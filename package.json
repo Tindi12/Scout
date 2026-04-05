@@ -1,0 +1,17 @@
+{
+  "name": "internsight",
+  "private": true,
+  "scripts": {
+    "lint": "pnpm --filter web lint",
+    "lint:fix": "pnpm --filter web lint --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "typecheck": "pnpm --filter web exec tsc --noEmit"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
