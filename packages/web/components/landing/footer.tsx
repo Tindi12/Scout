@@ -83,20 +83,20 @@ export function Footer() {
 
         <div className="mt-20 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div className="origin-left">
-            <Link href="#top" className="inline-flex items-center gap-2">
+            <Link href="#top" className="inline-flex items-center gap-3">
               <Image
                 src="/scout-logo.png"
                 alt="Scout AI Logo"
-                width={40}
-                height={40}
+                width={80}
+                height={80}
                 draggable={false}
-                className="h-10 w-10 select-none object-contain"
+                className="h-20 w-auto select-none object-contain"
               />
-              <span className="font-headline text-xl font-semibold tracking-tight text-white">
+              <span className="font-headline text-3xl font-semibold tracking-tight text-white">
                 Scout
               </span>
             </Link>
-            <p className="mt-4 max-w-xs font-body text-sm leading-relaxed text-[#A1A1AA]">
+            <p className="mt-5 max-w-xs font-body text-sm leading-relaxed text-[#A1A1AA]">
               Built for the alchemist. Automating the internship hunt for the
               next generation of engineers.
             </p>

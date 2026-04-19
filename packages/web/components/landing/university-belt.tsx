@@ -1,24 +1,19 @@
 import { fetchUniversityLogos, type University } from '@/lib/brandfetch'
 
 function UniversityItem({ uni }: { uni: University }) {
-  if (uni.logoUrl) {
-    return (
-      <div className="flex h-12 w-40 shrink-0 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+  return (
+    <div className="flex shrink-0 items-center gap-3.5">
+      {uni.logoUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={uni.logoUrl}
           alt={uni.name}
           loading="lazy"
           draggable={false}
-          className="max-h-10 w-auto select-none object-contain opacity-40 grayscale transition-all duration-300 hover:opacity-100 hover:grayscale-0"
+          className="h-8 w-auto select-none object-contain"
         />
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex h-12 w-40 shrink-0 items-center justify-center">
-      <span className="font-label text-sm font-medium uppercase tracking-[0.2em] text-white/40 transition-all duration-300 hover:text-white">
+      ) : null}
+      <span className="font-label text-sm font-medium tracking-wide text-white/90">
         {uni.name}
       </span>
     </div>
@@ -36,7 +31,7 @@ export async function UniversityBelt() {
       </p>
 
       <div className="belt-mask relative mt-10 overflow-hidden">
-        <div className="animate-marquee pause-on-hover flex w-max items-center gap-16">
+        <div className="animate-marquee pause-on-hover flex w-max items-center gap-20">
           {doubled.map((uni, i) => (
             <UniversityItem key={`${uni.domain}-${i}`} uni={uni} />
           ))}

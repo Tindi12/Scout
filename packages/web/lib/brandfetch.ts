@@ -7,25 +7,25 @@ export type University = {
 }
 
 const UNIVERSITIES: { domain: string; name: string }[] = [
-  { domain: 'ua.edu', name: 'Alabama' },
-  { domain: 'iu.edu', name: 'Indiana' },
+  { domain: 'ua.edu', name: 'University of Alabama' },
+  { domain: 'iu.edu', name: 'Indiana University' },
   { domain: 'gatech.edu', name: 'Georgia Tech' },
   { domain: 'stanford.edu', name: 'Stanford' },
   { domain: 'ucla.edu', name: 'UCLA' },
-  { domain: 'ufl.edu', name: 'Florida' },
-  { domain: 'purdue.edu', name: 'Purdue' },
+  { domain: 'ufl.edu', name: 'University of Florida' },
+  { domain: 'purdue.edu', name: 'Purdue University' },
   { domain: 'mit.edu', name: 'MIT' },
   { domain: 'nd.edu', name: 'Notre Dame' },
-  { domain: 'auburn.edu', name: 'Auburn' },
-  { domain: 'berkeley.edu', name: 'Berkeley' },
+  { domain: 'auburn.edu', name: 'Auburn University' },
+  { domain: 'berkeley.edu', name: 'UC Berkeley' },
   { domain: 'cmu.edu', name: 'Carnegie Mellon' },
-  { domain: 'uwaterloo.ca', name: 'Waterloo' },
+  { domain: 'uwaterloo.ca', name: 'University of Waterloo' },
 ]
 
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7
 
 function buildLogoUrl(domain: string, clientId: string): string {
-  return `https://cdn.brandfetch.io/${domain}/w/256/h/64/theme/dark/fallback/transparent?c=${clientId}`
+  return `https://cdn.brandfetch.io/${domain}/w/256/h/64/fallback/transparent?c=${clientId}`
 }
 
 async function probeLogo(url: string): Promise<boolean> {
