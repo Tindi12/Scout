@@ -1,5 +1,6 @@
+import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 export function Hero() {
   return (
@@ -34,12 +35,12 @@ export function Hero() {
       />
 
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
-        <div className="glass-pill mb-8 inline-flex items-center gap-2 rounded-full px-3 py-1.5">
-          <span className="relative flex h-1.5 w-1.5">
+        <div className="mb-8 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 backdrop-blur-md">
+          <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
           </span>
-          <span className="font-label text-[11px] font-medium uppercase tracking-[0.15em] text-white/90">
+          <span className="font-label text-sm font-medium tracking-wide text-white/90">
             Scout 1.0 is now live
           </span>
         </div>
@@ -124,10 +125,20 @@ export function Hero() {
                     Adam, you have 12 strong fits today.
                   </div>
                 </div>
-                <div className="hidden items-center gap-2 rounded-full bg-[#FF6733]/15 px-3 py-1.5 text-[12px] font-medium text-[#FF6733] sm:inline-flex">
-                  <Sparkles className="h-3.5 w-3.5" />
+                <button
+                  type="button"
+                  className="group/send hidden items-center gap-2 rounded-full border border-[#FF6733]/30 bg-[#FF6733]/10 px-3.5 py-1.5 text-[12px] font-medium text-[#FF6733] transition-all duration-300 hover:scale-105 hover:border-[#FF6733]/70 hover:bg-[#FF6733]/20 hover:shadow-[0_0_20px_rgba(255,103,51,0.35)] sm:inline-flex"
+                >
+                  <Image
+                    src="/scout-logo.png"
+                    alt=""
+                    width={20}
+                    height={20}
+                    draggable={false}
+                    className="h-4 w-auto select-none object-contain"
+                  />
                   Send Scout
-                </div>
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

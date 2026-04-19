@@ -35,11 +35,11 @@ export function DynamicIsland() {
           <Image
             src="/scout-logo.png"
             alt="Scout AI Logo"
-            width={56}
-            height={44}
+            width={32}
+            height={32}
             priority
             draggable={false}
-            className="h-11 w-auto select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
+            className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
           />
           <span className="font-headline text-lg font-semibold tracking-tight text-white">
             Scout

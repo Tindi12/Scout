@@ -87,12 +87,12 @@ export function Footer() {
               <Image
                 src="/scout-logo.png"
                 alt="Scout AI Logo"
-                width={80}
-                height={80}
+                width={48}
+                height={48}
                 draggable={false}
-                className="h-20 w-auto select-none object-contain"
+                className="h-12 w-12 select-none object-contain"
               />
-              <span className="font-headline text-3xl font-semibold tracking-tight text-white">
+              <span className="font-headline text-2xl font-semibold tracking-tight text-white">
                 Scout
               </span>
             </Link>
