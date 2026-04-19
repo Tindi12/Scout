@@ -13,10 +13,11 @@ from routes.resume import router as resume_router
 from routes.scout import router as scout_router
 from routes.strategy import router as strategy_router
 from routes.stripe_router import router as stripe_router
+from core.supabase_client import test_connection
 
 load_dotenv()
 
-API_VERSION = "0.1.0"
+API_VERSION = os.getenv("API_VERSION")
 
 app = FastAPI(title="Scout API")
 
@@ -31,13 +32,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health():
     return {
         "status": "ok",
         "version": API_VERSION,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "supabase": "connected" if test_connection() else "unreachable"
     }
 
 
