@@ -25,8 +25,8 @@ const COLUMNS = [
     links: [
       { label: 'Sign in', href: '/sign-in' },
       { label: 'Sign up', href: '/sign-up' },
-      { label: 'Privacy', href: '#' },
-      { label: 'Terms', href: '#' },
+      { label: 'Privacy', href: '/privacy' },
+      { label: 'Terms', href: '/terms' },
     ],
   },
 ] as const
@@ -125,7 +125,7 @@ export function Footer() {
 
         <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-white/5 pt-8 md:flex-row">
           <p className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">
-            © {new Date().getFullYear()} Scout. Carved for the kinetic obsidian.
+            © {new Date().getFullYear()} Scout. Never Apply Again
           </p>
           <div className="flex items-center gap-5">
             {[
