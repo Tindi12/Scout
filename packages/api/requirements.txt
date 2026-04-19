@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+groq
+google-generativeai
+tenacity
+supabase
+stripe
+resend
+pdfplumber
+python-docx
+celery[redis]
+redis
+browserbase
+playwright
+sentry-sdk
+python-jose[cryptography]
+httpx
+# asyncio is part of the Python standard library (no pip package).
