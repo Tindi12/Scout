@@ -11,25 +11,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        border: 'hsl(var(--border) / <alpha-value>)',
-        input: 'hsl(var(--input) / <alpha-value>)',
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring) / <alpha-value>)',
         background: 'hsl(var(--background) / <alpha-value>)',
         foreground: 'hsl(var(--foreground) / <alpha-value>)',
         primary: {
           DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
           foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
-          50: '#f5f4fc',
-          100: '#ebebfa',
-          200: '#d1ccf2',
-          300: '#b0a8e8',
-          400: '#8a7edc',
-          500: '#534ab7',
-          600: '#4a3fa5',
-          700: '#3d3488',
-          800: '#342c71',
-          900: '#2e275e',
-          950: '#1c1740',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary) / <alpha-value>)',
@@ -55,6 +44,14 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card) / <alpha-value>)',
           foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
+        'accent-orange': '#FF6733',
+        'muted-foreground-2': '#A1A1AA',
+        'muted-foreground-3': '#888888',
+      },
+      fontFamily: {
+        headline: ['var(--font-manrope)', 'sans-serif'],
+        body: ['var(--font-manrope)', 'sans-serif'],
+        label: ['var(--font-inter)', 'sans-serif'],
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -70,10 +67,15 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        marquee: {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-50%)' },
+        },
       },
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
+        'accordion-down': 'accordion-down 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        'accordion-up': 'accordion-up 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        marquee: 'marquee 40s linear infinite',
       },
     },
   },
