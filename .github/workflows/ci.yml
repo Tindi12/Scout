@@ -23,12 +23,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Frontend checks
       - name: Lint Next.js
         run: pnpm --filter web lint
 
       - name: TypeScript check
         run: pnpm --filter web tsc --noEmit
 
+      - name: Build Next.js
+        run: pnpm --filter web build
+
+      # Backend checks
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -39,3 +44,12 @@ jobs:
 
       - name: Python syntax check
         run: python -m compileall packages/api
+
+      - name: FastAPI health check
+        run: |
+          cd packages/api
+          ALLOWED_ORIGINS=http://localhost:3000 SUPABASE_URL=https://placeholder.supabase.co SUPABASE_SERVICE_ROLE_KEY=placeholder REDIS_URL=redis://localhost:6379 uvicorn main:app --host 127.0.0.1 --port 8000 &
+          UVICORN_PID=$!
+          sleep 3
+          curl -f http://127.0.0.1:8000/health
+          kill $UVICORN_PID
