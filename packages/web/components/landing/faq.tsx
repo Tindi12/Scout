@@ -10,7 +10,7 @@ const FAQS = [
   },
   {
     q: 'Do I get a different resume for every job?',
-    a: 'Yes — that\'s the entire point. Pro generates a job-specific rewrite per role using the JD\'s exact keywords, compiles it as a Jake-format LaTeX PDF, and caches the result so each application is uniquely tailored without rewrites costing you tokens twice.',
+    a: 'Yes — that\'s the entire point. Pro generates a job-specific rewrite per role using the Job Description\'s exact keywords, compiles it as a Jake-format LaTeX PDF, and caches the result so each application is uniquely tailored without rewrites costing you tokens twice.',
   },
   {
     q: 'Will using an AI agent get me blacklisted or banned?',
