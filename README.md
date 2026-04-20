@@ -16,5 +16,5 @@ Build your profile once. Let opportunities come to you.
 ---
 
 <div align="center">
-  <sub>Made with ambition, caffeine, and main-character energy.</sub>
+  <sub>Made with ambition, caffeine, and hope.</sub>
 </div>
