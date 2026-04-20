@@ -26,6 +26,7 @@ Scout helps you skip the repetitive job-application grind by turning your profil
 ## 🧪 Quick Start
 
 ```bash
+corepack enable
 corepack pnpm install
 corepack pnpm dev
 ```
