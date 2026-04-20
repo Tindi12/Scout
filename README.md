@@ -27,8 +27,8 @@ Scout helps you skip the repetitive job-application grind by turning your profil
 
 ```bash
 corepack enable
-corepack pnpm install
-corepack pnpm dev
+pnpm install
+pnpm dev
 ```
 
 Then open the web app and start scouting.
