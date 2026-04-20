@@ -1,8 +1,32 @@
-const STATS = [
-  { value: '10k+', label: 'Resumes Optimized' },
-  { value: '50k+', label: 'Applications Sent' },
-  { value: '1,200+', label: 'Interviews Landed' },
-] as const
+import { CountUp } from './count-up'
+
+type Stat = {
+  label: string
+  to: number
+  suffix: string
+  fallback: string
+}
+
+const STATS: Stat[] = [
+  {
+    label: 'Resumes Optimized',
+    to: 10,
+    suffix: 'k+',
+    fallback: '10k+',
+  },
+  {
+    label: 'Applications Sent',
+    to: 50,
+    suffix: 'k+',
+    fallback: '50k+',
+  },
+  {
+    label: 'Interviews Landed',
+    to: 1200,
+    suffix: '+',
+    fallback: '1,200+',
+  },
+]
 
 export function Stats() {
   return (
@@ -19,7 +43,11 @@ export function Stats() {
               }`}
             >
               <div className="font-headline text-5xl font-medium tracking-[-0.04em] text-white md:text-6xl">
-                {stat.value}
+                <CountUp
+                  to={stat.to}
+                  suffix={stat.suffix}
+                  fallback={stat.fallback}
+                />
               </div>
               <div className="mt-3 font-label text-sm font-normal text-[#A1A1AA]">
                 {stat.label}

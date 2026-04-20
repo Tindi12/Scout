@@ -18,7 +18,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Scout — Land your dream internship while you sleep.',
+  title: 'Scout - Never Apply Again.',
   description:
     'Scout is the autonomous AI agent that parses your resume, tailors it for every role, and applies on your behalf — so you can stop filling out forms and start interviewing.',
 }

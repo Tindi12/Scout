@@ -35,13 +35,19 @@ export function Hero() {
       />
 
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
-        <div className="mb-8 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 backdrop-blur-md">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
-          </span>
-          <span className="font-label text-sm font-medium tracking-wide text-white/90">
-            Scout 1.0 is now live
+        <div className="relative mb-8 inline-flex overflow-hidden rounded-full p-[1px]">
+          <span
+            aria-hidden
+            className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#000000_0%,#000000_50%,#FF6733_100%)]"
+          />
+          <span className="relative z-10 inline-flex items-center gap-2.5 rounded-full bg-[#0a0a0a] px-4 py-1.5 backdrop-blur-xl">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
+            </span>
+            <span className="font-label text-sm font-medium tracking-wide text-white/90">
+              Scout 1.0 is now live
+            </span>
           </span>
         </div>
 
