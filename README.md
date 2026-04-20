@@ -3,7 +3,7 @@
 
 # Scout
 
-### **scout - never apply again**
+### **Scout - Never Apply Again**
 
 Build your profile once. Let opportunities come to you.
 
