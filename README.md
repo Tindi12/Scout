@@ -15,30 +15,6 @@ Build your profile once. Let opportunities come to you.
 
 ---
 
-## ⚡ What is Scout?
-
-Scout helps you skip the repetitive job-application grind by turning your profile into your signal.
-
-- 🎯 One profile, many opportunities
-- 🤝 Smart matching over manual searching
-- 🚀 Built for speed, clarity, and momentum
-
-## 🧪 Quick Start
-
-```bash
-corepack enable
-pnpm install
-pnpm dev
-```
-
-Then open the web app and start scouting.
-
-## 🌌 Scout Vibe
-
-> Less forms. More future.
-
----
-
 <div align="center">
   <sub>Made with ambition, caffeine, and main-character energy.</sub>
 </div>
