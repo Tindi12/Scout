@@ -37,7 +37,7 @@ export function HowItWorks() {
           </h2>
           <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
             Three steps. Zero busywork. Scout handles the loop from resume to
-            recruiter so you can focus on shipping.
+            recruiter so you can focus on what matters.
           </p>
         </div>
 

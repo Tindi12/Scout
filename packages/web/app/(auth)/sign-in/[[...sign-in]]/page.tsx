@@ -54,27 +54,33 @@ export default function SignInPage() {
                 'radial-gradient(ellipse at center, black 25%, transparent 75%)',
             }}
           />
-          <div className="glass-card w-full rounded-2xl p-6 md:p-8">
-          <SignIn
-            routing="path"
-            path="/sign-in"
-            appearance={{
-              baseTheme: dark,
-              variables: {
-                colorPrimary: '#FF6733',
-                colorBackground: '#111111',
-                colorText: '#ffffff',
-                colorTextSecondary: '#888888',
-                colorInputBackground: '#1a1a1a',
-                colorInputText: '#ffffff',
-                borderRadius: '12px',
-              },
-              elements: {
-                card: 'shadow-none bg-transparent',
-                rootBox: 'w-full',
-              },
-            }}
-          />
+          <div className="relative w-full overflow-hidden rounded-2xl p-[1px]">
+            <span
+              aria-hidden
+              className="absolute inset-[-1000%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#000000_0%,#000000_50%,#FF6733_100%)]"
+            />
+            <div className="relative z-10 w-full rounded-2xl bg-[#0a0a0a] p-6 backdrop-blur-xl md:p-8">
+              <SignIn
+                routing="path"
+                path="/sign-in"
+                appearance={{
+                  baseTheme: dark,
+                  variables: {
+                    colorPrimary: '#FF6733',
+                    colorBackground: '#111111',
+                    colorText: '#ffffff',
+                    colorTextSecondary: '#888888',
+                    colorInputBackground: '#1a1a1a',
+                    colorInputText: '#ffffff',
+                    borderRadius: '12px',
+                  },
+                  elements: {
+                    card: 'shadow-none bg-transparent',
+                    rootBox: 'w-full',
+                  },
+                }}
+              />
+            </div>
           </div>
         </div>
 
