@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -24,6 +24,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useUser } from '@clerk/nextjs'
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
+import 'react-phone-number-input/style.css'
 
 import {
   completeOnboarding,
@@ -126,6 +128,13 @@ type FormState = {
   phone_number: string
 }
 
+type University = {
+  name: string
+  country: string
+  domains: string[]
+  web_pages: string[]
+}
+
 const INITIAL_FORM: FormState = {
   name: '',
   school: '',
@@ -159,7 +168,9 @@ export default function OnboardingPage() {
     form.name.trim().length > 0 &&
     form.school.trim().length > 0 &&
     form.grad_year > 0
-  const step2Valid = form.target_roles.length > 0
+  const phoneHasValue = form.phone_number.trim().length > 0
+  const phoneValid = !phoneHasValue || isValidPhoneNumber(form.phone_number)
+  const step2Valid = form.target_roles.length > 0 && phoneValid
 
   const toggleRole = (id: TargetRole) => {
     setForm((prev) => {
@@ -185,7 +196,9 @@ export default function OnboardingPage() {
         typeof gpaNum === 'number' && Number.isFinite(gpaNum) ? gpaNum : undefined,
       target_roles: form.target_roles,
       phone_number:
-        form.phone_number.trim() === '' ? undefined : form.phone_number.trim(),
+        form.phone_number.trim() !== '' && isValidPhoneNumber(form.phone_number)
+          ? form.phone_number
+          : undefined,
     }
 
     try {
@@ -255,6 +268,7 @@ export default function OnboardingPage() {
                   setForm={setForm}
                   toggleRole={toggleRole}
                   canSubmit={step2Valid}
+                  phoneValid={phoneValid}
                   submitting={submitting}
                   onBack={() => setStep(1)}
                   onSubmit={handleSubmit}
@@ -434,6 +448,110 @@ function StepOne({
   canContinue: boolean
   onContinue: () => void
 }) {
+  const universitiesRef = useRef<University[]>([])
+  const [schoolResults, setSchoolResults] = useState<University[]>([])
+  const [totalSchoolMatches, setTotalSchoolMatches] = useState(0)
+  const [showSchoolDropdown, setShowSchoolDropdown] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const schoolFieldRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    fetch('/universities.json')
+      .then((r) => {
+        if (r.ok) return r.json() as Promise<University[]>
+        return fetch('/world_universities_and_domains.json').then((fallback) =>
+          fallback.ok ? (fallback.json() as Promise<University[]>) : [],
+        )
+      })
+      .then((data) => {
+        universitiesRef.current = Array.isArray(data) ? data : []
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!schoolFieldRef.current) return
+      if (!schoolFieldRef.current.contains(event.target as Node)) {
+        setShowSchoolDropdown(false)
+      }
+    }
+
+    window.addEventListener('mousedown', onMouseDown)
+    return () => window.removeEventListener('mousedown', onMouseDown)
+  }, [])
+
+  useEffect(() => {
+    const query = form.school.trim().toLowerCase()
+    if (query.length <= 2) {
+      setSchoolResults([])
+      setTotalSchoolMatches(0)
+      setShowSchoolDropdown(false)
+      setHighlightedIndex(-1)
+      return
+    }
+
+    const matches = universitiesRef.current
+      .filter((u) => u.name.toLowerCase().includes(query))
+      .sort((a, b) => {
+        const aUS = a.country === 'United States' ? 0 : 1
+        const bUS = b.country === 'United States' ? 0 : 1
+        return aUS - bUS || a.name.localeCompare(b.name)
+      })
+    const topResults = matches.slice(0, 20)
+
+    setTotalSchoolMatches(matches.length)
+    setSchoolResults(topResults)
+    setShowSchoolDropdown(topResults.length > 0)
+    setHighlightedIndex(topResults.length > 0 ? 0 : -1)
+  }, [form.school])
+
+  const selectSchool = (schoolName: string) => {
+    setForm((p) => ({ ...p, school: schoolName }))
+    setShowSchoolDropdown(false)
+    setHighlightedIndex(-1)
+  }
+
+  const handleSchoolKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSchoolDropdown || schoolResults.length === 0) {
+      if (event.key === 'Escape') {
+        setShowSchoolDropdown(false)
+        setHighlightedIndex(-1)
+      }
+      return
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setHighlightedIndex((prev) =>
+        prev < schoolResults.length - 1 ? prev + 1 : 0,
+      )
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHighlightedIndex((prev) =>
+        prev > 0 ? prev - 1 : schoolResults.length - 1,
+      )
+      return
+    }
+
+    if (event.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < schoolResults.length) {
+        event.preventDefault()
+        selectSchool(schoolResults[highlightedIndex].name)
+      }
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setShowSchoolDropdown(false)
+      setHighlightedIndex(-1)
+    }
+  }
+
   return (
     <div className="glass-card rounded-2xl p-7 md:p-10">
       <div className="text-center">
@@ -459,17 +577,59 @@ function StepOne({
           />
         </div>
 
-        <div>
+        <div ref={schoolFieldRef} className="relative">
           <FieldLabel htmlFor="school" required>
             Your university
           </FieldLabel>
-          <TextField
+          <input
             id="school"
+            type="text"
             value={form.school}
-            onChange={(v) => setForm((p) => ({ ...p, school: v }))}
+            onChange={(event) =>
+              setForm((p) => ({ ...p, school: event.target.value }))
+            }
+            onFocus={() => {
+              if (form.school.trim().length > 2 && schoolResults.length > 0) {
+                setShowSchoolDropdown(true)
+                setHighlightedIndex(0)
+              }
+            }}
+            onKeyDown={handleSchoolKeyDown}
             placeholder="University of Alabama"
             autoComplete="organization"
+            className="font-body mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[15px] text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:bg-white/[0.05] focus:shadow-[0_0_24px_rgba(255,103,51,0.18)] focus:outline-none"
           />
+          {showSchoolDropdown && (
+            <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              {totalSchoolMatches > 20 && (
+                <div className="border-b border-white/10 px-4 py-2 text-xs text-[#555]">
+                  Showing 20 of {totalSchoolMatches} matches — type more to
+                  narrow down
+                </div>
+              )}
+              <div
+                className="uni-dropdown max-h-48 overflow-y-auto"
+                style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}
+              >
+                {schoolResults.map((result, index) => (
+                  <button
+                    key={`${result.name}-${result.country}`}
+                    type="button"
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    onClick={() => selectSchool(result.name)}
+                    className={`w-full cursor-pointer px-4 py-2 text-left ${
+                      highlightedIndex === index
+                        ? 'bg-white/10'
+                        : 'hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="text-sm text-white">{result.name}</div>
+                    <div className="text-xs text-[#888]">{result.country}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="font-label mt-2 text-xs text-[#888]">
             We&apos;ll find internships that recruit from your school
           </p>
@@ -553,6 +713,7 @@ function StepTwo({
   setForm,
   toggleRole,
   canSubmit,
+  phoneValid,
   submitting,
   onBack,
   onSubmit,
@@ -561,6 +722,7 @@ function StepTwo({
   setForm: React.Dispatch<React.SetStateAction<FormState>>
   toggleRole: (id: TargetRole) => void
   canSubmit: boolean
+  phoneValid: boolean
   submitting: boolean
   onBack: () => void
   onSubmit: () => void
@@ -625,16 +787,23 @@ function StepTwo({
         <FieldLabel htmlFor="phone" optional>
           Phone number
         </FieldLabel>
-        <TextField
+        <PhoneInput
           id="phone"
-          value={form.phone_number}
-          onChange={(v) => setForm((p) => ({ ...p, phone_number: v }))}
+          defaultCountry="US"
+          international
+          countryCallingCodeEditable={false}
+          value={form.phone_number || undefined}
+          onChange={(value) =>
+            setForm((p) => ({ ...p, phone_number: value ?? '' }))
+          }
           placeholder="+1 (555) 000-0000"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          ghost
+          className="mt-2"
         />
+        {!phoneValid && (
+          <p className="font-label mt-2 text-xs text-[#ef4444]">
+            Please enter a valid phone number (numbers only)
+          </p>
+        )}
         <p className="font-label mt-2 text-xs text-[#666]">
           Optional — Scout texts you when applications are done
         </p>
