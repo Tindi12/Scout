@@ -347,12 +347,19 @@ function Greeting({
   )
 }
 
-const CHECKLIST_STEPS = [
+type ChecklistStep = {
+  id: string
+  label: string
+  cta?: string
+  href?: string
+}
+
+const CHECKLIST_STEPS: readonly ChecklistStep[] = [
   { id: 'upload', label: 'Upload your resume', cta: 'Upload', href: '/resume' },
   { id: 'score', label: 'Scout scores and rewrites it' },
   { id: 'jobs', label: 'Browse your matched jobs' },
   { id: 'apply', label: 'Send Scout to apply' },
-] as const
+]
 
 function OnboardingChecklist({
   hasTargetRoles,
