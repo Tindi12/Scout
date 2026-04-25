@@ -17,4 +17,5 @@ playwright
 sentry-sdk
 python-jose[cryptography]
 httpx
+svix
 # asyncio is part of the Python standard library (no pip package).

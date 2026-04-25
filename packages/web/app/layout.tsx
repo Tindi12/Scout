@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Manrope } from 'next/font/google'
+import { ClerkProvider } from '@clerk/nextjs'
+import { dark } from '@clerk/themes'
 
 import './globals.css'
 
@@ -29,13 +31,27 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      className={`dark scroll-smooth ${manrope.variable} ${inter.variable}`}
+    <ClerkProvider
+      appearance={{
+        baseTheme: dark,
+        variables: {
+          colorPrimary: '#FF6733',
+          colorBackground: '#000000',
+          colorText: '#ffffff',
+          colorTextSecondary: '#A1A1AA',
+          borderRadius: '0.75rem',
+          fontFamily: 'var(--font-manrope)',
+        },
+      }}
     >
-      <body className="bg-black font-body text-white antialiased selection:bg-[#FF6733]/30 selection:text-white">
-        {children}
-      </body>
-    </html>
+      <html
+        lang="en"
+        className={`dark scroll-smooth ${manrope.variable} ${inter.variable}`}
+      >
+        <body className="bg-black font-body text-white antialiased selection:bg-[#FF6733]/30 selection:text-white">
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }
