@@ -11,9 +11,9 @@ import {
   CircleDashed,
   FileText,
   TrendingUp,
-  Upload,
 } from 'lucide-react'
 
+import { ResumeUpload } from '@/components/resume/ResumeUpload'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -287,15 +287,19 @@ export default function DashboardPage() {
           delta={scoreDelta}
           applied={appliedCount}
           replies={repliesCount}
-          appsLoaded={appsState.status === 'loaded'}
-          analysesLoaded={analysesState.status === 'loaded'}
+          appsLoaded={appsState.status !== 'loading'}
+          analysesLoaded={analysesState.status !== 'loading'}
         />
       )}
 
       <LiveAgentRun state={runState} />
 
-      {!isNewUser && !hasResume ? (
-        <ResumeUploadCta />
+      {!hasResume && user?.id ? (
+        <ResumeUpload
+          userId={user.id}
+          supabaseUserId={userState.data?.id ?? ''}
+          onSuccess={() => window.location.reload()}
+        />
       ) : hasResume ? (
         <ResumeSummary score={latestAnalysis?.score ?? 0} />
       ) : null}
@@ -708,34 +712,6 @@ function ApplicationStatusPill({ status }: { status: string | null }) {
     >
       {label}
     </span>
-  )
-}
-
-function ResumeUploadCta() {
-  return (
-    <section className="glass-card flex flex-col items-center gap-4 rounded-2xl px-6 py-10 text-center md:py-12">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FF6733]/10">
-        <FileText className="h-7 w-7 text-[#FF6733]" strokeWidth={1.5} />
-      </div>
-      <div>
-        <h2 className="font-headline text-2xl font-medium tracking-[-0.02em] text-white">
-          Upload your resume to get started
-        </h2>
-        <p className="mt-2 font-body text-sm text-[#999]">
-          Scout will score it, optimize it, and find your best fits.
-        </p>
-      </div>
-      <Link
-        href="/resume"
-        className="mt-1 inline-flex items-center gap-2 rounded-full bg-[#FF6733] px-6 py-2.5 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-      >
-        <Upload className="h-4 w-4" strokeWidth={2} />
-        Upload Resume
-      </Link>
-      <p className="font-body text-xs text-[#555]">
-        or drag and drop a PDF or DOCX
-      </p>
-    </section>
   )
 }
 
