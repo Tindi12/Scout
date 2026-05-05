@@ -8,6 +8,7 @@ from core.ai_router import call_ai
 from core.auth import verify_clerk_jwt
 from core.supabase_client import supabase
 from services.resume_parser import resume_parser
+from services.resume_scorer import resume_scorer
 
 router = APIRouter()
 
@@ -19,6 +20,10 @@ def load_prompt(name: str) -> str:
 
 class ParseResumeRequest(BaseModel):
     resume_id: str
+
+class ScoreResumeRequest(BaseModel):
+    resume_id: str
+    target_role: str
 
 
 @router.post("/parse")
@@ -65,8 +70,61 @@ async def parse_resume(
 
 
 @router.post("/score")
-async def score_resume() -> dict[str, str]:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def score_resume(request: ScoreResumeRequest, current_user: dict = Depends(verify_clerk_jwt)) -> dict:
+    resume = (
+        supabase.table("resumes")
+        .select("parsed_content, user_id, users!inner(clerk_id)")
+        .eq("id", request.resume_id)
+        .execute()
+    )
+
+    rows = resume.data
+    if not rows:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    row = rows[0]
+    users_row = row.get("users")
+    if not users_row or users_row.get("clerk_id") != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    parsed_content = row["parsed_content"]
+    if parsed_content is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Resume must be parsed first. Call POST /resume/parse.",
+        )
+
+    if isinstance(parsed_content, str):
+        try:
+            parsed_content = json.loads(parsed_content)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=422,
+                detail="Parsed resume is invalid; run POST /resume/parse again.",
+            )
+
+    if not isinstance(parsed_content, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="Parsed resume is invalid; run POST /resume/parse again.",
+        )
+
+    result = await resume_scorer.score_resume(parsed_content, request.target_role)
+
+    supabase.table("analyses").insert(
+        {
+            "user_id": row["user_id"],
+            "resume_id": request.resume_id,
+            "target_role": request.target_role,
+            "score": result["score"],
+            "breakdown": result["breakdown"],
+            "weaknesses": result["weaknesses"],
+            "rewritten_resume": None,
+            "before_after": [],
+        }
+    ).execute()
+
+    return result
 
 
 @router.post("/analyze")
