@@ -26,6 +26,11 @@ class ScoreResumeRequest(BaseModel):
     target_role: str
 
 
+class AnalyzeResumeRequest(BaseModel):
+    resume_id: str
+    target_role: str
+
+
 @router.post("/parse")
 async def parse_resume(
     request: ParseResumeRequest,
@@ -122,14 +127,88 @@ async def score_resume(request: ScoreResumeRequest, current_user: dict = Depends
             "rewritten_resume": None,
             "before_after": [],
         }
-    ).execute()
+    ).select("id").single().execute()
 
     return result
 
 
 @router.post("/analyze")
-async def analyze_resume() -> dict[str, str]:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def analyze_resume(
+    request: AnalyzeResumeRequest,
+    current_user: dict = Depends(verify_clerk_jwt),
+) -> dict:
+    resume = (
+        supabase.table("resumes")
+        .select("storage_path, file_type, user_id, users!inner(clerk_id)")
+        .eq("id", request.resume_id)
+        .execute()
+    )
+
+    rows = resume.data
+    if not rows:
+        raise HTTPException(status_code=404, detail="Resume not found")
+
+    row = rows[0]
+    users_row = row.get("users")
+    if not users_row or users_row.get("clerk_id") != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    storage_path = row["storage_path"]
+    file_type = row["file_type"]
+
+    raw_text = await resume_parser.parse_resume(storage_path, file_type)
+    parse_prompt = load_prompt("parse_prompt.txt")
+    parse_ai_response = await call_ai(
+        prompt=raw_text, system=parse_prompt, task="fast"
+    )
+
+    if parse_ai_response is None or not str(parse_ai_response).strip():
+        raise HTTPException(status_code=500, detail="AI returned empty response")
+
+    try:
+        parsed_content = json.loads(str(parse_ai_response).strip())
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="AI returned invalid JSON")
+
+    supabase.table("resumes").update({"parsed_content": parsed_content}).eq(
+        "id", request.resume_id
+    ).execute()
+
+    result = await resume_scorer.score_resume(parsed_content, request.target_role)
+
+    analysis = (
+        supabase.table("analyses")
+        .insert(
+            {
+                "user_id": row["user_id"],
+                "resume_id": request.resume_id,
+                "target_role": request.target_role,
+                "score": result["score"],
+                "breakdown": result["breakdown"],
+                "weaknesses": result["weaknesses"],
+                "rewritten_resume": None,
+                "before_after": [],
+            }
+        )
+        .select("id")
+        .single()
+        .execute()
+    )
+
+    analysis_row = analysis.data
+    if not analysis_row or "id" not in analysis_row:
+        raise HTTPException(
+            status_code=500, detail="Failed to create analysis record"
+        )
+
+    return {
+        "parsed": parsed_content,
+        "score": result["score"],
+        "breakdown": result["breakdown"],
+        "weaknesses": result["weaknesses"],
+        "resume_id": request.resume_id,
+        "analysis_id": str(analysis_row["id"]),
+    }
 
 
 @router.post("/rewrite")
