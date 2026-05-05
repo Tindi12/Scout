@@ -40,9 +40,9 @@ async def call_ai(prompt: str, system: str, task: str = "quality", stream: bool 
                 return response.choices[0].message.content
         except RateLimitError:
             response = await gemini_client.aio.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt,
-                config=types.GenerateContentConfig(system_instruction=system),
+                config=genai.types.GenerateContentConfig(system_instruction=system),
             )
             return response.text
     except Exception as e:
