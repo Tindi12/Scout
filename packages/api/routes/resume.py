@@ -224,3 +224,4 @@ async def rewrite_resume_for_job() -> dict[str, str]:
 @router.post("/pdf")
 async def generate_resume_pdf() -> dict[str, str]:
     raise HTTPException(status_code=501, detail="Not implemented")
+
