@@ -40,8 +40,9 @@ export function SendScoutButton({
   const router = useRouter()
   const [open, setOpen] = useState(false)
 
+  // Matches Copilot bubble inner logo circle: #FF6733 with bg-black/20 overlay (~#CC5229)
   const baseClasses =
-    'group inline-flex items-center justify-center rounded-full bg-[#FF6733] font-label font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]'
+    'group inline-flex items-center justify-center rounded-full bg-[#CC5229] font-label font-semibold text-white shadow-[0_0_24px_rgba(204,82,41,0.38)] transition-all duration-200 hover:shadow-[0_0_32px_rgba(204,82,41,0.55)] active:scale-[0.97]'
 
   const content = (
     <>

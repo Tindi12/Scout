@@ -298,7 +298,6 @@ export default function DashboardPage() {
         <ResumeUpload
           userId={user.id}
           supabaseUserId={userState.data?.id ?? ''}
-          onSuccess={() => window.location.reload()}
         />
       ) : hasResume ? (
         <ResumeSummary score={latestAnalysis?.score ?? 0} />

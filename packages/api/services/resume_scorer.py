@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+from core.ai_json import parse_ai_json_object
 from core.ai_router import call_ai
 
 logger = logging.getLogger(__name__)
@@ -31,14 +32,7 @@ class ResumeScorer:
         if ai_response is None or not str(ai_response).strip():
             raise HTTPException(status_code=500, detail="AI returned empty response")
 
-        try:
-            result = json.loads(str(ai_response).strip())
-        except json.JSONDecodeError:
-            logger.exception("Score AI returned invalid JSON")
-            raise HTTPException(status_code=500, detail="AI returned invalid JSON")
-
-        if not isinstance(result, dict):
-            raise HTTPException(status_code=500, detail="AI returned invalid score shape")
+        result = parse_ai_json_object(str(ai_response), context="Score AI")
 
         if (
             "score" not in result

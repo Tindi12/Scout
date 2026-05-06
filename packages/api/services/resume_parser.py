@@ -4,6 +4,8 @@ import io
 import logging
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
+from storage3.exceptions import StorageApiError
+
 from core.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,19 @@ class ResumeParser:
             return text
         except HTTPException:
             raise
+        except StorageApiError as e:
+            msg_lower = (e.message or "").lower()
+            status = e.status
+            if status == 404 or status == "404" or "not found" in msg_lower or "no such" in msg_lower:
+                raise HTTPException(status_code=404, detail="File not found")
+            logger.exception(
+                "Storage download failed",
+                extra={"storage_path": storage_path, "status": status},
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"Storage error: {e.message or status}",
+            )
         except Exception as e:
             logger.exception("Unexpected resume parsing failure", extra={"storage_path": storage_path, "file_type": file_type})
             raise HTTPException(status_code=500, detail=f"Failed to parse resume: {e}")

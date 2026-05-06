@@ -8,6 +8,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import {
   useCallback,
   useEffect,
@@ -18,6 +19,7 @@ import {
 } from 'react'
 
 import { uploadResume } from '@/app/actions/resume'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 interface ResumeUploadProps {
@@ -25,6 +27,23 @@ interface ResumeUploadProps {
   supabaseUserId: string
   onSuccess?: () => void
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  swe: 'Software Engineering Intern',
+  ml: 'Machine Learning Intern',
+  data_eng: 'Data Engineering Intern',
+  devops: 'DevOps Intern',
+  product: 'Product Management Intern',
+  research: 'Research Intern',
+  chem_eng: 'Chemical Engineering Intern',
+  mech_eng: 'Mechanical Engineering Intern',
+  elec_eng: 'Electrical Engineering Intern',
+  civil_eng: 'Civil Engineering Intern',
+  bio_eng: 'Biomedical Engineering Intern',
+  industrial_eng: 'Industrial Engineering Intern',
+}
+
+const DEFAULT_TARGET_ROLE = 'Software Engineering Intern'
 
 type UploadState =
   | { status: 'idle' }
@@ -70,6 +89,8 @@ export function ResumeUpload({
   supabaseUserId,
   onSuccess,
 }: ResumeUploadProps) {
+  const router = useRouter()
+
   const [state, setState] = useState<UploadState>({ status: 'idle' })
   const [validationError, setValidationError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -158,20 +179,73 @@ export function ResumeUpload({
 
       const result = await uploadResume(fd)
 
-      clearProgressInterval()
-
-      if (result.success) {
-        setState({ status: 'success', file })
-        successTimeoutRef.current = setTimeout(() => {
-          if (onSuccess) onSuccess()
-          else window.location.reload()
-        }, 2000)
-      } else {
+      if (!result.success || !result.resumeId) {
+        clearProgressInterval()
         setState({
           status: 'error',
           message: result.error ?? 'Upload failed',
         })
+        return
       }
+
+      const { data: userRow, error: rolesError } = await supabase
+        .from('users')
+        .select('target_roles')
+        .eq('clerk_id', userId)
+        .maybeSingle()
+
+      if (rolesError) {
+        console.warn('Could not load target_roles:', rolesError.message)
+      }
+
+      const roleKey: string | undefined = userRow?.target_roles?.[0]
+      const targetRoleLabel =
+        (roleKey && ROLE_LABELS[roleKey]) ?? DEFAULT_TARGET_ROLE
+
+      const analyzeRes = await fetch('/api/resume/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resume_id: result.resumeId,
+          target_role: targetRoleLabel,
+        }),
+      })
+
+      const analyzeText = await analyzeRes.text()
+      if (!analyzeRes.ok) {
+        clearProgressInterval()
+        let message = 'Could not analyze resume. Please try again.'
+        try {
+          const parsed = JSON.parse(analyzeText) as { detail?: unknown }
+          if (typeof parsed.detail === 'string') message = parsed.detail
+        } catch {
+          /* ignore */
+        }
+        setState({ status: 'error', message })
+        return
+      }
+
+      const analyzeBody = JSON.parse(analyzeText) as {
+        analysis_id?: string
+      }
+      const analysisId = analyzeBody.analysis_id
+      if (!analysisId) {
+        clearProgressInterval()
+        setState({
+          status: 'error',
+          message: 'Analyze returned an unexpected response.',
+        })
+        return
+      }
+
+      clearProgressInterval()
+      setState({ status: 'success', file })
+      successTimeoutRef.current = setTimeout(() => {
+        router.push(`/resume/analysis?id=${analysisId}`)
+        onSuccess?.()
+      }, 800)
     } catch (err) {
       clearProgressInterval()
       setState({

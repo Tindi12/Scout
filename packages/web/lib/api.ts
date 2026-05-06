@@ -1,4 +1,13 @@
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+/** Empty env string must not fall through — relative URLs hit Next.js and return 405 on POST. */
+export function getApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL
+  if (raw == null || String(raw).trim() === '') {
+    return 'http://localhost:8000'
+  }
+  return String(raw).trim().replace(/\/$/, '')
+}
+
+const API_BASE = getApiBaseUrl()
 
 export type ApiJson = Record<string, unknown> | unknown[]
 

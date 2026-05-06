@@ -43,12 +43,18 @@ export default function RootLayout({
           fontFamily: 'var(--font-manrope)',
         },
       }}
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
     >
       <html
         lang="en"
+        suppressHydrationWarning
         className={`dark scroll-smooth ${manrope.variable} ${inter.variable}`}
       >
-        <body className="bg-black font-body text-white antialiased selection:bg-[#FF6733]/30 selection:text-white">
+        <body
+          className="bg-black font-body text-white antialiased selection:bg-[#FF6733]/30 selection:text-white"
+          suppressHydrationWarning
+        >
           {children}
         </body>
       </html>
