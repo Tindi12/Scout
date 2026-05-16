@@ -46,8 +46,8 @@ export default function TermsOfServicePage() {
           </LegalLi>
           <LegalLi>
             <strong className="text-white/95">Account.</strong> You are
-            responsible for all activity under your account. Starter, Pro, and
-            other plan entitlements are for the registered individual unless we
+            responsible for all activity under your account. Free, Pro, Scout+,
+            and other plan entitlements are for the registered individual unless we
             agree otherwise in writing.
           </LegalLi>
           <LegalLi>

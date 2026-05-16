@@ -3,24 +3,31 @@ import { Check } from 'lucide-react'
 
 type Feature = { label: string; emphasis?: boolean }
 
-const STARTER_FEATURES: Feature[] = [
-  { label: 'Resume parsing for PDF & DOCX' },
-  { label: 'Full Scout Score with 4-dimension breakdown' },
-  { label: 'Weakness diagnosis with severity tags' },
-  { label: 'Browse matched internships across portals' },
+const FREE_FEATURES: Feature[] = [
+  { label: 'Resume parsing & Scout Score' },
+  { label: 'AI weakness diagnosis' },
+  { label: 'Browse matched internships' },
   { label: '5 lifetime AI Copilot messages' },
-  { label: 'Manual application links (apply yourself)' },
+  { label: 'Manual application links' },
 ]
 
 const PRO_FEATURES: Feature[] = [
-  { label: 'Everything in Starter, plus:' },
-  { label: 'Unlimited job-specific resume rewrites', emphasis: true },
-  { label: 'Unlimited autonomous auto-apply via Scout Agent', emphasis: true },
-  { label: 'LaTeX-rendered Jake-format PDFs' },
-  { label: 'Full AI Copilot — unlimited streaming chat' },
-  { label: 'Live application tracker (Kanban)' },
+  { label: 'Everything in Free, plus:' },
+  { label: 'Job-specific resume rewrites', emphasis: true },
+  { label: 'Autonomous auto-apply via Scout Agent', emphasis: true },
+  { label: 'LaTeX Jake-format PDF resumes' },
+  { label: 'Unlimited AI Copilot streaming' },
+  { label: 'Live Kanban application tracker' },
   { label: '7-day automated follow-up emails' },
-  { label: 'Priority job matching with pgvector search' },
+  { label: 'Priority pgvector job matching' },
+]
+
+const SCOUT_PLUS_FEATURES: Feature[] = [
+  { label: 'Everything in Pro' },
+  { label: '3x higher application volume', emphasis: true },
+  { label: 'Dedicated support queue' },
+  { label: 'Early access to new features' },
+  { label: 'Advanced analytics dashboard' },
 ]
 
 function FeatureRow({ feature }: { feature: Feature }) {
@@ -55,10 +62,10 @@ export function Pricing() {
 
       <div className="mx-auto mb-16 max-w-3xl text-center">
         <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
-          Pricing
+          Product
         </p>
         <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
-          Choose the plan that fits your hustle.
+          Three tiers. One goal: get you hired.
         </h2>
         <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
           Start free. Upgrade when you&apos;re ready to let Scout apply on your
@@ -66,18 +73,21 @@ export function Pricing() {
         </p>
       </div>
 
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Starter */}
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Free */}
         <div className="glass-card relative flex flex-col rounded-2xl p-8">
           <div className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888888]">
-            Starter
+            Free
           </div>
           <div className="mt-5 flex items-baseline gap-2">
             <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
               $0
             </span>
-            <span className="font-body text-lg text-[#A1A1AA]">/month</span>
+            <span className="font-body text-lg text-[#A1A1AA]">forever</span>
           </div>
+          <p className="mt-1 font-body text-sm text-[#A1A1AA]">
+            25 lifetime applications
+          </p>
           <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
             Perfect for trying Scout&apos;s resume intelligence before you let
             the agent loose.
@@ -94,7 +104,7 @@ export function Pricing() {
           <div className="my-7 h-px w-full bg-white/10" />
 
           <ul className="space-y-3.5">
-            {STARTER_FEATURES.map((f) => (
+            {FREE_FEATURES.map((f) => (
               <FeatureRow key={f.label} feature={f} />
             ))}
           </ul>
@@ -126,6 +136,9 @@ export function Pricing() {
             </span>
             <span className="font-body text-lg text-[#A1A1AA]">/month</span>
           </div>
+          <p className="mt-1 font-body text-sm text-[#A1A1AA]">
+            200 applications / 30 days
+          </p>
           <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
             Unleash the full agent. Tailored resumes for every role, applied
             autonomously while you sleep.
@@ -136,13 +149,55 @@ export function Pricing() {
             prefetch
             className="font-label mt-7 inline-flex items-center justify-center rounded-full bg-[#FF6733] px-5 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]"
           >
-            Send Scout
+            Upgrade to Pro
           </Link>
 
           <div className="my-7 h-px w-full bg-white/10" />
 
           <ul className="space-y-3.5">
             {PRO_FEATURES.map((f) => (
+              <FeatureRow key={f.label} feature={f} />
+            ))}
+          </ul>
+        </div>
+
+        {/* Scout+ */}
+        <div className="glass-card relative flex flex-col rounded-2xl p-8">
+          <div className="absolute -top-3 right-6">
+            <div className="font-label inline-flex items-center gap-1.5 rounded-full bg-[#FF6733] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-[0_0_20px_rgba(255,103,51,0.5)]">
+              Power User
+            </div>
+          </div>
+
+          <div className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-[#FF6733]">
+            Scout+
+          </div>
+          <div className="mt-5 flex items-baseline gap-2">
+            <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
+              $14.99
+            </span>
+            <span className="font-body text-lg text-[#A1A1AA]">/month</span>
+          </div>
+          <p className="mt-1 font-body text-sm text-[#A1A1AA]">
+            600 applications / 30 days
+          </p>
+          <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
+            Maximum volume, priority support, and first access when Scout ships
+            something new.
+          </p>
+
+          <Link
+            href="/sign-up"
+            prefetch
+            className="font-label mt-7 inline-flex items-center justify-center rounded-full bg-[#FF6733] px-5 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]"
+          >
+            Upgrade to Scout+
+          </Link>
+
+          <div className="my-7 h-px w-full bg-white/10" />
+
+          <ul className="space-y-3.5">
+            {SCOUT_PLUS_FEATURES.map((f) => (
               <FeatureRow key={f.label} feature={f} />
             ))}
           </ul>
