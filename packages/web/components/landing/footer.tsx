@@ -1,5 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
+
+import { scoutLogo } from '@/lib/scout-logo'
 import { Github, Linkedin, Twitter } from 'lucide-react'
 
 const COLUMNS = [
@@ -85,7 +87,7 @@ export function Footer() {
           <div className="origin-left">
             <Link href="#top" className="inline-flex items-center gap-3">
               <Image
-                src="/scout-logo.png"
+                src={scoutLogo}
                 alt="Scout AI Logo"
                 width={48}
                 height={48}

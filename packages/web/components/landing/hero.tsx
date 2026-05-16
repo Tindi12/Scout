@@ -1,5 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
+
+import { scoutLogo } from '@/lib/scout-logo'
 import { ArrowRight } from 'lucide-react'
 
 export function Hero() {
@@ -136,7 +138,7 @@ export function Hero() {
                   className="group/send hidden items-center gap-2 rounded-full border border-[#FF6733]/30 bg-[#FF6733]/10 px-3.5 py-1.5 text-[12px] font-medium text-[#FF6733] transition-all duration-300 hover:scale-105 hover:border-[#FF6733]/70 hover:bg-[#FF6733]/20 hover:shadow-[0_0_20px_rgba(255,103,51,0.35)] sm:inline-flex"
                 >
                   <Image
-                    src="/scout-logo.png"
+                    src={scoutLogo}
                     alt=""
                     width={20}
                     height={20}

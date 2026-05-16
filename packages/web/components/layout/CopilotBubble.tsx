@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+
+import { scoutLogo } from '@/lib/scout-logo'
 import { usePathname } from 'next/navigation'
 
 export function CopilotBubble() {
@@ -18,7 +20,7 @@ export function CopilotBubble() {
     >
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/20">
         <Image
-          src="/scout-logo.png"
+          src={scoutLogo}
           alt=""
           width={28}
           height={28}

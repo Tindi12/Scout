@@ -2,6 +2,7 @@ import { CopilotBubble } from '@/components/layout/CopilotBubble'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { Toaster } from '@/components/ui/toaster'
 
 export default function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default function DashboardLayout({
       </div>
       <MobileTabBar />
       <CopilotBubble />
+      <Toaster />
     </div>
   )
 }

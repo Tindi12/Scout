@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import {
+  AlertCircle,
   ArrowRight,
   ArrowUpRight,
   Bot,
@@ -27,6 +28,7 @@ type UserRow = {
   is_pro: boolean | null
   target_roles: string[] | null
   onboarding_complete: boolean | null
+  profile_complete: boolean | null
 }
 
 type AnalysisRow = {
@@ -101,7 +103,7 @@ export default function DashboardPage() {
         const { data, error } = await supabase
           .from('users')
           .select(
-            'id, clerk_id, name, is_pro, target_roles, onboarding_complete',
+            'id, clerk_id, name, is_pro, target_roles, onboarding_complete, profile_complete',
           )
           .eq('clerk_id', user.id)
           .maybeSingle()
@@ -293,6 +295,11 @@ export default function DashboardPage() {
       )}
 
       <LiveAgentRun state={runState} />
+
+      {userState.status === 'loaded' &&
+      userState.data?.profile_complete === false ? (
+        <ProfileIncompleteCta />
+      ) : null}
 
       {!hasResume && user?.id ? (
         <ResumeUpload
@@ -806,6 +813,42 @@ function QuickActions() {
         ))}
       </ul>
     </div>
+  )
+}
+
+function ProfileIncompleteCta() {
+  return (
+    <section className="glass-card relative overflow-hidden rounded-2xl border border-white/[0.06] p-5 md:p-6">
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-1 bg-[#FF6733]"
+      />
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#FF6733]/30 bg-[#FF6733]/[0.08]">
+            <AlertCircle
+              className="h-[18px] w-[18px] text-[#FF6733]"
+              strokeWidth={1.75}
+            />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-headline text-base font-medium text-white">
+              Complete your profile before Scout applies
+            </h3>
+            <p className="mt-1 text-sm text-[#888]">
+              Scout needs your details to fill applications correctly.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/profile"
+          className="font-label inline-flex items-center justify-center gap-2 self-start rounded-full bg-[#FF6733] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-shadow duration-200 hover:shadow-[0_0_36px_rgba(255,103,51,0.5)] md:self-auto"
+        >
+          Complete Profile
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </section>
   )
 }
 

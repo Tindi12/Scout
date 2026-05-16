@@ -1,4 +1,4 @@
-import { fetchUniversityLogos, type University } from '@/lib/brandfetch'
+import { fetchUniversityLogos, type University } from '@/lib/ncaa-logos'
 
 function UniversityItem({ uni }: { uni: University }) {
   return (
@@ -33,7 +33,7 @@ export async function UniversityBelt() {
       <div className="belt-mask relative mt-10 overflow-hidden">
         <div className="animate-marquee pause-on-hover flex w-max items-center gap-20">
           {doubled.map((uni, i) => (
-            <UniversityItem key={`${uni.domain}-${i}`} uni={uni} />
+            <UniversityItem key={`${uni.slug ?? uni.name}-${i}`} uni={uni} />
           ))}
         </div>
       </div>

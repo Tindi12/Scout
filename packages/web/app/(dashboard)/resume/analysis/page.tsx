@@ -17,6 +17,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { BreakdownCard } from '@/components/resume/BreakdownCard'
+import { scoutLogo } from '@/lib/scout-logo'
 import { ScoreWheel } from '@/components/resume/ScoreWheel'
 import {
   WeaknessCard,
@@ -27,9 +28,9 @@ import {
 const ROLE_LABELS: Record<string, string> = {
   swe: 'Software Engineering',
   ml: 'Machine Learning',
-  data_eng: 'Data Engineering',
-  devops: 'DevOps',
-  product: 'Product Management',
+  data_eng: 'Environmental Engineering',
+  devops: 'Aerospace Engineering',
+  product: 'Nuclear Engineering',
   research: 'Research',
   chem_eng: 'Chemical Engineering',
   mech_eng: 'Mechanical Engineering',
@@ -584,7 +585,7 @@ function RewriteCta({ isPro }: { isPro: boolean }) {
     <div className="glass-card mt-2 flex flex-col items-center gap-4 rounded-2xl border border-white/[0.06] p-7 text-center md:p-8">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-md">
         <Image
-          src="/scout-logo.png"
+          src={scoutLogo}
           alt="Scout"
           width={28}
           height={28}

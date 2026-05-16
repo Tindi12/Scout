@@ -4,11 +4,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'cdn.brandfetch.io',
-      },
-      {
-        protocol: 'https',
-        hostname: 'asset.brandfetch.io',
+        hostname: 'ncaa-api.henrygd.me',
       },
     ],
   },

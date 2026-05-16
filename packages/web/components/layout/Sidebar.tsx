@@ -12,12 +12,14 @@ import {
   FileText,
   LayoutDashboard,
   Settings as SettingsIcon,
+  User,
   type LucideIcon,
 } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SendScoutButton } from '@/components/layout/SendScoutButton'
+import { scoutLogo } from '@/lib/scout-logo'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +35,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: '/explore', label: 'Jobs', icon: Compass },
   { href: '/tracker', label: 'Tracker', icon: Activity },
   { href: '/copilot', label: 'Copilot', icon: Bot },
+  { href: '/profile', label: 'Profile', icon: User },
 ]
 
 const SETTINGS_ITEM: NavItem = {
@@ -50,9 +53,11 @@ function isActive(pathname: string | null, href: string): boolean {
 function NavLink({
   item,
   active,
+  showAlertDot,
 }: {
   item: NavItem
   active: boolean
+  showAlertDot?: boolean
 }) {
   const Icon = item.icon
   return (
@@ -73,6 +78,12 @@ function NavLink({
         strokeWidth={1.75}
       />
       <span className="font-label font-medium">{item.label}</span>
+      {showAlertDot && (
+        <span
+          aria-label="Profile incomplete"
+          className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-[#FF6733] shadow-[0_0_8px_rgba(255,103,51,0.7)]"
+        />
+      )}
     </Link>
   )
 }
@@ -81,6 +92,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, isLoaded } = useUser()
   const [isPro, setIsPro] = useState<boolean | null>(null)
+  const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -96,6 +108,17 @@ export function Sidebar() {
         if (!cancelled) setIsPro(Boolean(data?.is_pro))
       } catch {
         if (!cancelled) setIsPro(false)
+      }
+    })()
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/user/me', { cache: 'no-store' })
+        if (!response.ok) return
+        const body = (await response.json()) as { profile_complete?: boolean }
+        if (!cancelled) setProfileComplete(Boolean(body?.profile_complete))
+      } catch {
+        if (!cancelled) setProfileComplete(null)
       }
     })()
 
@@ -117,7 +140,7 @@ export function Sidebar() {
     >
       <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
         <Image
-          src="/scout-logo.png"
+          src={scoutLogo}
           alt="Scout"
           width={28}
           height={28}
@@ -177,6 +200,7 @@ export function Sidebar() {
             key={item.href}
             item={item}
             active={isActive(pathname, item.href)}
+            showAlertDot={item.href === '/profile' && profileComplete === false}
           />
         ))}
       </nav>

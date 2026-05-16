@@ -2,14 +2,15 @@
   "name": "scout",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"pnpm --filter web dev\" \"pnpm --filter api dev\"",
-    "lint": "pnpm --filter web lint",
-    "typecheck": "pnpm --filter web typecheck",
+    "dev": "concurrently -n web,api -c cyan,magenta \"corepack pnpm --filter web dev\" \"corepack pnpm --filter api dev\"",
+    "lint": "corepack pnpm --filter web lint",
+    "typecheck": "corepack pnpm --filter web typecheck",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "prettier": "^3.4.2"
+    "prettier": "^3.4.2",
+    "supabase": "^2.98.2"
   },
   "packageManager": "pnpm@9.15.4"
 }

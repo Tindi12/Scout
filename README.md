@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./packages/web/public/scout-logo.png" alt="Scout logo" width="110" />
+  <img src="./docs/imgs/Scout Logo.png" alt="Scout logo" width="110" />
 
 # Scout
 

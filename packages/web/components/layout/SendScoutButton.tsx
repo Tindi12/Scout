@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { scoutLogo } from '@/lib/scout-logo'
 import { cn } from '@/lib/utils'
 
 export type SendScoutVariant = 'sidebar' | 'topbar' | 'fab'
@@ -47,7 +48,7 @@ export function SendScoutButton({
   const content = (
     <>
       <Image
-        src="/scout-logo.png"
+        src={scoutLogo}
         alt=""
         width={20}
         height={20}
@@ -83,7 +84,7 @@ export function SendScoutButton({
         <DialogContent className="glass-card-strong max-w-md gap-5 rounded-2xl border-white/10 bg-[#0a0a0a]/90 p-7 text-white">
           <DialogHeader className="items-center text-center sm:text-center">
             <Image
-              src="/scout-logo.png"
+              src={scoutLogo}
               alt="Scout"
               width={40}
               height={40}

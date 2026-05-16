@@ -1,5 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
+
+import { scoutLogo } from '@/lib/scout-logo'
 import type { ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 
@@ -41,7 +43,7 @@ export function LegalPageShell({
           </Link>
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/scout-logo.png"
+              src={scoutLogo}
               alt="Scout"
               width={32}
               height={32}

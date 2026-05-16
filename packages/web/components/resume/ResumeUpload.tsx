@@ -31,9 +31,9 @@ interface ResumeUploadProps {
 const ROLE_LABELS: Record<string, string> = {
   swe: 'Software Engineering Intern',
   ml: 'Machine Learning Intern',
-  data_eng: 'Data Engineering Intern',
-  devops: 'DevOps Intern',
-  product: 'Product Management Intern',
+  data_eng: 'Environmental Engineering Intern',
+  devops: 'Aerospace Engineering Intern',
+  product: 'Nuclear Engineering Intern',
   research: 'Research Intern',
   chem_eng: 'Chemical Engineering Intern',
   mech_eng: 'Mechanical Engineering Intern',

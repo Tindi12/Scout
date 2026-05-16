@@ -7,19 +7,19 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
   ArrowRight,
+  Atom,
   BarChart3,
   Brain,
   Building2,
   Check,
-  Cloud,
   Code2,
   Cog,
-  Database,
   FlaskConical,
   HeartPulse,
-  LayoutGrid,
+  Leaf,
   Loader2,
   Microscope,
+  Plane,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
@@ -27,6 +27,7 @@ import { useUser } from '@clerk/nextjs'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 
+import { scoutLogo } from '@/lib/scout-logo'
 import {
   completeOnboarding,
   type OnboardingData,
@@ -55,21 +56,21 @@ const ROLES: Role[] = [
   },
   {
     id: 'data_eng',
-    title: 'Data Engineering',
-    desc: 'Data pipelines, analytics, and infrastructure',
-    Icon: Database,
+    title: 'Environmental Engineering',
+    desc: 'Sustainability, water systems, and climate-tech internships',
+    Icon: Leaf,
   },
   {
     id: 'devops',
-    title: 'DevOps & Cloud',
-    desc: 'Infrastructure, CI/CD, and cloud platforms',
-    Icon: Cloud,
+    title: 'Aerospace Engineering',
+    desc: 'Aircraft, spacecraft, and propulsion systems internships',
+    Icon: Plane,
   },
   {
     id: 'product',
-    title: 'Product Management',
-    desc: 'APM and product internship programs',
-    Icon: LayoutGrid,
+    title: 'Nuclear Engineering',
+    desc: 'Reactor design, energy systems, and radiation science internships',
+    Icon: Atom,
   },
   {
     id: 'research',
@@ -219,7 +220,7 @@ export default function OnboardingPage() {
       <div className="relative mx-auto flex max-w-5xl flex-col items-center">
         <div className="flex items-center gap-2.5">
           <Image
-            src="/scout-logo.png"
+            src={scoutLogo}
             alt="Scout"
             width={36}
             height={36}
@@ -855,7 +856,7 @@ function SuccessView() {
           className="absolute inset-0 -z-10 animate-pulse rounded-full bg-[#FF6733]/30 blur-2xl"
         />
         <Image
-          src="/scout-logo.png"
+          src={scoutLogo}
           alt="Scout"
           width={80}
           height={80}

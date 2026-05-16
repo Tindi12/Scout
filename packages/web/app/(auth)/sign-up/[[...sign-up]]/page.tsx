@@ -2,6 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+
+import { scoutLogo } from '@/lib/scout-logo'
 import { SignUp } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
 
@@ -15,7 +17,7 @@ export default function SignUpPage() {
           aria-label="Scout home"
         >
           <Image
-            src="/scout-logo.png"
+            src={scoutLogo}
             alt="Scout"
             width={36}
             height={36}

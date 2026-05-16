@@ -2,6 +2,43 @@ import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+const PROFILE_COLUMNS = [
+  'id',
+  'is_pro',
+  'name',
+  'phone_number',
+  'linkedin_url',
+  'github_url',
+  'portfolio_url',
+  'address_line',
+  'city',
+  'address_region',
+  'postal_code',
+  'country',
+  'work_authorization',
+  'cpt_eligible',
+  'opt_eligible',
+  'requires_sponsorship',
+  'school',
+  'degree_type',
+  'major',
+  'minor',
+  'gpa',
+  'grad_year',
+  'target_roles',
+  'preferred_locations',
+  'remote_preference',
+  'willing_to_relocate',
+  'earliest_start_date',
+  'heard_about_us',
+  'default_cover_letter',
+  'gender_identity',
+  'race_ethnicity',
+  'veteran_status',
+  'disability_status',
+  'profile_complete',
+] as const
+
 export async function GET() {
   const { userId } = await auth()
   if (!userId) {
@@ -26,7 +63,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from('users')
-    .select('id, is_pro, target_roles')
+    .select(PROFILE_COLUMNS.join(', '))
     .eq('clerk_id', userId)
     .maybeSingle()
 
@@ -37,13 +74,17 @@ export async function GET() {
     )
   }
 
+  const row = (data ?? {}) as Record<string, unknown>
+
   return NextResponse.json(
     {
-      id: data?.id ?? null,
-      is_pro: Boolean(data?.is_pro),
-      target_roles: Array.isArray(data?.target_roles)
-        ? (data?.target_roles as unknown[])
+      id: (row.id as string | null) ?? null,
+      is_pro: Boolean(row.is_pro),
+      target_roles: Array.isArray(row.target_roles)
+        ? (row.target_roles as unknown[])
         : [],
+      profile_complete: Boolean(row.profile_complete),
+      profile: data ? row : null,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )
