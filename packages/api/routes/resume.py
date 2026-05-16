@@ -12,6 +12,7 @@ from core.ai_router import call_ai
 from core.auth import verify_resume_api_user
 from core.supabase_client import supabase
 from services.resume_parser import resume_parser
+from services.resume_rewriter import resume_rewriter
 from services.resume_scorer import resume_scorer
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,63 @@ class AnalyzeResumeRequest(BaseModel):
     target_role: str
 
 
+class RewriteResumeRequest(BaseModel):
+    resume_id: str
+    target_role: str
+
+
+class RewriteForJobRequest(BaseModel):
+    resume_id: str
+    job_description: str
+    target_role: str
+
+
+def _coerce_parsed_content(parsed_content: object) -> dict:
+    if parsed_content is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Resume must be parsed first. Call POST /resume/parse.",
+        )
+    if isinstance(parsed_content, str):
+        try:
+            parsed_content = json.loads(parsed_content)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=422,
+                detail="Parsed resume is invalid; run POST /resume/parse again.",
+            )
+    if not isinstance(parsed_content, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="Parsed resume is invalid; run POST /resume/parse again.",
+        )
+    return parsed_content
+
+
+def _load_owned_resume_row(
+    resume_id: str,
+    current_user: dict,
+    *,
+    select: str,
+    operation: str = "load resume",
+) -> dict:
+    resume = _execute_pg(
+        operation,
+        lambda: supabase.table("resumes")
+        .select(select)
+        .eq("id", resume_id)
+        .execute(),
+    )
+    rows = resume.data
+    if not rows:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    row = rows[0]
+    users_row = _embedded_users_row(row.get("users"))
+    if not _user_owns_resume_row(row, users_row, current_user["sub"]):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return row
+
+
 @router.post("/parse")
 async def parse_resume(
     request: ParseResumeRequest,
@@ -178,44 +236,13 @@ async def score_resume(
     request: ScoreResumeRequest,
     current_user: dict = Depends(verify_resume_api_user),
 ) -> dict:
-    resume = _execute_pg(
-        "load resume for score",
-        lambda: supabase.table("resumes")
-        .select("parsed_content, user_id, users!inner(clerk_id)")
-        .eq("id", request.resume_id)
-        .execute(),
+    row = _load_owned_resume_row(
+        request.resume_id,
+        current_user,
+        select="parsed_content, user_id, users!inner(clerk_id)",
+        operation="load resume for score",
     )
-
-    rows = resume.data
-    if not rows:
-        raise HTTPException(status_code=404, detail="Resume not found")
-
-    row = rows[0]
-    users_row = _embedded_users_row(row.get("users"))
-    if not _user_owns_resume_row(row, users_row, current_user["sub"]):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    parsed_content = row["parsed_content"]
-    if parsed_content is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Resume must be parsed first. Call POST /resume/parse.",
-        )
-
-    if isinstance(parsed_content, str):
-        try:
-            parsed_content = json.loads(parsed_content)
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=422,
-                detail="Parsed resume is invalid; run POST /resume/parse again.",
-            )
-
-    if not isinstance(parsed_content, dict):
-        raise HTTPException(
-            status_code=422,
-            detail="Parsed resume is invalid; run POST /resume/parse again.",
-        )
+    parsed_content = _coerce_parsed_content(row["parsed_content"])
 
     result = await resume_scorer.score_resume(parsed_content, request.target_role)
 
@@ -319,7 +346,8 @@ async def get_analysis(
         "load analysis by id",
         lambda: supabase.table("analyses")
         .select(
-            "id, resume_id, target_role, score, breakdown, weaknesses, user_id"
+            "id, resume_id, target_role, score, breakdown, weaknesses, "
+            "rewritten_resume, user_id"
         )
         .eq("id", analysis_id)
         .execute(),
@@ -355,17 +383,78 @@ async def get_analysis(
         "score": row.get("score"),
         "breakdown": row.get("breakdown"),
         "weaknesses": row.get("weaknesses") or [],
+        "rewritten_resume": row.get("rewritten_resume"),
     }
 
 
 @router.post("/rewrite")
-async def rewrite_resume() -> dict[str, str]:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def rewrite_resume(
+    request: RewriteResumeRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    row = _load_owned_resume_row(
+        request.resume_id,
+        current_user,
+        select="parsed_content, user_id, users!inner(clerk_id)",
+        operation="load resume for rewrite",
+    )
+    parsed_content = _coerce_parsed_content(row["parsed_content"])
+
+    rewritten = await resume_rewriter.general_rewrite(parsed_content)
+
+    analysis_row = _analysis_insert_row(
+        {
+            "user_id": row["user_id"],
+            "resume_id": request.resume_id,
+            "target_role": request.target_role,
+            "rewritten_resume": rewritten,
+        }
+    )
+
+    return {
+        "resume_id": request.resume_id,
+        "target_role": request.target_role,
+        "analysis_id": str(analysis_row["id"]),
+        "rewritten": rewritten,
+    }
 
 
 @router.post("/rewrite-for-job")
-async def rewrite_resume_for_job() -> dict[str, str]:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def rewrite_resume_for_job(
+    request: RewriteForJobRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    row = _load_owned_resume_row(
+        request.resume_id,
+        current_user,
+        select="parsed_content, user_id, users!inner(clerk_id)",
+        operation="load resume for rewrite-for-job",
+    )
+    parsed_content = _coerce_parsed_content(row["parsed_content"])
+
+    if not request.job_description.strip():
+        raise HTTPException(status_code=422, detail="job_description is required")
+
+    rewritten = await resume_rewriter.jd_specific_rewrite(
+        parsed_content,
+        request.job_description.strip(),
+    )
+
+    analysis_row = _analysis_insert_row(
+        {
+            "user_id": row["user_id"],
+            "resume_id": request.resume_id,
+            "target_role": request.target_role,
+            "rewritten_resume": rewritten,
+        }
+    )
+
+    return {
+        "resume_id": request.resume_id,
+        "target_role": request.target_role,
+        "analysis_id": str(analysis_row["id"]),
+        "rewritten": rewritten,
+    }
 
 
 @router.post("/pdf")
