@@ -15,3 +15,4 @@ def refresh_jobs_task() -> dict:
     result = asyncio.run(store_jobs(jobs))
     logger.info("refresh_jobs_task: done — %s", result)
     return result
+
