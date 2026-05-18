@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from core.auth import verify_clerk_jwt
+from core.auth import verify_clerk_jwt, verify_resume_api_user
 from core.embedding_service import embed_resume, generate_embedding
 from core.supabase_client import supabase
 from services.job_matcher import match_jobs
@@ -26,7 +26,7 @@ class MatchJobsRequest(BaseModel):
 @router.post("/match")
 async def get_job_matches(
     request: MatchJobsRequest,
-    current_user: dict = Depends(verify_clerk_jwt),
+    current_user: dict = Depends(verify_resume_api_user),
 ) -> list[dict]:
     clerk_id = current_user["sub"]
 

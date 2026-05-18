@@ -18,7 +18,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SendScoutButton } from '@/components/layout/SendScoutButton'
+import { ApplicationCreditsMeter } from '@/components/layout/ApplicationCreditsMeter'
 import { scoutLogo } from '@/lib/scout-logo'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -212,7 +212,7 @@ export function Sidebar() {
         />
 
         <div className="px-4">
-          <SendScoutButton variant="sidebar" isPro={Boolean(isPro)} />
+          <ApplicationCreditsMeter />
         </div>
 
         <div className="px-5 pt-1 text-center">
