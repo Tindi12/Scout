@@ -250,11 +250,12 @@ def _render_education(items: list[dict]) -> str:
             degree_parts.append(f"GPA: {gpa.strip()}")
         degree_line = escape_latex(", ".join(degree_parts))
         date_line = _join_dates(ed.get("start_date"), ed.get("end_date"))
+        location = escape_latex((ed.get("location") or "").strip())
 
         lines.append(
             "    \\resumeSubheading"
             f"{{{school}}}{{{date_line}}}"
-            f"{{{degree_line}}}{{}}"
+            f"{{{degree_line}}}{{{location}}}"
         )
 
         coursework = _clean_list(ed.get("relevant_coursework"))
@@ -280,11 +281,12 @@ def _render_experience(items: list[dict]) -> str:
         company = escape_latex(exp.get("company") or "")
         title = escape_latex(exp.get("title") or "")
         date_line = _join_dates(exp.get("start_date"), exp.get("end_date"))
+        location = escape_latex((exp.get("location") or "").strip())
 
         lines.append(
             "    \\resumeSubheading"
             f"{{{company}}}{{{date_line}}}"
-            f"{{{title}}}{{}}"
+            f"{{{title}}}{{{location}}}"
         )
 
         bullets = _clean_list(exp.get("bullets"))
@@ -308,7 +310,13 @@ def _render_projects(items: list[dict]) -> str:
         name = escape_latex(proj.get("name") or "")
         tech = _clean_list(proj.get("tech_stack"))
         tech_line = escape_latex(", ".join(tech)) if tech else ""
-        date_line = _join_dates(proj.get("start_date"), proj.get("end_date"))
+        single_date = (proj.get("date") or "").strip()
+        if single_date:
+            date_line = escape_latex(single_date)
+        else:
+            date_line = _join_dates(
+                proj.get("start_date"), proj.get("end_date")
+            )
 
         if tech_line:
             heading_left = f"\\textbf{{{name}}} $|$ \\emph{{{tech_line}}}"
@@ -333,12 +341,25 @@ def _render_projects(items: list[dict]) -> str:
 def _render_skills(skills: object) -> str:
     if not isinstance(skills, dict):
         return ""
-    groups = [
-        ("Languages", _clean_list(skills.get("languages"))),
-        ("Frameworks", _clean_list(skills.get("frameworks"))),
-        ("Tools", _clean_list(skills.get("tools"))),
-        ("Platforms", _clean_list(skills.get("platforms"))),
-    ]
+
+    rewrite_shape = any(
+        key in skills for key in ("technical", "certifications", "organizations")
+    )
+
+    if rewrite_shape:
+        groups = [
+            ("Technical Skills", _clean_list(skills.get("technical"))),
+            ("Certifications", _clean_list(skills.get("certifications"))),
+            ("Organizations", _clean_list(skills.get("organizations"))),
+        ]
+    else:
+        groups = [
+            ("Languages", _clean_list(skills.get("languages"))),
+            ("Frameworks", _clean_list(skills.get("frameworks"))),
+            ("Tools", _clean_list(skills.get("tools"))),
+            ("Platforms", _clean_list(skills.get("platforms"))),
+        ]
+
     rendered_rows = [
         f"     \\textbf{{{label}}}{{: {escape_latex(', '.join(values))}}} \\\\"
         for label, values in groups
@@ -347,8 +368,12 @@ def _render_skills(skills: object) -> str:
     if not rendered_rows:
         return ""
 
+    section_title = (
+        "Technical Skills \\& Extracurriculars" if rewrite_shape else "Technical Skills"
+    )
+
     return (
-        "\\section{Technical Skills}\n"
+        f"\\section{{{section_title}}}\n"
         " \\begin{itemize}[leftmargin=0.15in, label={}]\n"
         "    \\small{\\item{\n"
         + "\n".join(rendered_rows)

@@ -133,12 +133,14 @@ class AnalyzeResumeRequest(BaseModel):
 class RewriteResumeRequest(BaseModel):
     resume_id: str
     target_role: str
+    analysis_id: Optional[str] = None
 
 
 class RewriteForJobRequest(BaseModel):
     resume_id: str
     job_description: str
     target_role: str
+    analysis_id: Optional[str] = None
 
 
 class PdfResumeRequest(BaseModel):
@@ -263,6 +265,104 @@ def _user_owns_analysis_row(row: dict, sub: str) -> bool:
     owns_by_clerk = bool(user_row and str(user_row.get("id")) == str(row.get("user_id")))
     owns_by_sub = str(row.get("user_id")) == str(sub)
     return owns_by_clerk or owns_by_sub
+
+
+_DEFAULT_BREAKDOWN: dict[str, int] = {
+    "experience": 0,
+    "metrics": 0,
+    "structure": 0,
+    "keywords": 0,
+}
+
+
+def _analysis_score_snapshot(*, resume_id: str, user_id: str) -> dict:
+    """Return score, breakdown, and weaknesses for a new analyses insert."""
+    prior = _execute_pg(
+        "load prior analysis for rewrite score snapshot",
+        lambda: supabase.table("analyses")
+        .select("score, breakdown, weaknesses")
+        .eq("resume_id", resume_id)
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute(),
+    )
+    rows = prior.data or []
+    if rows:
+        row = rows[0]
+        score = row.get("score")
+        return {
+            "score": score if score is not None else 0,
+            "breakdown": row.get("breakdown") or dict(_DEFAULT_BREAKDOWN),
+            "weaknesses": row.get("weaknesses") or [],
+        }
+    return {
+        "score": 0,
+        "breakdown": dict(_DEFAULT_BREAKDOWN),
+        "weaknesses": [],
+    }
+
+
+def _persist_rewrite_analysis(
+    *,
+    user_id: str,
+    resume_id: str,
+    target_role: str,
+    rewritten: dict,
+    before_after: list,
+    analysis_id: Optional[str],
+    current_user: dict,
+) -> dict:
+    """
+    Store rewrite output on an existing analysis (preferred) or insert a new row
+    with score fields copied from the latest analysis for this resume.
+    """
+    if analysis_id:
+        existing = _execute_pg(
+            "load analysis for rewrite update",
+            lambda: supabase.table("analyses")
+            .select("id, resume_id, user_id")
+            .eq("id", analysis_id)
+            .execute(),
+        )
+        rows = existing.data or []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+        row = rows[0]
+        if not _user_owns_analysis_row(row, current_user["sub"]):
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if str(row.get("resume_id") or "") != str(resume_id):
+            raise HTTPException(
+                status_code=422,
+                detail="analysis_id does not belong to this resume",
+            )
+
+        _execute_pg(
+            "update analysis with rewrite",
+            lambda: supabase.table("analyses")
+            .update(
+                {
+                    "rewritten_resume": rewritten,
+                    "before_after": before_after,
+                    "target_role": target_role,
+                }
+            )
+            .eq("id", analysis_id)
+            .execute(),
+        )
+        return {"id": analysis_id}
+
+    snapshot = _analysis_score_snapshot(resume_id=resume_id, user_id=user_id)
+    return _analysis_insert_row(
+        {
+            "user_id": user_id,
+            "resume_id": resume_id,
+            "target_role": target_role,
+            "rewritten_resume": rewritten,
+            "before_after": before_after,
+            **snapshot,
+        }
+    )
 
 
 def _resolve_resume_content_for_pdf(
@@ -541,14 +641,14 @@ async def rewrite_resume(
     rewritten = await resume_rewriter.general_rewrite(parsed_content)
     before_after = _build_before_after(parsed_content, rewritten)
 
-    analysis_row = _analysis_insert_row(
-        {
-            "user_id": row["user_id"],
-            "resume_id": request.resume_id,
-            "target_role": request.target_role,
-            "rewritten_resume": rewritten,
-            "before_after": before_after,
-        }
+    analysis_row = _persist_rewrite_analysis(
+        user_id=str(row["user_id"]),
+        resume_id=request.resume_id,
+        target_role=request.target_role,
+        rewritten=rewritten,
+        before_after=before_after,
+        analysis_id=request.analysis_id,
+        current_user=current_user,
     )
 
     return {
@@ -580,13 +680,14 @@ async def rewrite_resume_for_job(
         request.job_description.strip(),
     )
 
-    analysis_row = _analysis_insert_row(
-        {
-            "user_id": row["user_id"],
-            "resume_id": request.resume_id,
-            "target_role": request.target_role,
-            "rewritten_resume": rewritten,
-        }
+    analysis_row = _persist_rewrite_analysis(
+        user_id=str(row["user_id"]),
+        resume_id=request.resume_id,
+        target_role=request.target_role,
+        rewritten=rewritten,
+        before_after=[],
+        analysis_id=request.analysis_id,
+        current_user=current_user,
     )
 
     return {

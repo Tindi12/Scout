@@ -21,6 +21,11 @@ import { BreakdownCard } from '@/components/resume/BreakdownCard'
 import { scoutLogo } from '@/lib/scout-logo'
 import { ScoreWheel } from '@/components/resume/ScoreWheel'
 import {
+  RewriteResults,
+  type BeforeAfterDiff,
+  type RewrittenResume,
+} from '@/components/resume/RewriteResults'
+import {
   WeaknessCard,
   type Weakness,
   type WeaknessSeverity,
@@ -68,6 +73,18 @@ type Analysis = {
   breakdown: Breakdown
   weaknesses: Weakness[]
 }
+
+type RewriteData = {
+  rewrittenResume: RewrittenResume
+  beforeAfter: BeforeAfterDiff[]
+  analysisId: string
+}
+
+type RewriteState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'done'; data: RewriteData }
+  | { status: 'error'; message: string }
 
 type PageState =
   | { status: 'loading' }
@@ -130,6 +147,34 @@ function normalizeWeaknesses(raw: unknown): Weakness[] {
     .filter((w): w is Weakness => w !== null)
 }
 
+function normalizeBeforeAfter(raw: unknown): BeforeAfterDiff[] {
+  const list = parseMaybeJson<unknown>(raw, [])
+  if (!Array.isArray(list)) return []
+  return list
+    .map((entry): BeforeAfterDiff | null => {
+      if (!entry || typeof entry !== 'object') return null
+      const e = entry as Record<string, unknown>
+      const section = e.section === 'projects' ? 'projects' : 'experience'
+      const original = typeof e.original === 'string' ? e.original : ''
+      const rewritten = typeof e.rewritten === 'string' ? e.rewritten : ''
+      if (!original && !rewritten) return null
+      const diff: BeforeAfterDiff = { section, original, rewritten }
+      if (typeof e.company === 'string') diff.company = e.company
+      if (typeof e.name === 'string') diff.name = e.name
+      return diff
+    })
+    .filter((d): d is BeforeAfterDiff => d !== null)
+}
+
+function normalizeRewrittenResume(raw: unknown): RewrittenResume | null {
+  const obj = parseMaybeJson<Record<string, unknown> | null>(raw, null)
+  if (!obj || typeof obj !== 'object') return null
+  if (!('experience' in obj) && !('projects' in obj) && !('education' in obj)) {
+    return null
+  }
+  return obj as unknown as RewrittenResume
+}
+
 function normalizeTargetRoleKeys(raw: unknown): string[] {
   const roleEntries: unknown[] = Array.isArray(raw)
     ? raw
@@ -162,7 +207,12 @@ export default function ResumeAnalysisPage() {
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false)
   const [reanalyzeError, setReanalyzeError] = useState<string | null>(null)
   const [roleMenuOpen, setRoleMenuOpen] = useState<boolean>(false)
+  const [rewriteState, setRewriteState] = useState<RewriteState>({
+    status: 'idle',
+  })
   const roleMenuRef = useRef<HTMLDivElement | null>(null)
+  const rewriteResultsRef = useRef<HTMLDivElement | null>(null)
+  const previousRewriteStatusRef = useRef<RewriteState['status']>('idle')
 
   useEffect(() => {
     if (!roleMenuOpen) return
@@ -233,6 +283,22 @@ export default function ResumeAnalysisPage() {
         }
 
         setState({ status: 'loaded', analysis })
+
+        const rewrittenResume = normalizeRewrittenResume(body.rewritten_resume)
+        if (rewrittenResume) {
+          previousRewriteStatusRef.current = 'done'
+          setRewriteState({
+            status: 'done',
+            data: {
+              rewrittenResume,
+              beforeAfter: normalizeBeforeAfter(body.before_after),
+              analysisId: analysis.id,
+            },
+          })
+        } else {
+          previousRewriteStatusRef.current = 'idle'
+          setRewriteState({ status: 'idle' })
+        }
       try {
         if (analysis.id) window.localStorage.setItem(LAST_ANALYSIS_ID_KEY, analysis.id)
       } catch {
@@ -349,6 +415,8 @@ export default function ResumeAnalysisPage() {
           weaknesses: normalizeWeaknesses(body.weaknesses),
         },
       })
+      previousRewriteStatusRef.current = 'idle'
+      setRewriteState({ status: 'idle' })
       try {
         window.localStorage.setItem(LAST_ANALYSIS_ID_KEY, newAnalysisId)
       } catch {
@@ -362,6 +430,99 @@ export default function ResumeAnalysisPage() {
       setIsReanalyzing(false)
     }
   }
+
+  const userName = useMemo(() => {
+    if (!user) return 'Scout User'
+    if (user.fullName && user.fullName.trim()) return user.fullName
+    const parts = [user.firstName, user.lastName].filter(
+      (p): p is string => typeof p === 'string' && p.trim().length > 0,
+    )
+    return parts.length > 0 ? parts.join(' ') : 'Scout User'
+  }, [user])
+
+  const handleRewrite = async () => {
+    if (state.status !== 'loaded' || rewriteState.status === 'loading') return
+    const resumeId = state.analysis.resume_id
+    if (!resumeId) {
+      setRewriteState({
+        status: 'error',
+        message: 'Missing resume reference for rewrite.',
+      })
+      return
+    }
+
+    setRewriteState({ status: 'loading' })
+
+    try {
+      const res = await fetch('/api/resume/rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resume_id: resumeId,
+          target_role: state.analysis.target_role,
+          analysis_id: state.analysis.id,
+        }),
+      })
+
+      const text = await res.text()
+      let body: Record<string, unknown> | null = null
+      try {
+        body = text ? (JSON.parse(text) as Record<string, unknown>) : null
+      } catch {
+        body = null
+      }
+
+      if (!res.ok || !body) {
+        const detail =
+          typeof body?.detail === 'string'
+            ? body.detail
+            : 'Scout could not rewrite this resume. Please try again.'
+        setRewriteState({ status: 'error', message: detail })
+        return
+      }
+
+      const rewrittenResume = normalizeRewrittenResume(body.rewritten)
+      const beforeAfter = normalizeBeforeAfter(body.before_after)
+      const newAnalysisId = String(body.analysis_id ?? state.analysis.id)
+
+      if (!rewrittenResume) {
+        setRewriteState({
+          status: 'error',
+          message: 'Rewrite returned an unexpected response.',
+        })
+        return
+      }
+
+      setRewriteState({
+        status: 'done',
+        data: {
+          rewrittenResume,
+          beforeAfter,
+          analysisId: newAnalysisId,
+        },
+      })
+    } catch {
+      setRewriteState({
+        status: 'error',
+        message: 'Network error. Please try again.',
+      })
+    }
+  }
+
+  useEffect(() => {
+    const prev = previousRewriteStatusRef.current
+    previousRewriteStatusRef.current = rewriteState.status
+    if (
+      prev === 'loading' &&
+      rewriteState.status === 'done' &&
+      rewriteResultsRef.current
+    ) {
+      rewriteResultsRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+  }, [rewriteState.status])
 
   if (state.status === 'loading' || !userLoaded) {
     return <AnalysisSkeleton />
@@ -574,14 +735,117 @@ export default function ResumeAnalysisPage() {
             </div>
           )}
 
-          <RewriteCta isPro={isPro} />
+          <div ref={rewriteResultsRef}>
+            <RewriteSection
+              rewriteState={rewriteState}
+              isPro={isPro}
+              onRewrite={handleRewrite}
+              resumeId={analysis.resume_id}
+              userName={userName}
+            />
+          </div>
         </section>
       </div>
     </motion.div>
   )
 }
 
-function RewriteCta({ isPro }: { isPro: boolean }) {
+interface RewriteSectionProps {
+  rewriteState: RewriteState
+  isPro: boolean
+  onRewrite: () => void
+  resumeId: string
+  userName: string
+}
+
+function RewriteSection({
+  rewriteState,
+  isPro,
+  onRewrite,
+  resumeId,
+  userName,
+}: RewriteSectionProps) {
+  if (rewriteState.status === 'done') {
+    return (
+      <RewriteResults
+        beforeAfter={rewriteState.data.beforeAfter}
+        rewrittenResume={rewriteState.data.rewrittenResume}
+        analysisId={rewriteState.data.analysisId}
+        resumeId={resumeId}
+        userName={userName}
+      />
+    )
+  }
+
+  if (rewriteState.status === 'loading') {
+    return <RewriteLoading />
+  }
+
+  return (
+    <RewriteCta
+      isPro={isPro}
+      onRewrite={onRewrite}
+      errorMessage={
+        rewriteState.status === 'error' ? rewriteState.message : null
+      }
+    />
+  )
+}
+
+function RewriteLoading() {
+  return (
+    <div className="glass-card mt-2 flex flex-col items-center gap-5 rounded-2xl border border-white/[0.06] p-8 text-center md:p-10">
+      <motion.div
+        initial={{ scale: 1 }}
+        animate={{ scale: [1, 1.08, 1] }}
+        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+        className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-md"
+      >
+        <Image
+          src={scoutLogo}
+          alt="Scout"
+          width={34}
+          height={34}
+          draggable={false}
+          className="h-8 w-8 select-none object-contain"
+        />
+      </motion.div>
+
+      <div>
+        <p className="font-headline text-xl font-medium tracking-[-0.01em] text-white">
+          Scout is rewriting your resume...
+        </p>
+        <p className="mt-2 font-body text-sm text-[#888]">
+          This takes about 10 seconds
+        </p>
+      </div>
+
+      <div
+        className="relative h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-white/[0.05]"
+        aria-hidden
+      >
+        <motion.span
+          className="absolute top-0 left-0 h-full w-1/3 rounded-full bg-[#FF6733] shadow-[0_0_18px_rgba(255,103,51,0.55)]"
+          initial={{ x: '-100%' }}
+          animate={{ x: '300%' }}
+          transition={{
+            duration: 1.6,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+interface RewriteCtaProps {
+  isPro: boolean
+  onRewrite: () => void
+  errorMessage: string | null
+}
+
+function RewriteCta({ isPro, onRewrite, errorMessage }: RewriteCtaProps) {
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   return (
@@ -598,22 +862,24 @@ function RewriteCta({ isPro }: { isPro: boolean }) {
       </div>
       <div>
         <p className="font-headline text-xl font-medium tracking-[-0.01em] text-white">
-          Ready to optimize?
+          {errorMessage ? 'Rewrite didn’t finish' : 'Ready to optimize?'}
         </p>
         <p className="mx-auto mt-2 max-w-md font-body text-sm leading-relaxed text-[#999]">
-          Scout will rewrite your resume using the Jake-ATS proof format, fixing every issue
-          above.
+          {errorMessage
+            ? errorMessage
+            : 'Scout will rewrite your resume using the Jake-ATS proof format, fixing every issue above.'}
         </p>
       </div>
 
       {isPro ? (
-        <Link
-          href="/resume/builder"
+        <button
+          type="button"
+          onClick={onRewrite}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
         >
-          Rewrite with Scout
+          {errorMessage ? 'Try again' : 'Rewrite with Scout'}
           <ArrowRight className="h-4 w-4" strokeWidth={2} />
-        </Link>
+        </button>
       ) : (
         <>
           <button
