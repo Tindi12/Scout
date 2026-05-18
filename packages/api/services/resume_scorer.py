@@ -27,6 +27,7 @@ class ResumeScorer:
             prompt=user_prompt,
             system=system,
             task="fast",
+            json_mode=True,
         )
 
         if ai_response is None or not str(ai_response).strip():

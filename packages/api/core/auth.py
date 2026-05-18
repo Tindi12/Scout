@@ -69,19 +69,21 @@ async def verify_resume_api_user(
         )
     return _user_from_supabase_jwt(credentials.credentials)
 
-async def require_pro(current_user: dict = Depends(verify_clerk_jwt)) -> dict:
+async def require_pro(current_user: dict = Depends(verify_resume_api_user)) -> dict:
     from core.supabase_client import supabase
 
-    user = supabase.table("users")\
-        .select("is_pro")\
-        .eq("clerk_id", current_user["sub"])\
-        .single()\
+    user = (
+        supabase.table("users")
+        .select("is_pro")
+        .eq("clerk_id", current_user["sub"])
+        .maybe_single()
         .execute()
+    )
 
-    if not user.data or not user.data.get["is_pro"]:
+    if not user.data or not user.data.get("is_pro"):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Pro subscription required"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pro subscription required",
         )
 
     return current_user

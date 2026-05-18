@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { BreakdownCard } from '@/components/resume/BreakdownCard'
 import { scoutLogo } from '@/lib/scout-logo'
 import { ScoreWheel } from '@/components/resume/ScoreWheel'
@@ -581,6 +582,8 @@ export default function ResumeAnalysisPage() {
 }
 
 function RewriteCta({ isPro }: { isPro: boolean }) {
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+
   return (
     <div className="glass-card mt-2 flex flex-col items-center gap-4 rounded-2xl border border-white/[0.06] p-7 text-center md:p-8">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-md">
@@ -612,18 +615,26 @@ function RewriteCta({ isPro }: { isPro: boolean }) {
           <ArrowRight className="h-4 w-4" strokeWidth={2} />
         </Link>
       ) : (
-        <div className="flex flex-col items-center gap-2">
-          <span
-            aria-disabled
-            className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-6 font-label text-sm font-semibold text-[#888]"
+        <>
+          <button
+            type="button"
+            onClick={() => setUpgradeOpen(true)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-6 font-label text-sm font-semibold text-[#888] transition-colors hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-[#aaa] active:scale-[0.97]"
           >
             <Lock className="h-4 w-4" strokeWidth={2} />
             Rewrite with Scout
-          </span>
+            <ArrowRight className="h-4 w-4" strokeWidth={2} />
+          </button>
           <p className="font-body text-xs text-[#666]">
             Pro feature — Upgrade to unlock
           </p>
-        </div>
+          <ProUpgradeDialog
+            open={upgradeOpen}
+            onOpenChange={setUpgradeOpen}
+            title="Resume rewrite is a Pro feature"
+            description="Upgrade to let Scout rewrite your resume in Jake-ATS format and fix every issue from your analysis. Free accounts can still upload, score, and review weaknesses."
+          />
+        </>
       )}
     </div>
   )

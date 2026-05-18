@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   CircleDashed,
   FileText,
   TrendingUp,
+  Upload,
 } from 'lucide-react'
 
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
@@ -23,11 +24,9 @@ type Status = 'loading' | 'empty' | 'loaded' | 'error'
 
 type UserRow = {
   id: string
-  clerk_id: string
   name: string | null
   is_pro: boolean | null
   target_roles: string[] | null
-  onboarding_complete: boolean | null
   profile_complete: boolean | null
 }
 
@@ -36,6 +35,9 @@ type AnalysisRow = {
   score: number | null
   created_at: string
 }
+
+const LAST_ANALYSIS_ID_KEY = 'scout:last_analysis_id'
+const LAST_ANALYSIS_TS_KEY = 'scout:last_analysis_ts'
 
 type ApplicationRow = {
   id: string
@@ -90,6 +92,8 @@ export default function DashboardPage() {
   }>({ status: 'loading' })
 
   // Fetch the Supabase user row first — we need its id for the other queries.
+  // Go through /api/user/me (service role) so RLS doesn't hide the row from
+  // the anon-key client.
   useEffect(() => {
     if (!clerkLoaded) return
     if (!user?.id) {
@@ -100,24 +104,38 @@ export default function DashboardPage() {
     let cancelled = false
     void (async () => {
       try {
-        const { data, error } = await supabase
-          .from('users')
-          .select(
-            'id, clerk_id, name, is_pro, target_roles, onboarding_complete, profile_complete',
-          )
-          .eq('clerk_id', user.id)
-          .maybeSingle()
-
+        const res = await fetch('/api/user/me', {
+          method: 'GET',
+          cache: 'no-store',
+        })
         if (cancelled) return
-        if (error) {
+        if (!res.ok) {
           setUserState({ status: 'error' })
           return
         }
-        setUserState(
-          data
-            ? { status: 'loaded', data: data as UserRow }
-            : { status: 'empty' },
-        )
+        const body = (await res.json()) as {
+          id?: string | null
+          is_pro?: boolean | null
+          target_roles?: unknown
+          profile_complete?: boolean | null
+          profile?: { name?: string | null } | null
+        }
+        if (!body?.id) {
+          setUserState({ status: 'empty' })
+          return
+        }
+        setUserState({
+          status: 'loaded',
+          data: {
+            id: String(body.id),
+            name: body.profile?.name ?? null,
+            is_pro: body.is_pro ?? false,
+            target_roles: Array.isArray(body.target_roles)
+              ? (body.target_roles as string[])
+              : [],
+            profile_complete: body.profile_complete ?? false,
+          },
+        })
       } catch {
         if (!cancelled) setUserState({ status: 'error' })
       }
@@ -130,6 +148,30 @@ export default function DashboardPage() {
 
   const supabaseUserId = userState.data?.id ?? null
 
+  const fetchAnalyses = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch('/api/resume/analyses?limit=5', {
+        method: 'GET',
+        cache: 'no-store',
+        signal,
+      })
+      if (!res.ok) {
+        setAnalysesState({ status: 'empty' })
+        return
+      }
+      const body = (await res.json()) as { analyses?: AnalysisRow[] }
+      const rows = Array.isArray(body.analyses) ? body.analyses : []
+      setAnalysesState(
+        rows.length > 0
+          ? { status: 'loaded', data: rows }
+          : { status: 'empty' },
+      )
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') return
+      setAnalysesState({ status: 'empty' })
+    }
+  }, [])
+
   useEffect(() => {
     if (!supabaseUserId) {
       if (userState.status !== 'loading') {
@@ -141,30 +183,9 @@ export default function DashboardPage() {
     }
 
     let cancelled = false
+    const controller = new AbortController()
 
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('analyses')
-          .select('id, score, created_at')
-          .eq('user_id', supabaseUserId)
-          .order('created_at', { ascending: false })
-          .limit(2)
-
-        if (cancelled) return
-        if (error) {
-          setAnalysesState({ status: 'empty' })
-          return
-        }
-        setAnalysesState(
-          data && data.length > 0
-            ? { status: 'loaded', data: data as AnalysisRow[] }
-            : { status: 'empty' },
-        )
-      } catch {
-        if (!cancelled) setAnalysesState({ status: 'empty' })
-      }
-    })()
+    void fetchAnalyses(controller.signal)
 
     void (async () => {
       try {
@@ -231,8 +252,42 @@ export default function DashboardPage() {
 
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [supabaseUserId, userState.status])
+  }, [supabaseUserId, userState.status, fetchAnalyses])
+
+  // Refresh the Scout Score when the user comes back to the dashboard
+  // (returning from /resume/analysis after a new analyze) or when another
+  // tab signals a new analysis via localStorage.
+  useEffect(() => {
+    if (!supabaseUserId) return
+
+    const refresh = () => {
+      void fetchAnalyses()
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const onFocus = () => refresh()
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key === LAST_ANALYSIS_ID_KEY ||
+        event.key === LAST_ANALYSIS_TS_KEY
+      ) {
+        refresh()
+      }
+    }
+
+    window.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [supabaseUserId, fetchAnalyses])
 
   const firstName = useMemo(() => {
     if (userState.data?.name) return userState.data.name.split(' ')[0]
@@ -307,7 +362,10 @@ export default function DashboardPage() {
           supabaseUserId={userState.data?.id ?? ''}
         />
       ) : hasResume ? (
-        <ResumeSummary score={latestAnalysis?.score ?? 0} />
+        <ResumeSummary
+          score={latestAnalysis?.score ?? 0}
+          analysisId={latestAnalysis?.id ?? null}
+        />
       ) : null}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -721,17 +779,27 @@ function ApplicationStatusPill({ status }: { status: string | null }) {
   )
 }
 
-function ResumeSummary({ score }: { score: number }) {
+function ResumeSummary({
+  score,
+  analysisId,
+}: {
+  score: number
+  analysisId: string | null
+}) {
+  const analysisHref = analysisId
+    ? `/resume/analysis?id=${encodeURIComponent(analysisId)}`
+    : '/resume/analysis'
+
   return (
-    <Link
-      href="/resume/analysis"
-      className="glass-card group flex items-center justify-between gap-4 rounded-2xl p-5 transition-colors hover:bg-white/[0.04]"
-    >
-      <div className="flex items-center gap-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FF6733]/10">
+    <section className="glass-card flex flex-col gap-4 rounded-2xl p-5 transition-colors hover:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
+      <Link
+        href={analysisHref}
+        className="group flex min-w-0 flex-1 items-center gap-4"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FF6733]/10">
           <FileText className="h-5 w-5 text-[#FF6733]" strokeWidth={1.5} />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="font-label text-[11px] font-medium uppercase tracking-[0.22em] text-[#666]">
             Resume Score
           </p>
@@ -740,12 +808,28 @@ function ResumeSummary({ score }: { score: number }) {
             <span className="ml-1 font-body text-sm text-[#666]">/ 100</span>
           </p>
         </div>
+      </Link>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Link
+          href="/resume?new=1"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 font-label text-xs font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white"
+        >
+          <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+          Upload new
+        </Link>
+        <Link
+          href={analysisHref}
+          className="group inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#FF6733] px-4 font-label text-xs font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-shadow hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
+        >
+          View analysis
+          <ArrowRight
+            className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+            strokeWidth={2}
+          />
+        </Link>
       </div>
-      <span className="inline-flex items-center gap-1 font-label text-xs font-medium text-[#FF6733] transition-transform group-hover:translate-x-0.5">
-        View analysis
-        <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
-      </span>
-    </Link>
+    </section>
   )
 }
 

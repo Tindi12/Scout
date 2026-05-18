@@ -90,7 +90,7 @@ class ResumeRewriter:
         parsed_resume: dict,
         job_description: str,
     ) -> dict:
-        user_prompt = (
+        user_prompt = (  
             f"Job Description:\n{job_description}\n\n"
             f"Resume:\n{json.dumps(parsed_resume)}"
         )

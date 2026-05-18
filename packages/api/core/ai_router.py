@@ -25,7 +25,14 @@ groq_client = AsyncGroq(api_key=GROQ_API_KEY)
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-async def call_ai(prompt: str, system: str, task: str = "quality", stream: bool = False) -> str:
+async def call_ai(
+    prompt: str,
+    system: str,
+    task: str = "quality",
+    stream: bool = False,
+    *,
+    json_mode: bool = False,
+) -> str:
     """
     Prefer Groq; if Groq returns empty content, errors, or rate-limits, fall back to Gemini.
     Empty Llama completions are common enough that failing hard breaks /resume/analyze.
@@ -46,10 +53,14 @@ async def call_ai(prompt: str, system: str, task: str = "quality", stream: bool 
             raise HTTPException(status_code=500, detail=f"AI routing failed: {str(e)}")
 
     async def gemini_text() -> str:
+        config_kwargs: dict = {"system_instruction": system}
+        if json_mode:
+            config_kwargs["response_mime_type"] = "application/json"
+            config_kwargs["max_output_tokens"] = 8192
         response = await gemini_client.aio.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
-            config=genai.types.GenerateContentConfig(system_instruction=system),
+            config=genai.types.GenerateContentConfig(**config_kwargs),
         )
         text = getattr(response, "text", None)
         text = str(text).strip() if text is not None else ""
@@ -59,15 +70,20 @@ async def call_ai(prompt: str, system: str, task: str = "quality", stream: bool 
 
     groq_issue: Optional[str] = None
 
+    groq_kwargs: dict = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+    }
+    if json_mode:
+        groq_kwargs["response_format"] = {"type": "json_object"}
+        groq_kwargs["max_completion_tokens"] = 8192
+
     try:
-        response = await groq_client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            stream=False,
-        )
+        response = await groq_client.chat.completions.create(**groq_kwargs)
         choices = getattr(response, "choices", None) or []
         msg = choices[0].message if choices else None
         content = getattr(msg, "content", None) if msg else None

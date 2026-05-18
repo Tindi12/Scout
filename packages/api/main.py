@@ -21,6 +21,7 @@ API_VERSION = os.getenv("API_VERSION")
 
 app = FastAPI(title="Scout API")
 
+
 _origins_raw = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = [o.strip() for o in _origins_raw.split(",") if o.strip()]
 

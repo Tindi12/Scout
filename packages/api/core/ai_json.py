@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -50,28 +51,41 @@ def _extract_first_json_object(s: str) -> Optional[str]:
     return None
 
 
-def parse_ai_json_object(raw: str, *, context: str = "AI") -> dict[str, Any]:
-    s = strip_markdown_json_fence(raw)
+def _repair_json_text(s: str) -> str:
+    """Best-effort fixes for common LLM JSON mistakes."""
+    s = s.strip().lstrip("\ufeff")
+    # Trailing commas before } or ]
+    s = re.sub(r",(\s*[}\]])", r"\1", s)
+    return s
 
+
+def _loads_json_object(s: str) -> Optional[dict[str, Any]]:
     try:
         out = json.loads(s)
-        if isinstance(out, dict):
-            return out
-        raise HTTPException(
-            status_code=500,
-            detail=f"{context} returned non-object JSON",
-        )
+        return out if isinstance(out, dict) else None
     except json.JSONDecodeError:
-        pass
+        return None
+
+
+def parse_ai_json_object(raw: str, *, context: str = "AI") -> dict[str, Any]:
+    candidates: list[str] = []
+    s = strip_markdown_json_fence(raw)
+    candidates.append(s)
+    candidates.append(_repair_json_text(s))
 
     extracted = _extract_first_json_object(s)
     if extracted:
-        try:
-            out = json.loads(extracted)
-            if isinstance(out, dict):
-                return out
-        except json.JSONDecodeError:
-            pass
+        candidates.append(extracted)
+        candidates.append(_repair_json_text(extracted))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        out = _loads_json_object(candidate)
+        if out is not None:
+            return out
 
     raise HTTPException(
         status_code=500,

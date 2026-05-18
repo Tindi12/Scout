@@ -1,1 +1,122 @@
-[]
+[
+    {
+      "role_id": "swe",
+      "label": "Software Engineering Intern",
+      "required_skills": ["data structures", "algorithms", "one OOP language", "git"],
+      "nice_to_have": ["system design", "web frameworks", "databases", "APIs"],
+      "project_depth": "at least 1 project with backend or fullstack component",
+      "experience_min": "any technical experience or strong projects",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["Google", "Meta", "Apple", "Microsoft", "Stripe", "startups"]
+    },
+    {
+      "role_id": "ml",
+      "label": "Machine Learning Intern",
+      "required_skills": ["Python", "linear algebra", "statistics", "one ML framework"],
+      "nice_to_have": ["PyTorch", "TensorFlow", "data pipelines", "research experience"],
+      "project_depth": "at least 1 ML or data science project with real dataset",
+      "experience_min": "ML coursework or personal projects",
+      "gpa_soft_threshold": 3.2,
+      "target_companies": ["Google DeepMind", "OpenAI", "Meta AI", "Microsoft Research"]
+    },
+    {
+      "role_id": "aerospace_eng",
+      "label": "Aerospace Engineering Intern",
+      "required_skills": ["CAD software", "thermodynamics", "fluid mechanics", "MATLAB"],
+      "nice_to_have": ["ANSYS", "SolidWorks", "propulsion systems", "FEA"],
+      "project_depth": "design project or research with aerospace application",
+      "experience_min": "aerospace coursework or relevant lab experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["NASA", "SpaceX", "Boeing", "Lockheed Martin", "Northrop Grumman", "Raytheon"]
+    },
+    {
+      "role_id": "environmental_eng",
+      "label": "Environmental Engineering Intern",
+      "required_skills": ["environmental science", "water treatment", "EPA regulations", "AutoCAD"],
+      "nice_to_have": ["GIS", "sustainability reporting", "remediation", "air quality modeling"],
+      "project_depth": "environmental assessment or sustainability project",
+      "experience_min": "environmental engineering coursework or field experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["AECOM", "Jacobs", "Tetra Tech", "WSP", "EPA", "environmental startups"]
+    },
+    {
+      "role_id": "nuclear_eng",
+      "label": "Nuclear Engineering Intern",
+      "required_skills": ["nuclear physics", "radiation safety", "reactor theory", "MATLAB"],
+      "nice_to_have": ["MCNP", "neutronics", "thermal hydraulics", "NRC regulations"],
+      "project_depth": "nuclear simulation or reactor design project",
+      "experience_min": "nuclear engineering coursework or lab experience",
+      "gpa_soft_threshold": 3.2,
+      "target_companies": ["NuScale", "TerraPower", "Westinghouse", "Duke Energy", "Department of Energy"]
+    },
+    {
+      "role_id": "research",
+      "label": "Research Intern",
+      "required_skills": ["technical writing", "data analysis", "literature review", "one research tool"],
+      "nice_to_have": ["publications", "lab experience", "grant writing", "statistical analysis"],
+      "project_depth": "independent research project or thesis work",
+      "experience_min": "any research or lab experience",
+      "gpa_soft_threshold": 3.3,
+      "target_companies": ["national labs", "universities", "R&D divisions", "think tanks"]
+    },
+    {
+      "role_id": "chem_eng",
+      "label": "Chemical Engineering Intern",
+      "required_skills": ["thermodynamics", "mass transfer", "process design", "MATLAB"],
+      "nice_to_have": ["Aspen Plus", "reaction kinetics", "plant safety", "Six Sigma"],
+      "project_depth": "process design or lab research project",
+      "experience_min": "chemical engineering coursework or lab experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["ExxonMobil", "Dow", "BASF", "Shell", "Chevron", "3M", "DuPont"]
+    },
+    {
+      "role_id": "mech_eng",
+      "label": "Mechanical Engineering Intern",
+      "required_skills": ["CAD", "statics", "dynamics", "thermodynamics", "manufacturing"],
+      "nice_to_have": ["SolidWorks", "ANSYS", "GD&T", "CNC machining", "FEA"],
+      "project_depth": "design and build project or senior design",
+      "experience_min": "mechanical engineering coursework or hands-on project",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["Tesla", "SpaceX", "GE", "Caterpillar", "John Deere", "Ford", "GM"]
+    },
+    {
+      "role_id": "elec_eng",
+      "label": "Electrical Engineering Intern",
+      "required_skills": ["circuit analysis", "signal processing", "PCB design", "MATLAB"],
+      "nice_to_have": ["VHDL", "embedded systems", "power electronics", "RF design"],
+      "project_depth": "electronics project or embedded systems build",
+      "experience_min": "electrical engineering coursework or lab experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["Texas Instruments", "Qualcomm", "Intel", "NVIDIA", "Broadcom", "Apple"]
+    },
+    {
+      "role_id": "civil_eng",
+      "label": "Civil Engineering Intern",
+      "required_skills": ["structural analysis", "AutoCAD", "soil mechanics", "project management"],
+      "nice_to_have": ["Revit", "SAP2000", "BIM", "surveying", "traffic engineering"],
+      "project_depth": "structural design or infrastructure project",
+      "experience_min": "civil engineering coursework or field experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["AECOM", "Jacobs", "Bechtel", "Turner Construction", "WSP", "Skanska"]
+    },
+    {
+      "role_id": "bio_eng",
+      "label": "Biomedical Engineering Intern",
+      "required_skills": ["biology", "biomechanics", "medical devices", "MATLAB"],
+      "nice_to_have": ["FDA regulations", "SolidWorks", "signal processing", "tissue engineering"],
+      "project_depth": "biomedical device or research project",
+      "experience_min": "biomedical engineering coursework or lab experience",
+      "gpa_soft_threshold": 3.2,
+      "target_companies": ["Medtronic", "Abbott", "Boston Scientific", "Stryker", "Zimmer Biomet"]
+    },
+    {
+      "role_id": "industrial_eng",
+      "label": "Industrial Engineering Intern",
+      "required_skills": ["operations research", "statistics", "process improvement", "Excel"],
+      "nice_to_have": ["Six Sigma", "lean manufacturing", "simulation", "supply chain"],
+      "project_depth": "process improvement or operations research project",
+      "experience_min": "industrial engineering coursework or operations experience",
+      "gpa_soft_threshold": 3.0,
+      "target_companies": ["Amazon", "UPS", "FedEx", "Boeing", "Toyota", "consulting firms"]
+    }
+  ]

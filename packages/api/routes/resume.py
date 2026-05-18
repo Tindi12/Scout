@@ -7,13 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from postgrest.exceptions import APIError
 
-from core.ai_json import parse_ai_json_object
-from core.ai_router import call_ai
-from core.auth import verify_resume_api_user
+from core.auth import require_pro, verify_resume_api_user
 from core.supabase_client import supabase
 from services.resume_parser import resume_parser
 from services.resume_rewriter import resume_rewriter
 from services.resume_scorer import resume_scorer
+from services.resume_structurer import structure_resume_text
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +161,63 @@ def _coerce_parsed_content(parsed_content: object) -> dict:
     return parsed_content
 
 
+def _build_before_after(original: dict, rewritten: dict) -> list[dict]:
+    """Compare bullets index-by-index between original and rewritten resume.
+
+    Returns only changed bullets, tagged with their section and parent
+    company/project name so the UI can render a focused diff.
+    """
+    diffs: list[dict] = []
+
+    original_experience = original.get("experience") or []
+    rewritten_experience = rewritten.get("experience") or []
+    for i, exp in enumerate(original_experience):
+        if not isinstance(exp, dict):
+            continue
+        original_bullets = exp.get("bullets") or []
+        rewritten_entry = (
+            rewritten_experience[i]
+            if i < len(rewritten_experience) and isinstance(rewritten_experience[i], dict)
+            else {}
+        )
+        rewritten_bullets = rewritten_entry.get("bullets") or []
+        for orig, rewr in zip(original_bullets, rewritten_bullets):
+            if orig != rewr:
+                diffs.append(
+                    {
+                        "section": "experience",
+                        "company": exp.get("company", ""),
+                        "original": orig,
+                        "rewritten": rewr,
+                    }
+                )
+
+    original_projects = original.get("projects") or []
+    rewritten_projects = rewritten.get("projects") or []
+    for i, proj in enumerate(original_projects):
+        if not isinstance(proj, dict):
+            continue
+        original_bullets = proj.get("bullets") or []
+        rewritten_entry = (
+            rewritten_projects[i]
+            if i < len(rewritten_projects) and isinstance(rewritten_projects[i], dict)
+            else {}
+        )
+        rewritten_bullets = rewritten_entry.get("bullets") or []
+        for orig, rewr in zip(original_bullets, rewritten_bullets):
+            if orig != rewr:
+                diffs.append(
+                    {
+                        "section": "projects",
+                        "name": proj.get("name", ""),
+                        "original": orig,
+                        "rewritten": rewr,
+                    }
+                )
+
+    return diffs
+
+
 def _load_owned_resume_row(
     resume_id: str,
     current_user: dict,
@@ -212,13 +268,7 @@ async def parse_resume(
     file_type = row["file_type"]
 
     raw_text = await resume_parser.parse_resume(storage_path, file_type)
-    parse_prompt = load_prompt("parse_prompt.txt")
-    ai_response = await call_ai(prompt=raw_text, system=parse_prompt, task="fast")
-
-    if ai_response is None or not str(ai_response).strip():
-        raise HTTPException(status_code=500, detail="AI returned empty response")
-
-    parsed = parse_ai_json_object(str(ai_response), context="Parse AI")
+    parsed = await structure_resume_text(raw_text)
 
     _execute_pg(
         "save parsed resume",
@@ -288,17 +338,7 @@ async def analyze_resume(
     file_type = row["file_type"]
 
     raw_text = await resume_parser.parse_resume(storage_path, file_type)
-    parse_prompt = load_prompt("parse_prompt.txt")
-    parse_ai_response = await call_ai(
-        prompt=raw_text, system=parse_prompt, task="fast"
-    )
-
-    if parse_ai_response is None or not str(parse_ai_response).strip():
-        raise HTTPException(status_code=500, detail="AI returned empty response")
-
-    parsed_content = parse_ai_json_object(
-        str(parse_ai_response), context="Parse AI"
-    )
+    parsed_content = await structure_resume_text(raw_text)
 
     _execute_pg(
         "save parsed resume after analyze",
@@ -333,6 +373,60 @@ async def analyze_resume(
     }
 
 
+@router.get("/analyses")
+async def list_analyses(
+    limit: int = 10,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """List the current user's most recent analyses for the dashboard.
+
+    Browser reads with anon key + RLS can hide rows inserted by the service
+    role, which causes stale Scout Score on the dashboard. We use the service
+    role here and enforce ownership server-side.
+    """
+    capped = max(1, min(limit, 50))
+    sub = current_user["sub"]
+
+    user_lookup = _execute_pg(
+        "lookup user for analyses list",
+        lambda: supabase.table("users")
+        .select("id, clerk_id")
+        .eq("clerk_id", sub)
+        .limit(1)
+        .execute(),
+    )
+    rows = user_lookup.data or []
+    if not rows:
+        return {"analyses": []}
+
+    supabase_user_id = rows[0].get("id")
+    if not supabase_user_id:
+        return {"analyses": []}
+
+    analyses = _execute_pg(
+        "list analyses by user",
+        lambda: supabase.table("analyses")
+        .select("id, score, target_role, created_at")
+        .eq("user_id", supabase_user_id)
+        .order("created_at", desc=True)
+        .limit(capped)
+        .execute(),
+    )
+
+    out = []
+    for row in analyses.data or []:
+        out.append(
+            {
+                "id": str(row.get("id") or ""),
+                "score": row.get("score"),
+                "target_role": row.get("target_role") or "",
+                "created_at": row.get("created_at"),
+            }
+        )
+
+    return {"analyses": out}
+
+
 @router.get("/analysis/{analysis_id}")
 async def get_analysis(
     analysis_id: str,
@@ -346,8 +440,7 @@ async def get_analysis(
         "load analysis by id",
         lambda: supabase.table("analyses")
         .select(
-            "id, resume_id, target_role, score, breakdown, weaknesses, "
-            "rewritten_resume, user_id"
+            "id, resume_id, target_role, score, breakdown, weaknesses, user_id"
         )
         .eq("id", analysis_id)
         .execute(),
@@ -383,24 +476,23 @@ async def get_analysis(
         "score": row.get("score"),
         "breakdown": row.get("breakdown"),
         "weaknesses": row.get("weaknesses") or [],
-        "rewritten_resume": row.get("rewritten_resume"),
     }
 
 
 @router.post("/rewrite")
 async def rewrite_resume(
     request: RewriteResumeRequest,
-    current_user: dict = Depends(verify_resume_api_user),
+    current_user: dict = Depends(require_pro),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
         current_user,
         select="parsed_content, user_id, users!inner(clerk_id)",
-        operation="load resume for rewrite",
     )
     parsed_content = _coerce_parsed_content(row["parsed_content"])
 
     rewritten = await resume_rewriter.general_rewrite(parsed_content)
+    before_after = _build_before_after(parsed_content, rewritten)
 
     analysis_row = _analysis_insert_row(
         {
@@ -408,6 +500,7 @@ async def rewrite_resume(
             "resume_id": request.resume_id,
             "target_role": request.target_role,
             "rewritten_resume": rewritten,
+            "before_after": before_after,
         }
     )
 
@@ -416,19 +509,19 @@ async def rewrite_resume(
         "target_role": request.target_role,
         "analysis_id": str(analysis_row["id"]),
         "rewritten": rewritten,
+        "before_after": before_after,
     }
 
 
 @router.post("/rewrite-for-job")
 async def rewrite_resume_for_job(
     request: RewriteForJobRequest,
-    current_user: dict = Depends(verify_resume_api_user),
+    current_user: dict = Depends(require_pro),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
         current_user,
         select="parsed_content, user_id, users!inner(clerk_id)",
-        operation="load resume for rewrite-for-job",
     )
     parsed_content = _coerce_parsed_content(row["parsed_content"])
 

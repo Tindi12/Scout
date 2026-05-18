@@ -45,6 +45,9 @@ const ROLE_LABELS: Record<string, string> = {
 
 const DEFAULT_TARGET_ROLE = 'Software Engineering Intern'
 
+const LAST_ANALYSIS_ID_KEY = 'scout:last_analysis_id'
+const LAST_ANALYSIS_TS_KEY = 'scout:last_analysis_ts'
+
 type UploadState =
   | { status: 'idle' }
   | { status: 'selected'; file: File }
@@ -242,6 +245,14 @@ export function ResumeUpload({
 
       clearProgressInterval()
       setState({ status: 'success', file })
+
+      try {
+        window.localStorage.setItem(LAST_ANALYSIS_ID_KEY, analysisId)
+        window.localStorage.setItem(LAST_ANALYSIS_TS_KEY, String(Date.now()))
+      } catch {
+        /* ignore storage errors (private mode, quota) */
+      }
+
       successTimeoutRef.current = setTimeout(() => {
         router.push(`/resume/analysis?id=${analysisId}`)
         onSuccess?.()

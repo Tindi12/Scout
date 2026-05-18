@@ -1,7 +1,7 @@
 'use client'
 
 import { useUser } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
@@ -10,13 +10,19 @@ const LAST_ANALYSIS_ID_KEY = 'scout:last_analysis_id'
 
 export default function Page() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { isLoaded, user } = useUser()
   const [didRedirect, setDidRedirect] = useState(false)
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null)
 
+  // ?new=1 forces the upload UI even if the user already has an analysis,
+  // so the "Upload new" CTA on the dashboard always lands here.
+  const forceNew = searchParams.get('new') === '1'
+
   useEffect(() => {
     if (!isLoaded) return
     if (!user?.id) return
+    if (forceNew) return
 
     try {
       const lastId = window.localStorage.getItem(LAST_ANALYSIS_ID_KEY)
@@ -27,7 +33,7 @@ export default function Page() {
     } catch {
       // ignore
     }
-  }, [isLoaded, user?.id, router])
+  }, [isLoaded, user?.id, router, forceNew])
 
   useEffect(() => {
     if (!isLoaded) return
