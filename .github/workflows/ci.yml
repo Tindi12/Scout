@@ -92,6 +92,8 @@ jobs:
           # Required at import time via routes.jobs → services.job_fetcher
           export ADZUNA_APP_ID=ci-placeholder-adzuna
           export ADZUNA_APP_KEY=ci-placeholder-adzuna
+          # Required at import time via core.embedding_service
+          export OPENAI_API_KEY=ci-placeholder-openai
 
           uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!
