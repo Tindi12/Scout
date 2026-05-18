@@ -89,6 +89,9 @@ jobs:
           # Required at import time via routes.resume → core.ai_router
           export GROQ_API_KEY=ci-placeholder-groq
           export GEMINI_API_KEY=ci-placeholder-gemini
+          # Required at import time via routes.jobs → services.job_fetcher
+          export ADZUNA_APP_ID=ci-placeholder-adzuna
+          export ADZUNA_APP_KEY=ci-placeholder-adzuna
 
           uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!

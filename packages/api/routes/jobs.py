@@ -1,12 +1,12 @@
 import logging
 
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, Query
 from starlette.concurrency import run_in_threadpool
 
 from core.auth import verify_clerk_jwt
 from core.supabase_client import supabase
-from services.job_fetcher import fetch_all_jobs
-from services.job_store import store_jobs
+from tasks.job_tasks import refresh_jobs_task
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +47,21 @@ async def list_jobs(
 async def refresh_jobs(
     current_user: dict = Depends(verify_clerk_jwt),
 ) -> dict:
-    jobs = await fetch_all_jobs()
-    summary = await store_jobs(jobs)
-    return summary
+    task = refresh_jobs_task.delay()
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "message": "Job refresh started in background. Check /jobs/status/{task_id} for progress.",
+    }
 
 
-# REMOVE BEFORE PROD
-@router.get("/refresh-test")
-async def refresh_jobs_test() -> dict:
-    jobs = await fetch_all_jobs()
-    summary = await store_jobs(jobs)
-    return summary
+@router.get("/status/{task_id}")
+async def job_refresh_status(task_id: str) -> dict:
+    result = AsyncResult(task_id)
+    return {
+        "task_id": task_id,
+        "status": result.status,
+        "result": result.result if result.ready() else None,
+    }
+
+
