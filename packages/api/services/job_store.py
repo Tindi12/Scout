@@ -8,6 +8,7 @@ from core.supabase_client import supabase
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 500
+URL_LOOKUP_BATCH_SIZE = 100
 
 
 def _upsert_batch(jobs: list[dict]) -> int:
@@ -15,15 +16,22 @@ def _upsert_batch(jobs: list[dict]) -> int:
     return len(jobs)
 
 
-def _fetch_upserted_without_embeddings(urls: list[str]) -> list[dict]:
-    result = (
-        supabase.table("jobs")
-        .select("id, title, company, description")
-        .in_("url", urls)
-        .is_("embedding", "null")
-        .execute()
-    )
-    return result.data or []
+def _fetch_upserted_without_embeddings(all_urls: list[str]) -> list[dict]:
+    if not all_urls:
+        return []
+
+    results: list[dict] = []
+    for i in range(0, len(all_urls), URL_LOOKUP_BATCH_SIZE):
+        batch = all_urls[i : i + URL_LOOKUP_BATCH_SIZE]
+        response = (
+            supabase.table("jobs")
+            .select("id, title, company, description")
+            .in_("url", batch)
+            .is_("embedding", "null")
+            .execute()
+        )
+        results.extend(response.data or [])
+    return results
 
 
 def _delete_expired() -> int:
