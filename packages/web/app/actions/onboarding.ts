@@ -11,9 +11,9 @@ const supabase = createClient(
 export type TargetRole =
   | 'swe'
   | 'ml'
-  | 'data_eng'
-  | 'devops'
-  | 'product'
+  | 'environmental_eng'
+  | 'aerospace_eng'
+  | 'nuclear_eng'
   | 'research'
   | 'chem_eng'
   | 'mech_eng'

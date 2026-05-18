@@ -29,9 +29,9 @@ import {
 const ROLE_LABELS: Record<string, string> = {
   swe: 'Software Engineering',
   ml: 'Machine Learning',
-  data_eng: 'Environmental Engineering',
-  devops: 'Aerospace Engineering',
-  product: 'Nuclear Engineering',
+  environmental_eng: 'Environmental Engineering',
+  aerospace_eng: 'Aerospace Engineering',
+  nuclear_eng: 'Nuclear Engineering',
   research: 'Research',
   chem_eng: 'Chemical Engineering',
   mech_eng: 'Mechanical Engineering',

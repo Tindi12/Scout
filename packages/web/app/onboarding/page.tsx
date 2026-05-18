@@ -55,19 +55,19 @@ const ROLES: Role[] = [
     Icon: Brain,
   },
   {
-    id: 'data_eng',
+    id: 'environmental_eng',
     title: 'Environmental Engineering',
     desc: 'Sustainability, water systems, and climate-tech internships',
     Icon: Leaf,
   },
   {
-    id: 'devops',
+    id: 'aerospace_eng',
     title: 'Aerospace Engineering',
     desc: 'Aircraft, spacecraft, and propulsion systems internships',
     Icon: Plane,
   },
   {
-    id: 'product',
+    id: 'nuclear_eng',
     title: 'Nuclear Engineering',
     desc: 'Reactor design, energy systems, and radiation science internships',
     Icon: Atom,

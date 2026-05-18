@@ -27,9 +27,9 @@ const ROLES: ReadonlyArray<{
 }> = [
   { id: 'swe', title: 'Software Engineering', Icon: Code2 },
   { id: 'ml', title: 'Machine Learning', Icon: Brain },
-  { id: 'data_eng', title: 'Environmental Engineering', Icon: Leaf },
-  { id: 'devops', title: 'Aerospace Engineering', Icon: Plane },
-  { id: 'product', title: 'Nuclear Engineering', Icon: Atom },
+  { id: 'environmental_eng', title: 'Environmental Engineering', Icon: Leaf },
+  { id: 'aerospace_eng', title: 'Aerospace Engineering', Icon: Plane },
+  { id: 'nuclear_eng', title: 'Nuclear Engineering', Icon: Atom },
   { id: 'research', title: 'Research', Icon: Microscope },
   { id: 'chem_eng', title: 'Chemical Engineering', Icon: FlaskConical },
   { id: 'mech_eng', title: 'Mechanical Engineering', Icon: Cog },
