@@ -13,7 +13,7 @@ from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)    
 
 ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID")
 ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY")

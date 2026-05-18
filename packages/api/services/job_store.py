@@ -7,7 +7,7 @@ from core.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 500
+BATCH_SIZE = 50
 URL_LOOKUP_BATCH_SIZE = 100
 
 
