@@ -3,12 +3,14 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from postgrest.exceptions import APIError
 
 from core.auth import require_pro, verify_resume_api_user
 from core.supabase_client import supabase
+from services.latex_generator import generate_resume_pdf as compile_resume_pdf
 from services.resume_parser import resume_parser
 from services.resume_rewriter import resume_rewriter
 from services.resume_scorer import resume_scorer
@@ -139,6 +141,11 @@ class RewriteForJobRequest(BaseModel):
     target_role: str
 
 
+class PdfResumeRequest(BaseModel):
+    resume_id: str
+    analysis_id: str
+
+
 def _coerce_parsed_content(parsed_content: object) -> dict:
     if parsed_content is None:
         raise HTTPException(
@@ -240,6 +247,61 @@ def _load_owned_resume_row(
     if not _user_owns_resume_row(row, users_row, current_user["sub"]):
         raise HTTPException(status_code=403, detail="Forbidden")
     return row
+
+
+def _user_owns_analysis_row(row: dict, sub: str) -> bool:
+    user_lookup = _execute_pg(
+        "lookup user for analysis ownership",
+        lambda: supabase.table("users")
+        .select("id, clerk_id")
+        .eq("clerk_id", sub)
+        .limit(1)
+        .execute(),
+    )
+    users_rows = user_lookup.data or []
+    user_row = users_rows[0] if users_rows else None
+    owns_by_clerk = bool(user_row and str(user_row.get("id")) == str(row.get("user_id")))
+    owns_by_sub = str(row.get("user_id")) == str(sub)
+    return owns_by_clerk or owns_by_sub
+
+
+def _resolve_resume_content_for_pdf(
+    *,
+    resume_id: str,
+    analysis_id: Optional[str],
+    current_user: dict,
+) -> dict:
+    """Return parsed or rewritten resume JSON to feed the LaTeX generator."""
+    if analysis_id:
+        analysis = _execute_pg(
+            "load analysis for pdf",
+            lambda: supabase.table("analyses")
+            .select("id, resume_id, user_id, rewritten_resume")
+            .eq("id", analysis_id)
+            .execute(),
+        )
+        rows = analysis.data
+        if not rows:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+        row = rows[0]
+        if not _user_owns_analysis_row(row, current_user["sub"]):
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if str(row.get("resume_id") or "") != str(resume_id):
+            raise HTTPException(
+                status_code=422,
+                detail="analysis_id does not belong to this resume",
+            )
+        rewritten = row.get("rewritten_resume")
+        if rewritten is not None:
+            return _coerce_parsed_content(rewritten)
+
+    resume_row = _load_owned_resume_row(
+        resume_id,
+        current_user,
+        select="parsed_content, user_id, users!inner(clerk_id)",
+        operation="load resume for pdf",
+    )
+    return _coerce_parsed_content(resume_row["parsed_content"])
 
 
 @router.post("/parse")
@@ -451,22 +513,7 @@ async def get_analysis(
         raise HTTPException(status_code=404, detail="Analysis not found")
 
     row = rows[0]
-    sub = current_user["sub"]
-
-    user_lookup = _execute_pg(
-        "lookup user for analysis ownership",
-        lambda: supabase.table("users")
-        .select("id, clerk_id")
-        .eq("clerk_id", sub)
-        .limit(1)
-        .execute(),
-    )
-    users_rows = user_lookup.data or []
-    user_row = users_rows[0] if users_rows else None
-
-    owns_by_clerk = bool(user_row and str(user_row.get("id")) == str(row.get("user_id")))
-    owns_by_sub = str(row.get("user_id")) == str(sub)
-    if not (owns_by_clerk or owns_by_sub):
+    if not _user_owns_analysis_row(row, current_user["sub"]):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return {
@@ -551,6 +598,23 @@ async def rewrite_resume_for_job(
 
 
 @router.post("/pdf")
-async def generate_resume_pdf() -> dict[str, str]:
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def generate_resume_pdf_endpoint(
+    request: PdfResumeRequest,
+    current_user: dict = Depends(require_pro),
+) -> Response:
+    """Compile parsed (or rewritten) resume JSON into a Jake-format PDF."""
+    resume_content = _resolve_resume_content_for_pdf(
+        resume_id=request.resume_id,
+        analysis_id=request.analysis_id,
+        current_user=current_user,
+    )
+
+    pdf_bytes = await run_in_threadpool(compile_resume_pdf, resume_content)
+
+    filename = f"resume-{request.resume_id[:8]}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
