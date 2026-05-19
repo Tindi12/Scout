@@ -90,6 +90,18 @@ export function Hero() {
             See how it works
           </Link>
         </div>
+
+        <p className="mt-4 font-body text-sm text-[#71717A]">
+          Already have an account?{' '}
+          <Link
+            href="/login"
+            prefetch
+            className="text-[#A1A1AA] underline-offset-4 transition-colors duration-200 hover:text-white"
+          >
+            Log in here
+          </Link>
+          .
+        </p>
       </div>
 
       <div className="relative mx-auto mt-24 max-w-6xl">

@@ -15,7 +15,9 @@ import {
   Upload,
 } from 'lucide-react'
 
+import { ProfilePromptOverlay } from '@/components/profile/ProfilePromptOverlay'
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
+import { isProfilePromptDismissed } from '@/lib/profile-prompt-dismiss'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -90,6 +92,12 @@ export default function DashboardPage() {
     status: Status
     data?: ScoutRunRow
   }>({ status: 'loading' })
+  const [profilePromptHidden, setProfilePromptHidden] = useState(false)
+
+  useEffect(() => {
+    if (!user?.id) return
+    setProfilePromptHidden(isProfilePromptDismissed(user.id))
+  }, [user?.id])
 
   // Fetch the Supabase user row first — we need its id for the other queries.
   // Go through /api/user/me (service role) so RLS doesn't hide the row from
@@ -321,8 +329,22 @@ export default function DashboardPage() {
 
   const strongFitsCount = 0 // job matching engine not wired yet
 
+  const showProfilePrompt =
+    Boolean(user?.id) &&
+    userState.status === 'loaded' &&
+    userState.data?.profile_complete === false &&
+    !profilePromptHidden
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+      {user?.id ? (
+        <ProfilePromptOverlay
+          clerkUserId={user.id}
+          open={showProfilePrompt}
+          onDismiss={() => setProfilePromptHidden(true)}
+        />
+      ) : null}
+
       <Greeting
         firstName={firstName}
         isNewUser={isNewUser}

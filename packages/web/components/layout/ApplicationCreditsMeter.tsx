@@ -1,6 +1,8 @@
 'use client'
 
+import { ApplicationCreditsInfo } from '@/components/layout/ApplicationCreditsInfo'
 import { useExploreBatchOptional } from '@/contexts/explore-batch-context'
+import { creditsPeriodLabel } from '@/lib/subscription-plan'
 import { cn } from '@/lib/utils'
 
 type ApplicationCreditsMeterProps = {
@@ -16,18 +18,23 @@ export function ApplicationCreditsMeter({
 
   const remaining = credits?.remaining
   const limit = credits?.limit
-  const periodLabel = credits?.isPro ? 'this billing period' : 'lifetime'
+  const periodLabel = credits?.plan
+    ? creditsPeriodLabel(credits.plan)
+    : 'lifetime'
 
   return (
     <div
       className={cn(
-        'glass-card w-full rounded-2xl border border-white/[0.06] px-4 py-3.5',
+        'glass-card w-full overflow-visible rounded-2xl border border-white/[0.06] px-4 py-3.5',
         className,
       )}
     >
-      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#666]">
-        Application credits
-      </p>
+      <div className="flex items-center gap-1.5">
+        <p className="min-w-0 flex-1 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.1em] text-[#666]">
+          Application credits
+        </p>
+        <ApplicationCreditsInfo plan={credits?.plan ?? null} />
+      </div>
       {loading ? (
         <div className="mt-2 h-8 w-24 animate-pulse rounded-md bg-white/[0.06]" />
       ) : (

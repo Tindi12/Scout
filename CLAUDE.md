@@ -9,7 +9,7 @@ autonomously applies on their behalf via browser automation.
 ## Monorepo Structure
 packages/web/   → Next.js 14 App Router (Vercel)
 packages/api/   → FastAPI Python backend (Railway)
-supabase/       → Database migrations
+supabase/       → README only; schema on Supabase (scout-dev), not repo SQL files
 
 ## Tech Stack
 - Frontend: Next.js 14, Tailwind, shadcn/ui, Clerk, Supabase JS
@@ -93,11 +93,18 @@ All AI calls go through packages/api/core/ai_router.py
 
 ## Commands
 ```bash
-# Start everything
+# Start everything (preferred on Windows — isolated processes, scoped API reload)
 pnpm dev
 
-# FastAPI only
-cd packages/api && .venv\Scripts\activate && uvicorn main:app --reload
+# Two terminals if reload still feels flaky
+pnpm dev:web   # :3000
+pnpm dev:api   # :8000 — no reload during long AI requests: pnpm --filter api dev:stable
+
+# Legacy concurrently runner
+pnpm dev:concurrent
+
+# FastAPI only (reloads routes/services/core/tasks only, not data/ or tests/)
+cd packages/api && .venv\Scripts\activate && pnpm dev
 
 # TypeScript check
 pnpm --filter web tsc --noEmit

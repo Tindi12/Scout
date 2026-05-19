@@ -24,9 +24,13 @@ export async function POST(req: Request) {
     )
   }
 
-  let body: { resume_id?: string; analysis_id?: string }
+  let body: {
+    resume_id?: string
+    analysis_id?: string
+    rewritten_resume?: Record<string, unknown>
+  }
   try {
-    body = (await req.json()) as { resume_id?: string; analysis_id?: string }
+    body = (await req.json()) as typeof body
   } catch {
     return NextResponse.json({ detail: 'Invalid JSON' }, { status: 400 })
   }
@@ -35,11 +39,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ detail: 'resume_id is required' }, { status: 400 })
   }
 
-  const payload: { resume_id: string; analysis_id?: string } = {
+  const payload: {
+    resume_id: string
+    analysis_id?: string
+    rewritten_resume?: Record<string, unknown>
+  } = {
     resume_id: body.resume_id.trim(),
   }
   if (body.analysis_id?.trim()) {
     payload.analysis_id = body.analysis_id.trim()
+  }
+  if (body.rewritten_resume && typeof body.rewritten_resume === 'object') {
+    payload.rewritten_resume = body.rewritten_resume
   }
 
   const upstream = await fetch(`${getApiBaseUrl()}/resume/pdf`, {

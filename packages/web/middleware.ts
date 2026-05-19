@@ -8,12 +8,16 @@ const isPublicRoute = createRouteMatcher([
   '/terms',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/login(.*)',
 ])
 
 export default clerkMiddleware(async (auth, request) => {
   const { userId, sessionClaims } = await auth()
   const path = request.nextUrl.pathname
-  const isAuthRoute = path.startsWith('/sign-in') || path.startsWith('/sign-up')
+  const isAuthRoute =
+    path.startsWith('/sign-in') ||
+    path.startsWith('/sign-up') ||
+    path.startsWith('/login')
   const metadata = sessionClaims?.metadata as
     | {
         onboardingComplete?: boolean

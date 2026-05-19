@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from postgrest.exceptions import APIError
@@ -52,6 +52,85 @@ def _execute_pg(description: str, fn):
             status_code=502,
             detail=getattr(e, "message", None) or str(e),
         ) from e
+
+
+def _is_resume_variants_unavailable(exc: APIError) -> bool:
+    """True when the table is missing or the query cannot run yet."""
+    msg = (getattr(exc, "message", None) or str(exc)).lower()
+    code = str(getattr(exc, "code", "") or "")
+    return (
+        "resume_variants" in msg
+        or "does not exist" in msg
+        or code in ("42P01", "PGRST205")
+    )
+
+
+def _fetch_resume_variant_row(
+    *,
+    user_supabase_id: str,
+    resume_id: str,
+    job_id: str,
+) -> dict | None:
+    try:
+        resp = (
+            supabase.table("resume_variants")
+            .select("*")
+            .eq("job_id", job_id)
+            .eq("resume_id", resume_id)
+            .eq("user_id", user_supabase_id)
+            .limit(1)
+            .execute()
+        )
+    except APIError as e:
+        if _is_resume_variants_unavailable(e):
+            logger.warning(
+                "resume_variants unavailable: %s", getattr(e, "message", e)
+            )
+            return None
+        raise HTTPException(
+            status_code=502,
+            detail=getattr(e, "message", None) or str(e),
+        ) from e
+
+    if resp is None:
+        return None
+    rows = resp.data if isinstance(resp.data, list) else []
+    if not rows or not isinstance(rows[0], dict):
+        return None
+    return rows[0]
+
+
+def _list_resume_variant_job_ids(
+    *,
+    user_supabase_id: str,
+    resume_id: str,
+) -> list[str]:
+    try:
+        resp = (
+            supabase.table("resume_variants")
+            .select("job_id")
+            .eq("resume_id", resume_id)
+            .eq("user_id", user_supabase_id)
+            .execute()
+        )
+    except APIError as e:
+        if _is_resume_variants_unavailable(e):
+            logger.warning(
+                "resume_variants list skipped: %s", getattr(e, "message", e)
+            )
+            return []
+        raise HTTPException(
+            status_code=502,
+            detail=getattr(e, "message", None) or str(e),
+        ) from e
+
+    if resp is None:
+        return []
+    job_ids: list[str] = []
+    for row in resp.data or []:
+        if isinstance(row, dict) and row.get("job_id"):
+            job_ids.append(str(row["job_id"]))
+    return job_ids
 
 
 def _analysis_insert_row(payload: dict) -> dict:
@@ -145,7 +224,13 @@ class RewriteForJobRequest(BaseModel):
 
 class PdfResumeRequest(BaseModel):
     resume_id: str
-    analysis_id: str
+    analysis_id: Optional[str] = None
+    rewritten_resume: Optional[dict] = None
+
+
+class GenerateVariantRequest(BaseModel):
+    job_id: str
+    resume_id: str
 
 
 def _coerce_parsed_content(parsed_content: object) -> dict:
@@ -365,13 +450,38 @@ def _persist_rewrite_analysis(
     )
 
 
+def _resolve_supabase_user_id(sub: str) -> str:
+    user_lookup = _execute_pg(
+        "lookup user for resume variants",
+        lambda: supabase.table("users")
+        .select("id, clerk_id")
+        .eq("clerk_id", sub)
+        .limit(1)
+        .execute(),
+    )
+    rows = user_lookup.data or []
+    if not rows or not rows[0].get("id"):
+        raise HTTPException(status_code=404, detail="User not found")
+    return str(rows[0]["id"])
+
+
 def _resolve_resume_content_for_pdf(
     *,
     resume_id: str,
     analysis_id: Optional[str],
+    rewritten_resume: Optional[dict],
     current_user: dict,
 ) -> dict:
     """Return parsed or rewritten resume JSON to feed the LaTeX generator."""
+    if rewritten_resume is not None:
+        _load_owned_resume_row(
+            resume_id,
+            current_user,
+            select="id, user_id, users!inner(clerk_id)",
+            operation="verify resume for inline pdf",
+        )
+        return _coerce_parsed_content(rewritten_resume)
+
     if analysis_id:
         analysis = _execute_pg(
             "load analysis for pdf",
@@ -568,7 +678,7 @@ async def list_analyses(
     analyses = _execute_pg(
         "list analyses by user",
         lambda: supabase.table("analyses")
-        .select("id, score, target_role, created_at")
+        .select("id, resume_id, score, target_role, created_at")
         .eq("user_id", supabase_user_id)
         .order("created_at", desc=True)
         .limit(capped)
@@ -580,6 +690,7 @@ async def list_analyses(
         out.append(
             {
                 "id": str(row.get("id") or ""),
+                "resume_id": str(row.get("resume_id") or ""),
                 "score": row.get("score"),
                 "target_role": row.get("target_role") or "",
                 "created_at": row.get("created_at"),
@@ -587,6 +698,147 @@ async def list_analyses(
         )
 
     return {"analyses": out}
+
+
+def _save_resume_variant(
+    *,
+    user_supabase_id: str,
+    resume_id: str,
+    job_id: str,
+    rewritten: dict,
+) -> dict:
+    """Insert or update a variant row (no upsert — works without a unique constraint)."""
+    existing = _fetch_resume_variant_row(
+        user_supabase_id=user_supabase_id,
+        resume_id=resume_id,
+        job_id=job_id,
+    )
+    if existing and existing.get("id"):
+        resp = _execute_pg(
+            "update resume variant",
+            lambda: supabase.table("resume_variants")
+            .update({"rewritten_resume": rewritten})
+            .eq("id", existing["id"])
+            .execute(),
+        )
+        rows = (resp.data if resp is not None else None) or []
+        if rows and isinstance(rows[0], dict):
+            return rows[0]
+        return {**existing, "rewritten_resume": rewritten}
+
+    payload = {
+        "user_id": user_supabase_id,
+        "resume_id": resume_id,
+        "job_id": job_id,
+        "rewritten_resume": rewritten,
+    }
+    resp = _execute_pg(
+        "insert resume variant",
+        lambda: supabase.table("resume_variants").insert(payload).execute(),
+    )
+    rows = (resp.data if resp is not None else None) or []
+    if rows and isinstance(rows[0], dict):
+        return rows[0]
+    return payload
+
+
+@router.get("/variant")
+async def get_resume_variant(
+    job_id: str = Query(..., min_length=1),
+    resume_id: str = Query(..., min_length=1),
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    user_supabase_id = _resolve_supabase_user_id(current_user["sub"])
+    _load_owned_resume_row(
+        resume_id,
+        current_user,
+        select="id, user_id, users!inner(clerk_id)",
+        operation="verify resume for variant lookup",
+    )
+
+    row = _fetch_resume_variant_row(
+        user_supabase_id=user_supabase_id,
+        resume_id=resume_id,
+        job_id=job_id,
+    )
+    if row:
+        return {"cached": True, "variant": row}
+    return {"cached": False, "variant": None}
+
+
+@router.get("/variants")
+async def list_resume_variants(
+    resume_id: str = Query(..., min_length=1),
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """Return job_ids that already have a cached variant for this resume."""
+    user_supabase_id = _resolve_supabase_user_id(current_user["sub"])
+    _load_owned_resume_row(
+        resume_id,
+        current_user,
+        select="id, user_id, users!inner(clerk_id)",
+        operation="verify resume for variants list",
+    )
+
+    job_ids = _list_resume_variant_job_ids(
+        user_supabase_id=user_supabase_id,
+        resume_id=resume_id,
+    )
+    return {"job_ids": job_ids}
+
+
+@router.post("/generate-variant")
+async def generate_resume_variant(
+    request: GenerateVariantRequest,
+    current_user: dict = Depends(require_pro),
+) -> dict:
+    user_supabase_id = _resolve_supabase_user_id(current_user["sub"])
+    resume_row = _load_owned_resume_row(
+        request.resume_id,
+        current_user,
+        select="parsed_content, user_id, users!inner(clerk_id)",
+        operation="load resume for variant generation",
+    )
+    parsed_content = _coerce_parsed_content(resume_row["parsed_content"])
+
+    job_resp = _execute_pg(
+        "load job for variant generation",
+        lambda: supabase.table("jobs")
+        .select("id, title, company, description")
+        .eq("id", request.job_id)
+        .execute(),
+    )
+    job_rows = job_resp.data or []
+    if not job_rows:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = job_rows[0]
+    description = (job.get("description") or "").strip()
+    if not description:
+        raise HTTPException(
+            status_code=422,
+            detail="No description available for this job",
+        )
+
+    title = (job.get("title") or "Role").strip()
+    company = (job.get("company") or "Company").strip()
+    job_description = f"{title} at {company}\n\n{description}"
+
+    rewritten = await resume_rewriter.jd_specific_rewrite(
+        parsed_content,
+        job_description,
+    )
+
+    variant_row = _save_resume_variant(
+        user_supabase_id=user_supabase_id,
+        resume_id=request.resume_id,
+        job_id=request.job_id,
+        rewritten=rewritten,
+    )
+
+    return {
+        "cached": False,
+        "variant": variant_row,
+    }
 
 
 @router.get("/analysis/{analysis_id}")
@@ -707,6 +959,7 @@ async def generate_resume_pdf_endpoint(
     resume_content = _resolve_resume_content_for_pdf(
         resume_id=request.resume_id,
         analysis_id=request.analysis_id,
+        rewritten_resume=request.rewritten_resume,
         current_user=current_user,
     )
 

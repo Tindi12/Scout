@@ -1,7 +1,7 @@
 'use client'
 
 import { ChevronDown } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { JobCard, type JobMatch } from '@/components/jobs/JobCard'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,11 +13,62 @@ export interface JobColumnProps {
   jobs: JobMatch[]
   selectedJobIds: Set<string>
   onToggleSelect: (jobId: string) => void
+  onSelectAllInColumn?: () => void
+  onDeselectAllInColumn?: () => void
   loading?: boolean
+  resumeId: string | null
+  isPro: boolean
+  tailoredJobIds: Set<string>
+  onVariantCached: (jobId: string) => void
 }
 
 const SCROLL_STEP_PX = 400
 const BOTTOM_THRESHOLD_PX = 8
+
+export function ColumnSelectActions({
+  jobIds,
+  selectedJobIds,
+  onSelectAll,
+  onDeselectAll,
+  className,
+}: {
+  jobIds: string[]
+  selectedJobIds: Set<string>
+  onSelectAll: () => void
+  onDeselectAll: () => void
+  className?: string
+}) {
+  if (jobIds.length === 0) return null
+
+  const selectedInColumn = jobIds.filter((id) => selectedJobIds.has(id)).length
+  const allSelected = selectedInColumn === jobIds.length
+  const noneSelected = selectedInColumn === 0
+
+  return (
+    <div
+      className={`flex items-center gap-2${className ? ` ${className}` : ''}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={onSelectAll}
+        disabled={allSelected}
+        className="font-label text-[10px] text-[#666] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-[#666]"
+      >
+        Select all
+      </button>
+      <span aria-hidden className="h-2.5 w-px bg-[#1f1f1f]" />
+      <button
+        type="button"
+        onClick={onDeselectAll}
+        disabled={noneSelected}
+        className="font-label text-[10px] text-[#666] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-[#666]"
+      >
+        Deselect all
+      </button>
+    </div>
+  )
+}
 
 export function JobColumn({
   title,
@@ -26,11 +77,18 @@ export function JobColumn({
   jobs,
   selectedJobIds,
   onToggleSelect,
+  onSelectAllInColumn,
+  onDeselectAllInColumn,
   loading = false,
+  resumeId,
+  isPro,
+  tailoredJobIds,
+  onVariantCached,
 }: JobColumnProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [hasOverflow, setHasOverflow] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
+  const jobIds = useMemo(() => jobs.map((j) => j.id), [jobs])
 
   const recompute = useCallback(() => {
     const node = scrollRef.current
@@ -83,8 +141,9 @@ export function JobColumn({
 
   return (
     <section className="relative flex h-[calc(100vh-260px)] min-h-[480px] flex-col">
-      <header className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <header className="mb-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
           <span
             aria-hidden
             className="inline-block h-2 w-2 rounded-full"
@@ -93,10 +152,19 @@ export function JobColumn({
           <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#888]">
             {title}
           </h2>
+          </div>
+          <span className="glass-pill rounded-full px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-[#888]">
+            {count}
+          </span>
         </div>
-        <span className="glass-pill rounded-full px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-[#888]">
-          {count}
-        </span>
+        {!loading && onSelectAllInColumn && onDeselectAllInColumn ? (
+          <ColumnSelectActions
+            jobIds={jobIds}
+            selectedJobIds={selectedJobIds}
+            onSelectAll={onSelectAllInColumn}
+            onDeselectAll={onDeselectAllInColumn}
+          />
+        ) : null}
       </header>
 
       <div className="relative flex-1 overflow-hidden">
@@ -123,6 +191,10 @@ export function JobColumn({
                   job={job}
                   selected={selectedJobIds.has(job.id)}
                   onToggleSelect={onToggleSelect}
+                  resumeId={resumeId}
+                  isPro={isPro}
+                  hasTailoredVariant={tailoredJobIds.has(job.id)}
+                  onVariantCached={onVariantCached}
                 />
               ))}
             </div>

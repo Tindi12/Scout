@@ -1,8 +1,14 @@
 'use client'
 
-import { Check, ExternalLink, MapPin } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent } from 'react'
+import { Check, ChevronDown, ExternalLink, MapPin, Sparkles } from 'lucide-react'
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useCallback,
+  useState,
+} from 'react'
 
+import { JobCardTailoredPanel } from '@/components/jobs/JobCardTailoredPanel'
 import { cn } from '@/lib/utils'
 
 export type JobMatch = {
@@ -18,12 +24,17 @@ export type JobMatch = {
   final_score: number
   category: string
   matched_skills: string[]
+  description?: string
 }
 
 export interface JobCardProps {
   job: JobMatch
   selected: boolean
   onToggleSelect: (jobId: string) => void
+  resumeId: string | null
+  isPro: boolean
+  hasTailoredVariant?: boolean
+  onVariantCached?: (jobId: string) => void
 }
 
 function scorePillClasses(category: string): string {
@@ -66,11 +77,6 @@ function portalMeta(portal: string): PortalMeta {
   return { label: 'Direct', classes: 'bg-white/5 text-[#888]' }
 }
 
-// Job feeds often pack multiple cities into the single `location` field as
-// "Denver, CO;San Francisco, CA;New York, NY" — a string with no spaces after
-// the separator. Browsers won't wrap that unbroken token, so it overflows the
-// card and slides underneath the right-hand badges. Split it up here so the UI
-// can show a primary city + "+N more" with a tooltip.
 function parseLocations(raw: string): string[] {
   if (!raw) return []
   return raw
@@ -79,7 +85,17 @@ function parseLocations(raw: string): string[] {
     .filter(Boolean)
 }
 
-export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
+export function JobCard({
+  job,
+  selected,
+  onToggleSelect,
+  resumeId,
+  isPro,
+  hasTailoredVariant = false,
+  onVariantCached,
+}: JobCardProps) {
+  const [expanded, setExpanded] = useState(false)
+
   const score = Math.max(0, Math.min(100, Math.round(job.final_score)))
   const scoreClasses = scorePillClasses(job.category)
   const portal = portalMeta(job.portal)
@@ -101,13 +117,24 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
   const primaryLocation = locationList[0] ?? 'Location TBD'
   const extraLocationCount = Math.max(0, locationList.length - 1)
   const allLocationsLabel = locationList.join(', ')
+  const hasDescription = Boolean((job.description ?? '').trim())
 
-  const handleToggle = () => onToggleSelect(job.id)
+  const handleExpandToggle = useCallback(() => {
+    setExpanded((prev) => !prev)
+  }, [])
+
+  const handleSelectToggle = useCallback(
+    (event: MouseEvent) => {
+      event.stopPropagation()
+      onToggleSelect(job.id)
+    },
+    [job.id, onToggleSelect],
+  )
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      handleToggle()
+      handleExpandToggle()
     }
   }
 
@@ -119,14 +146,15 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
     <article
       role="button"
       tabIndex={0}
-      aria-pressed={selected}
-      onClick={handleToggle}
+      aria-expanded={expanded}
+      onClick={handleExpandToggle}
       onKeyDown={handleKeyDown}
       className={cn(
         'group glass-card relative cursor-pointer overflow-hidden rounded-2xl border p-4 transition-all duration-200 focus:outline-none focus-visible:border-[#FF6733]/60 focus-visible:ring-2 focus-visible:ring-[#FF6733]/40',
         selected
           ? 'border-[#FF6733]/60 bg-[#FF6733]/[0.04]'
           : 'border-white/[0.06] hover:border-white/10',
+        expanded && 'border-white/12',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -134,6 +162,12 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
           {companyLabel}
         </p>
         <div className="flex shrink-0 items-center gap-2">
+          {hasTailoredVariant ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6733]/10 px-2 py-0.5 font-label text-[9px] font-semibold uppercase tracking-wider text-[#FF6733]">
+              <Sparkles className="h-2.5 w-2.5" strokeWidth={2} />
+              Tailored
+            </span>
+          ) : null}
           <span
             className={cn(
               'rounded-full px-2.5 py-0.5 font-label text-[10px] font-semibold uppercase tracking-wider',
@@ -142,8 +176,11 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
           >
             {score}% match
           </span>
-          <span
-            aria-hidden
+          <button
+            type="button"
+            aria-label={selected ? 'Deselect job' : 'Select job'}
+            aria-pressed={selected}
+            onClick={handleSelectToggle}
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-200',
               selected
@@ -152,7 +189,7 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
             )}
           >
             <Check className="h-3.5 w-3.5" strokeWidth={2.75} />
-          </span>
+          </button>
         </div>
       </div>
 
@@ -237,7 +274,7 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
         ) : null}
       </div>
 
-      <div className="mt-4 flex items-center">
+      <div className="mt-4 flex items-center justify-between gap-2">
         <a
           href={job.url || '#'}
           target="_blank"
@@ -247,7 +284,30 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
         >
           View job →
         </a>
+        <span
+          className="inline-flex items-center gap-1 font-label text-[10px] uppercase tracking-wider text-[#666]"
+          aria-hidden
+        >
+          {expanded ? 'Hide resume' : 'Tailored resume'}
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 transition-transform duration-200',
+              expanded && 'rotate-180',
+            )}
+            strokeWidth={2}
+          />
+        </span>
       </div>
+
+      <JobCardTailoredPanel
+        expanded={expanded}
+        jobId={job.id}
+        company={companyLabel}
+        resumeId={resumeId}
+        isPro={isPro}
+        hasDescription={hasDescription}
+        onCached={() => onVariantCached?.(job.id)}
+      />
     </article>
   )
 }

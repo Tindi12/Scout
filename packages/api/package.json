@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": ".venv\\Scripts\\uvicorn main:app --reload --host 127.0.0.1 --port 8000"
+    "dev": ".venv\\Scripts\\python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload --reload-delay 0.75 --reload-dir routes --reload-dir services --reload-dir core --reload-dir tasks",
+    "dev:stable": ".venv\\Scripts\\python -m uvicorn main:app --host 127.0.0.1 --port 8000"
   }
 }

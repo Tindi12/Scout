@@ -18,8 +18,9 @@ import {
 } from 'react'
 
 import { JobCard, type JobMatch } from '@/components/jobs/JobCard'
-import { JobColumn } from '@/components/jobs/JobColumn'
+import { ColumnSelectActions, JobColumn } from '@/components/jobs/JobColumn'
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
+import { ProfileRequiredDialog } from '@/components/profile/ProfileRequiredDialog'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,14 @@ import { useToast } from '@/hooks/use-toast'
 import { useExploreBatch } from '@/contexts/explore-batch-context'
 import { cn } from '@/lib/utils'
 import { queueApplication } from '@/app/actions/applications'
+import {
+  computeProfileCompletion,
+  type ProfileData,
+} from '@/lib/profile-completion'
+import {
+  hasPaidFeatures,
+  normalizeSubscriptionPlan,
+} from '@/lib/subscription-plan'
 
 type PageStatus = 'loading' | 'no_resume' | 'error' | 'loaded'
 type FilterKey = 'all' | 'remote' | 'visa'
@@ -40,6 +49,8 @@ type FilterKey = 'all' | 'remote' | 'visa'
 type UserSummary = {
   id: string | null
   isPro: boolean
+  profileComplete: boolean
+  missingFieldLabels: string[]
 }
 
 const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
@@ -64,7 +75,12 @@ export default function ExplorePage() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [resumeId, setResumeId] = useState<string | null>(null)
+  const [tailoredJobIds, setTailoredJobIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [showProGate, setShowProGate] = useState(false)
+  const [showProfileGate, setShowProfileGate] = useState(false)
   const [showBatchConfirm, setShowBatchConfirm] = useState(false)
   const [isSending, startSending] = useTransition()
 
@@ -82,22 +98,44 @@ export default function ExplorePage() {
         })
         if (cancelled) return
         if (!res.ok) {
-          setUser({ id: null, isPro: false })
+          setUser({
+            id: null,
+            isPro: false,
+            profileComplete: false,
+            missingFieldLabels: [],
+          })
           setUserLoaded(true)
           return
         }
         const body = (await res.json()) as {
           id?: string | null
           is_pro?: boolean | null
+          subscription_plan?: string | null
+          profile?: Partial<ProfileData> | null
+          profile_complete?: boolean | null
         }
+        const plan = normalizeSubscriptionPlan(
+          body.subscription_plan,
+          body.is_pro,
+        )
+        const completion = computeProfileCompletion(body.profile ?? undefined)
         setUser({
           id: body.id ?? null,
-          isPro: Boolean(body.is_pro),
+          isPro: hasPaidFeatures(plan, body.is_pro),
+          profileComplete: Boolean(
+            body.profile_complete ?? completion.profileComplete,
+          ),
+          missingFieldLabels: completion.missingFieldLabels,
         })
         setUserLoaded(true)
       } catch {
         if (!cancelled) {
-          setUser({ id: null, isPro: false })
+          setUser({
+            id: null,
+            isPro: false,
+            profileComplete: false,
+            missingFieldLabels: [],
+          })
           setUserLoaded(true)
         }
       }
@@ -158,6 +196,59 @@ export default function ExplorePage() {
     void loadMatches()
   }, [userLoaded, loadMatches])
 
+  useEffect(() => {
+    if (!userLoaded) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch('/api/resume/analyses?limit=1', {
+          cache: 'no-store',
+        })
+        if (cancelled || !res.ok) return
+        const body = (await res.json()) as {
+          analyses?: Array<{ resume_id?: string }>
+        }
+        const rid = body.analyses?.[0]?.resume_id?.trim()
+        if (rid) setResumeId(rid)
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [userLoaded])
+
+  useEffect(() => {
+    if (!resumeId || status !== 'loaded') return
+    let cancelled = false
+    void (async () => {
+      try {
+        const qs = new URLSearchParams({ resume_id: resumeId })
+        const res = await fetch(`/api/resume/variants?${qs}`, {
+          cache: 'no-store',
+        })
+        if (cancelled || !res.ok) return
+        const body = (await res.json()) as { job_ids?: string[] }
+        const ids = Array.isArray(body.job_ids) ? body.job_ids : []
+        setTailoredJobIds(new Set(ids))
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [resumeId, status])
+
+  const handleVariantCached = useCallback((jobId: string) => {
+    setTailoredJobIds((prev) => {
+      const next = new Set(prev)
+      next.add(jobId)
+      return next
+    })
+  }, [])
+
   const handleRefresh = useCallback(() => {
     if (refreshing || status === 'loading') return
     setRefreshing(true)
@@ -216,14 +307,49 @@ export default function ExplorePage() {
     setSelectedJobIds(new Set())
   }, [])
 
+  const handleSelectColumn = useCallback((columnJobs: JobMatch[]) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev)
+      for (const job of columnJobs) next.add(job.id)
+      return next
+    })
+  }, [])
+
+  const handleDeselectColumn = useCallback((columnJobs: JobMatch[]) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev)
+      for (const job of columnJobs) next.delete(job.id)
+      return next
+    })
+  }, [])
+
   const handleSendScoutClick = useCallback(() => {
     if (selectedJobIds.size === 0) return
     if (!user?.isPro) {
       setShowProGate(true)
       return
     }
+    if (!user.profileComplete) {
+      setShowProfileGate(true)
+      return
+    }
+    const remaining = credits?.remaining ?? 0
+    if (selectedJobIds.size > remaining) {
+      toast({
+        title: 'Not enough application credits',
+        description: `You have ${remaining} credit${remaining === 1 ? '' : 's'} left but selected ${selectedJobIds.size} job${selectedJobIds.size === 1 ? '' : 's'}. Deselect some roles or upgrade your plan.`,
+        variant: 'destructive',
+      })
+      return
+    }
     setShowBatchConfirm(true)
-  }, [selectedJobIds.size, user?.isPro])
+  }, [
+    selectedJobIds.size,
+    user?.isPro,
+    user?.profileComplete,
+    credits?.remaining,
+    toast,
+  ])
 
   const selectedJobs = useMemo(
     () => jobs.filter((j) => selectedJobIds.has(j.id)),
@@ -235,20 +361,51 @@ export default function ExplorePage() {
       setShowBatchConfirm(false)
       return
     }
+    const remaining = credits?.remaining ?? 0
+    if (selectedJobs.length > remaining) {
+      toast({
+        title: 'Not enough application credits',
+        description: `You have ${remaining} credit${remaining === 1 ? '' : 's'} remaining.`,
+        variant: 'destructive',
+      })
+      setShowBatchConfirm(false)
+      return
+    }
     const batch = selectedJobs
     startSending(async () => {
-      const results = await Promise.all(
-        batch.map((job) =>
-          queueApplication({
-            jobId: job.id,
-            company: job.company,
-            role: job.title,
-            url: job.url,
-          }),
-        ),
+      const results: Awaited<ReturnType<typeof queueApplication>>[] = []
+      for (const job of batch) {
+        const result = await queueApplication({
+          jobId: job.id,
+          company: job.company,
+          role: job.title,
+          url: job.url,
+        })
+        results.push(result)
+        if (
+          !result.ok &&
+          result.error.toLowerCase().includes('credit limit')
+        ) {
+          break
+        }
+      }
+      const profileBlocked = results.some(
+        (r) =>
+          !r.ok &&
+          r.error.toLowerCase().includes('complete your profile'),
       )
+      if (profileBlocked) {
+        setShowBatchConfirm(false)
+        setShowProfileGate(true)
+        return
+      }
+
       const queued = results.filter((r) => r.ok).length
       const failed = batch.length - queued
+      const hitCreditLimit = results.some(
+        (r) =>
+          !r.ok && r.error.toLowerCase().includes('credit limit'),
+      )
       await refreshCredits()
       setSelectedJobIds(new Set())
       setShowBatchConfirm(false)
@@ -269,12 +426,14 @@ export default function ExplorePage() {
       } else {
         toast({
           title: `Queued ${queued} of ${batch.length} applications`,
-          description: `${failed} could not be queued — please try again.`,
+          description: hitCreditLimit
+            ? `${queued} credit${queued === 1 ? '' : 's'} used — you hit your application limit.`
+            : `${failed} could not be queued — please try again.`,
           variant: 'destructive',
         })
       }
     })
-  }, [selectedJobs, toast, refreshCredits])
+  }, [selectedJobs, credits?.remaining, toast, refreshCredits])
 
   const selectedCount = selectedJobIds.size
 
@@ -339,6 +498,12 @@ export default function ExplorePage() {
             stretchJobs={stretchJobs}
             selectedJobIds={selectedJobIds}
             onToggleSelect={handleToggleSelect}
+            onSelectColumn={handleSelectColumn}
+            onDeselectColumn={handleDeselectColumn}
+            resumeId={resumeId}
+            isPro={user?.isPro ?? false}
+            tailoredJobIds={tailoredJobIds}
+            onVariantCached={handleVariantCached}
           />
         )}
       </div>
@@ -348,6 +513,12 @@ export default function ExplorePage() {
         onOpenChange={setShowProGate}
         title="Auto-apply is a Pro feature"
         description="Upgrade to Scout Pro to send Scout to apply to internships on your behalf."
+      />
+
+      <ProfileRequiredDialog
+        open={showProfileGate}
+        onOpenChange={setShowProfileGate}
+        missingFieldLabels={user?.missingFieldLabels ?? []}
       />
 
       <Dialog
@@ -394,7 +565,11 @@ export default function ExplorePage() {
             <button
               type="button"
               onClick={handleConfirmBatch}
-              disabled={isSending || selectedCount === 0}
+              disabled={
+                isSending ||
+                selectedCount === 0 ||
+                (creditsRemaining != null && selectedCount > creditsRemaining)
+              }
               className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSending ? (
@@ -584,6 +759,12 @@ function KanbanBoard({
   stretchJobs,
   selectedJobIds,
   onToggleSelect,
+  onSelectColumn,
+  onDeselectColumn,
+  resumeId,
+  isPro,
+  tailoredJobIds,
+  onVariantCached,
 }: {
   loading: boolean
   strongJobs: JobMatch[]
@@ -591,7 +772,19 @@ function KanbanBoard({
   stretchJobs: JobMatch[]
   selectedJobIds: Set<string>
   onToggleSelect: (jobId: string) => void
+  onSelectColumn: (jobs: JobMatch[]) => void
+  onDeselectColumn: (jobs: JobMatch[]) => void
+  resumeId: string | null
+  isPro: boolean
+  tailoredJobIds: Set<string>
+  onVariantCached: (jobId: string) => void
 }) {
+  const tailoringProps = {
+    resumeId,
+    isPro,
+    tailoredJobIds,
+    onVariantCached,
+  }
   return (
     <>
       <div className="hidden gap-6 md:grid md:grid-cols-3">
@@ -602,7 +795,10 @@ function KanbanBoard({
           jobs={strongJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(strongJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(strongJobs)}
           loading={loading}
+          {...tailoringProps}
         />
         <JobColumn
           title="Good Fit"
@@ -611,7 +807,10 @@ function KanbanBoard({
           jobs={goodJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(goodJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(goodJobs)}
           loading={loading}
+          {...tailoringProps}
         />
         <JobColumn
           title="Stretch"
@@ -620,7 +819,10 @@ function KanbanBoard({
           jobs={stretchJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(stretchJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(stretchJobs)}
           loading={loading}
+          {...tailoringProps}
         />
       </div>
 
@@ -631,8 +833,11 @@ function KanbanBoard({
           jobs={strongJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(strongJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(strongJobs)}
           loading={loading}
           defaultOpen
+          {...tailoringProps}
         />
         <MobileSection
           title="Good Fit"
@@ -640,7 +845,10 @@ function KanbanBoard({
           jobs={goodJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(goodJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(goodJobs)}
           loading={loading}
+          {...tailoringProps}
         />
         <MobileSection
           title="Stretch"
@@ -648,7 +856,10 @@ function KanbanBoard({
           jobs={stretchJobs}
           selectedJobIds={selectedJobIds}
           onToggleSelect={onToggleSelect}
+          onSelectAllInColumn={() => onSelectColumn(stretchJobs)}
+          onDeselectAllInColumn={() => onDeselectColumn(stretchJobs)}
           loading={loading}
+          {...tailoringProps}
         />
       </div>
     </>
@@ -661,17 +872,31 @@ function MobileSection({
   jobs,
   selectedJobIds,
   onToggleSelect,
+  onSelectAllInColumn,
+  onDeselectAllInColumn,
   loading,
   defaultOpen = false,
+  resumeId,
+  isPro,
+  tailoredJobIds,
+  onVariantCached,
 }: {
   title: string
   color: string
   jobs: JobMatch[]
   selectedJobIds: Set<string>
   onToggleSelect: (jobId: string) => void
+  onSelectAllInColumn: () => void
+  onDeselectAllInColumn: () => void
   loading: boolean
   defaultOpen?: boolean
+  resumeId: string | null
+  isPro: boolean
+  tailoredJobIds: Set<string>
+  onVariantCached: (jobId: string) => void
 }) {
+  const jobIds = jobs.map((j) => j.id)
+
   return (
     <details
       open={defaultOpen}
@@ -699,6 +924,16 @@ function MobileSection({
         </div>
       </summary>
 
+      {!loading && jobs.length > 0 ? (
+        <ColumnSelectActions
+          jobIds={jobIds}
+          selectedJobIds={selectedJobIds}
+          onSelectAll={onSelectAllInColumn}
+          onDeselectAll={onDeselectAllInColumn}
+          className="mt-3"
+        />
+      ) : null}
+
       <div className="mt-4">
         {loading ? (
           <div className="space-y-3">
@@ -717,6 +952,10 @@ function MobileSection({
                 job={job}
                 selected={selectedJobIds.has(job.id)}
                 onToggleSelect={onToggleSelect}
+                resumeId={resumeId}
+                isPro={isPro}
+                hasTailoredVariant={tailoredJobIds.has(job.id)}
+                onVariantCached={onVariantCached}
               />
             ))}
           </div>

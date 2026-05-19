@@ -2,9 +2,13 @@ import { auth } from '@clerk/nextjs/server'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+import { buildApplicationCredits } from '@/lib/application-credits'
+import { normalizeSubscriptionPlan } from '@/lib/subscription-plan'
+
 const PROFILE_COLUMNS = [
   'id',
   'is_pro',
+  'subscription_plan',
   'name',
   'phone_number',
   'linkedin_url',
@@ -75,11 +79,32 @@ export async function GET() {
   }
 
   const row = (data ?? {}) as Record<string, unknown>
+  const supabaseUserId = (row.id as string | null) ?? null
+  const subscriptionPlan = normalizeSubscriptionPlan(
+    row.subscription_plan as string | null | undefined,
+    row.is_pro as boolean | null | undefined,
+  )
+
+  let applicationUsed = 0
+  if (supabaseUserId) {
+    const { count, error: countError } = await admin
+      .from('applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', supabaseUserId)
+    if (!countError && typeof count === 'number') applicationUsed = count
+  }
+
+  const applicationCredits = buildApplicationCredits(
+    subscriptionPlan,
+    applicationUsed,
+  )
 
   return NextResponse.json(
     {
-      id: (row.id as string | null) ?? null,
+      id: supabaseUserId,
       is_pro: Boolean(row.is_pro),
+      subscription_plan: subscriptionPlan,
+      application_credits: applicationCredits,
       target_roles: Array.isArray(row.target_roles)
         ? (row.target_roles as unknown[])
         : [],

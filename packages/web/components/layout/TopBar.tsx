@@ -6,7 +6,10 @@ import { useUser } from '@clerk/nextjs'
 import { Bell } from 'lucide-react'
 
 import { SendScoutButton } from '@/components/layout/SendScoutButton'
-import { supabase } from '@/lib/supabase'
+import {
+  hasPaidFeatures,
+  normalizeSubscriptionPlan,
+} from '@/lib/subscription-plan'
 
 function buildBreadcrumb(pathname: string | null): string[] {
   if (!pathname) return ['SCOUT']
@@ -27,12 +30,17 @@ export function TopBar() {
 
     void (async () => {
       try {
-        const { data } = await supabase
-          .from('users')
-          .select('is_pro')
-          .eq('clerk_id', user.id)
-          .maybeSingle()
-        if (!cancelled) setIsPro(Boolean(data?.is_pro))
+        const response = await fetch('/api/user/me', { cache: 'no-store' })
+        if (!response.ok) return
+        const body = (await response.json()) as {
+          is_pro?: boolean | null
+          subscription_plan?: string | null
+        }
+        const plan = normalizeSubscriptionPlan(
+          body.subscription_plan,
+          body.is_pro,
+        )
+        if (!cancelled) setIsPro(hasPaidFeatures(plan, body.is_pro))
       } catch {
         if (!cancelled) setIsPro(false)
       }
@@ -43,7 +51,6 @@ export function TopBar() {
     }
   }, [user?.id])
 
-  // No notifications API yet; placeholder always 0.
   const unreadCount = 0
 
   return (

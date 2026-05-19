@@ -34,7 +34,7 @@ def _fetch_upserted_without_embeddings(all_urls: list[str]) -> list[dict]:
     return results
 
 
-def _delete_expired() -> int:
+def _delete_expired() -> int: 
     try:
         result = supabase.rpc("delete_expired_jobs").execute()
         return result.data if isinstance(result.data, int) else 0

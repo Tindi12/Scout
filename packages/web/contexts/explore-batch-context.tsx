@@ -11,10 +11,18 @@ import {
   type ReactNode,
 } from 'react'
 
-import { supabase } from '@/lib/supabase'
+import type { ApplicationCreditsSnapshot } from '@/lib/application-credits'
+import {
+  FREE_APPLICATION_LIMIT,
+  PRO_APPLICATION_LIMIT,
+  SCOUT_PLUS_APPLICATION_LIMIT,
+} from '@/lib/subscription-plan'
 
-export const FREE_APPLICATION_LIMIT = 25
-export const PRO_APPLICATION_LIMIT = 200
+export {
+  FREE_APPLICATION_LIMIT,
+  PRO_APPLICATION_LIMIT,
+  SCOUT_PLUS_APPLICATION_LIMIT,
+}
 
 export type ExploreBatchState = {
   selectedCount: number
@@ -22,10 +30,8 @@ export type ExploreBatchState = {
   onSend: () => void
 }
 
-export type ApplicationCredits = {
-  remaining: number
-  limit: number
-  used: number
+export type ApplicationCredits = ApplicationCreditsSnapshot & {
+  /** @deprecated Use isPaid — kept for callers that check isPro */
   isPro: boolean
 }
 
@@ -64,34 +70,22 @@ export function ExploreBatchProvider({ children }: { children: ReactNode }) {
     setCreditsLoading(true)
     try {
       const meRes = await fetch('/api/user/me', { cache: 'no-store' })
-      let isPro = false
-      let supabaseUserId: string | null = null
-
-      if (meRes.ok) {
-        const body = (await meRes.json()) as {
-          id?: string | null
-          is_pro?: boolean | null
-        }
-        isPro = Boolean(body.is_pro)
-        supabaseUserId = body.id ?? null
+      if (!meRes.ok) {
+        setCredits(null)
+        return
       }
-
-      let used = 0
-      if (supabaseUserId) {
-        const { count, error } = await supabase
-          .from('applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', supabaseUserId)
-        if (!error && typeof count === 'number') used = count
+      const body = (await meRes.json()) as {
+        application_credits?: ApplicationCreditsSnapshot | null
       }
-
-      const limit = isPro ? PRO_APPLICATION_LIMIT : FREE_APPLICATION_LIMIT
-      setCredits({
-        remaining: Math.max(0, limit - used),
-        limit,
-        used,
-        isPro,
-      })
+      const snapshot = body.application_credits
+      if (snapshot) {
+        setCredits({
+          ...snapshot,
+          isPro: snapshot.isPaid,
+        })
+      } else {
+        setCredits(null)
+      }
     } catch {
       setCredits(null)
     } finally {
