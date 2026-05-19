@@ -18,6 +18,10 @@ import {
 import { ProfilePromptOverlay } from '@/components/profile/ProfilePromptOverlay'
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
 import { isProfilePromptDismissed } from '@/lib/profile-prompt-dismiss'
+import {
+  RESUME_UPLOAD_SECTION_ID,
+  scrollToResumeUpload,
+} from '@/lib/scroll-to-resume-upload'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -93,6 +97,14 @@ export default function DashboardPage() {
     data?: ScoutRunRow
   }>({ status: 'loading' })
   const [profilePromptHidden, setProfilePromptHidden] = useState(false)
+  const [showResumeUpload, setShowResumeUpload] = useState(false)
+
+  const openResumeUpload = useCallback(() => {
+    setShowResumeUpload(true)
+    window.requestAnimationFrame(() => {
+      scrollToResumeUpload()
+    })
+  }, [])
 
   useEffect(() => {
     if (!user?.id) return
@@ -128,20 +140,16 @@ export default function DashboardPage() {
           profile_complete?: boolean | null
           profile?: { name?: string | null } | null
         }
-        if (!body?.id) {
-          setUserState({ status: 'empty' })
-          return
-        }
         setUserState({
           status: 'loaded',
           data: {
-            id: String(body.id),
+            id: body?.id ? String(body.id) : '',
             name: body.profile?.name ?? null,
             is_pro: body.is_pro ?? false,
             target_roles: Array.isArray(body.target_roles)
               ? (body.target_roles as string[])
               : [],
-            profile_complete: body.profile_complete ?? false,
+            profile_complete: body?.profile_complete === true,
           },
         })
       } catch {
@@ -331,9 +339,23 @@ export default function DashboardPage() {
 
   const showProfilePrompt =
     Boolean(user?.id) &&
+    clerkLoaded &&
     userState.status === 'loaded' &&
-    userState.data?.profile_complete === false &&
+    userState.data?.profile_complete !== true &&
     !profilePromptHidden
+
+  useEffect(() => {
+    if (!user?.id) return
+    if (window.location.hash !== `#${RESUME_UPLOAD_SECTION_ID}`) return
+    if (hasResume) setShowResumeUpload(true)
+    const id = window.requestAnimationFrame(() => {
+      scrollToResumeUpload()
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [user?.id, hasResume])
+
+  const showUploadSection =
+    Boolean(user?.id) && (!hasResume || showResumeUpload)
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
@@ -355,6 +377,7 @@ export default function DashboardPage() {
       {isNewUser ? (
         <OnboardingChecklist
           hasTargetRoles={(userState.data?.target_roles?.length ?? 0) > 0}
+          onUploadClick={scrollToResumeUpload}
         />
       ) : (
         <StatGrid
@@ -378,16 +401,42 @@ export default function DashboardPage() {
         <ProfileIncompleteCta />
       ) : null}
 
-      {!hasResume && user?.id ? (
-        <ResumeUpload
-          userId={user.id}
-          supabaseUserId={userState.data?.id ?? ''}
-        />
-      ) : hasResume ? (
+      {hasResume ? (
         <ResumeSummary
           score={latestAnalysis?.score ?? 0}
           analysisId={latestAnalysis?.id ?? null}
+          onUploadNew={openResumeUpload}
         />
+      ) : null}
+
+      {showUploadSection ? (
+        <section
+          id={RESUME_UPLOAD_SECTION_ID}
+          className="scroll-mt-6"
+        >
+          {hasResume && showResumeUpload ? (
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="font-label text-[11px] font-medium uppercase tracking-[0.22em] text-[#666]">
+                Replace resume
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowResumeUpload(false)}
+                className="font-label text-xs text-[#888] transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+          <ResumeUpload
+            userId={user!.id}
+            supabaseUserId={userState.data?.id ?? ''}
+            onSuccess={() => {
+              setShowResumeUpload(false)
+              void fetchAnalyses()
+            }}
+          />
+        </section>
       ) : null}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -445,7 +494,7 @@ type ChecklistStep = {
 }
 
 const CHECKLIST_STEPS: readonly ChecklistStep[] = [
-  { id: 'upload', label: 'Upload your resume', cta: 'Upload', href: '/resume' },
+  { id: 'upload', label: 'Upload your resume', cta: 'Upload' },
   { id: 'score', label: 'Scout scores and rewrites it' },
   { id: 'jobs', label: 'Browse your matched jobs' },
   { id: 'apply', label: 'Send Scout to apply' },
@@ -453,8 +502,10 @@ const CHECKLIST_STEPS: readonly ChecklistStep[] = [
 
 function OnboardingChecklist({
   hasTargetRoles,
+  onUploadClick,
 }: {
   hasTargetRoles: boolean
+  onUploadClick: () => void
 }) {
   // Active step is "Upload resume" until resume is uploaded.
   // Roles being chosen at onboarding doesn't shift this — the dashboard's
@@ -514,14 +565,25 @@ function OnboardingChecklist({
                 </span>
               </div>
 
-              {active && step.cta && step.href ? (
-                <Link
-                  href={step.href}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FF6733] px-4 py-1.5 font-label text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-                >
-                  {step.cta}
-                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-                </Link>
+              {active && step.cta ? (
+                step.id === 'upload' ? (
+                  <button
+                    type="button"
+                    onClick={onUploadClick}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FF6733] px-4 py-1.5 font-label text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
+                  >
+                    {step.cta}
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </button>
+                ) : step.href ? (
+                  <Link
+                    href={step.href}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FF6733] px-4 py-1.5 font-label text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
+                  >
+                    {step.cta}
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </Link>
+                ) : null
               ) : null}
             </li>
           )
@@ -557,7 +619,10 @@ function StatGrid({
         loading={loading || !analysesLoaded}
         value={score != null ? String(score) : null}
         emptyValue="—"
-        emptyCta={{ href: '/resume', label: 'Upload resume to get your score' }}
+        emptyCta={{
+          href: `#${RESUME_UPLOAD_SECTION_ID}`,
+          label: 'Upload resume to get your score',
+        }}
         delta={delta}
         subtext={
           previousScore != null && score != null
@@ -804,9 +869,11 @@ function ApplicationStatusPill({ status }: { status: string | null }) {
 function ResumeSummary({
   score,
   analysisId,
+  onUploadNew,
 }: {
   score: number
   analysisId: string | null
+  onUploadNew: () => void
 }) {
   const analysisHref = analysisId
     ? `/resume/analysis?id=${encodeURIComponent(analysisId)}`
@@ -833,13 +900,14 @@ function ResumeSummary({
       </Link>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href="/resume?new=1"
+        <button
+          type="button"
+          onClick={onUploadNew}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 font-label text-xs font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white"
         >
           <Upload className="h-3.5 w-3.5" strokeWidth={2} />
           Upload new
-        </Link>
+        </button>
         <Link
           href={analysisHref}
           className="group inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#FF6733] px-4 font-label text-xs font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-shadow hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
@@ -924,11 +992,7 @@ function QuickActions() {
 
 function ProfileIncompleteCta() {
   return (
-    <section className="glass-card relative overflow-hidden rounded-2xl border border-white/[0.06] p-5 md:p-6">
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-1 bg-[#FF6733]"
-      />
+    <section className="glass-card rounded-2xl border border-white/[0.06] p-5 md:p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#FF6733]/30 bg-[#FF6733]/[0.08]">

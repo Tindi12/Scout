@@ -315,20 +315,24 @@ export function Sidebar() {
       className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-white/[0.06] bg-[#0a0a0a] md:flex"
       aria-label="Primary"
     >
-      <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
+      <Link
+        href="/"
+        className="group flex items-center gap-2.5 px-5 pb-4 pt-6 transition-opacity hover:opacity-90"
+        aria-label="Scout home"
+      >
         <Image
           src={scoutLogo}
-          alt="Scout"
+          alt=""
           width={28}
           height={28}
           priority
           draggable={false}
-          className="h-7 w-7 select-none object-contain"
+          className="h-7 w-7 select-none object-contain transition-transform duration-200 group-hover:scale-[1.03]"
         />
         <span className="font-headline text-lg font-semibold tracking-tight text-white">
           Scout
         </span>
-      </div>
+      </Link>
 
       <SidebarProfileMenu
         isLoaded={isLoaded}

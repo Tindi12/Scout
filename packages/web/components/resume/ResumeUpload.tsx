@@ -48,12 +48,82 @@ const DEFAULT_TARGET_ROLE = 'Software Engineering Intern'
 const LAST_ANALYSIS_ID_KEY = 'scout:last_analysis_id'
 const LAST_ANALYSIS_TS_KEY = 'scout:last_analysis_ts'
 
+type UploadPhase =
+  | 'uploading_file'
+  | 'reading_resume'
+  | 'parsing'
+  | 'scoring'
+  | 'critiquing'
+  | 'wrapping_up'
+
 type UploadState =
   | { status: 'idle' }
   | { status: 'selected'; file: File }
-  | { status: 'uploading'; file: File; progress: number }
+  | {
+      status: 'uploading'
+      file: File
+      progress: number
+      phase: UploadPhase
+    }
   | { status: 'success'; file: File }
   | { status: 'error'; message: string }
+
+const SCOUT_STATUS_BY_PHASE: Record<UploadPhase, readonly string[]> = {
+  uploading_file: [
+    'scout is receiving your file',
+    'scout is securing your upload',
+    'scout is unpacking your resume',
+  ],
+  reading_resume: [
+    'scout is reading your resume',
+    'scout is scanning every section',
+    'scout is extracting the text',
+  ],
+  parsing: [
+    'scout is parsing your experience',
+    'scout is mapping education and skills',
+    'scout is structuring your bullets',
+    'scout is organizing projects',
+  ],
+  scoring: [
+    'scout is analyzing your resume',
+    'scout is scoring internship readiness',
+    'scout is checking ATS structure',
+    'scout is matching keywords to your role',
+  ],
+  critiquing: [
+    'scout is critiquing weak bullets',
+    'scout is hunting for missing metrics',
+    'scout is flagging improvement areas',
+    'scout is comparing you to strong applicants',
+  ],
+  wrapping_up: [
+    'scout is wrapping up your analysis',
+    'scout is preparing your score',
+    'scout is almost done',
+  ],
+}
+
+const SCOUT_STATUS_GENERAL: readonly string[] = [
+  'scout is getting your resume',
+  'scout is analyzing',
+  'scout is reading',
+  'scout is critiquing',
+  'scout is thinking like a recruiter',
+  'scout is stress-testing your bullets',
+  'scout is looking for hidden strengths',
+  'scout is building your breakdown',
+]
+
+function pickScoutStatus(
+  phase: UploadPhase,
+  recent: string[],
+): string {
+  const pool = [...SCOUT_STATUS_BY_PHASE[phase], ...SCOUT_STATUS_GENERAL]
+  const candidates = pool.filter((line) => !recent.includes(line))
+  const choices = candidates.length > 0 ? candidates : pool
+  return choices[Math.floor(Math.random() * choices.length)] ?? pool[0]!
+}
 
 const MAX_BYTES = 10 * 1024 * 1024
 const ACCEPT_EXT = ['.pdf', '.docx'] as const
@@ -99,27 +169,53 @@ export function ResumeUpload({
   const [isDragging, setIsDragging] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  )
+  const analyzeCreepRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const clearProgressInterval = useCallback(() => {
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current)
-      progressIntervalRef.current = null
+  const clearAnalyzeCreep = useCallback(() => {
+    if (analyzeCreepRef.current) {
+      clearInterval(analyzeCreepRef.current)
+      analyzeCreepRef.current = null
     }
   }, [])
 
+  const startAnalyzeCreep = useCallback(() => {
+    clearAnalyzeCreep()
+    analyzeCreepRef.current = setInterval(() => {
+      setState((prev) => {
+        if (prev.status !== 'uploading') return prev
+        if (prev.progress >= 92) return prev
+
+        const next = Math.min(
+          92,
+          prev.progress + 0.35 + Math.random() * 0.65,
+        )
+        let phase: UploadPhase = prev.phase
+        if (next >= 78) phase = 'critiquing'
+        else if (next >= 58) phase = 'scoring'
+        else if (next >= 42) phase = 'parsing'
+
+        return { ...prev, progress: next, phase }
+      })
+    }, 220)
+  }, [clearAnalyzeCreep])
+
+  const patchUpload = useCallback(
+    (file: File, progress: number, phase: UploadPhase) => {
+      setState({ status: 'uploading', file, progress, phase })
+    },
+    [],
+  )
+
   useEffect(() => {
     return () => {
-      clearProgressInterval()
+      clearAnalyzeCreep()
       if (successTimeoutRef.current) {
         clearTimeout(successTimeoutRef.current)
         successTimeoutRef.current = null
       }
     }
-  }, [clearProgressInterval])
+  }, [clearAnalyzeCreep])
 
   const acceptFile = useCallback((file: File) => {
     const error = validateFile(file)
@@ -164,15 +260,7 @@ export function ResumeUpload({
     if (state.status !== 'selected') return
     const file = state.file
 
-    setState({ status: 'uploading', file, progress: 6 })
-
-    progressIntervalRef.current = setInterval(() => {
-      setState((prev) => {
-        if (prev.status !== 'uploading') return prev
-        const next = Math.min(90, prev.progress + 3 + Math.random() * 3)
-        return { ...prev, progress: next }
-      })
-    }, 120)
+    patchUpload(file, 6, 'uploading_file')
 
     try {
       const fd = new FormData()
@@ -183,13 +271,15 @@ export function ResumeUpload({
       const result = await uploadResume(fd)
 
       if (!result.success || !result.resumeId) {
-        clearProgressInterval()
+        clearAnalyzeCreep()
         setState({
           status: 'error',
           message: result.error ?? 'Upload failed',
         })
         return
       }
+
+      patchUpload(file, 30, 'reading_resume')
 
       const { data: userRow, error: rolesError } = await supabase
         .from('users')
@@ -205,6 +295,9 @@ export function ResumeUpload({
       const targetRoleLabel =
         (roleKey && ROLE_LABELS[roleKey]) ?? DEFAULT_TARGET_ROLE
 
+      patchUpload(file, 38, 'parsing')
+      startAnalyzeCreep()
+
       const analyzeRes = await fetch('/api/resume/analyze', {
         method: 'POST',
         headers: {
@@ -216,9 +309,10 @@ export function ResumeUpload({
         }),
       })
 
+      clearAnalyzeCreep()
+
       const analyzeText = await analyzeRes.text()
       if (!analyzeRes.ok) {
-        clearProgressInterval()
         let message = 'Could not analyze resume. Please try again.'
         try {
           const parsed = JSON.parse(analyzeText) as { detail?: unknown }
@@ -235,7 +329,6 @@ export function ResumeUpload({
       }
       const analysisId = analyzeBody.analysis_id
       if (!analysisId) {
-        clearProgressInterval()
         setState({
           status: 'error',
           message: 'Analyze returned an unexpected response.',
@@ -243,7 +336,7 @@ export function ResumeUpload({
         return
       }
 
-      clearProgressInterval()
+      patchUpload(file, 100, 'wrapping_up')
       setState({ status: 'success', file })
 
       try {
@@ -258,7 +351,7 @@ export function ResumeUpload({
         onSuccess?.()
       }, 800)
     } catch (err) {
-      clearProgressInterval()
+      clearAnalyzeCreep()
       setState({
         status: 'error',
         message:
@@ -299,7 +392,11 @@ export function ResumeUpload({
       ) : null}
 
       {state.status === 'uploading' ? (
-        <UploadingView file={state.file} progress={state.progress} />
+        <UploadingView
+          file={state.file}
+          progress={state.progress}
+          phase={state.phase}
+        />
       ) : null}
 
       {state.status === 'success' ? <SuccessView /> : null}
@@ -449,24 +546,92 @@ function SelectedView({
   )
 }
 
-function UploadingView({ file, progress }: { file: File; progress: number }) {
+function UploadingView({
+  file,
+  progress,
+  phase,
+}: {
+  file: File
+  progress: number
+  phase: UploadPhase
+}) {
+  const [statusLine, setStatusLine] = useState(() =>
+    pickScoutStatus(phase, []),
+  )
+  const recentLinesRef = useRef<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const rotate = () => {
+      if (cancelled) return
+      const recent = recentLinesRef.current
+      const next = pickScoutStatus(phase, recent)
+      recentLinesRef.current = [...recent.slice(-4), next]
+      setStatusLine(next)
+      timeoutId = setTimeout(
+        rotate,
+        2100 + Math.floor(Math.random() * 900),
+      )
+    }
+
+    rotate()
+    return () => {
+      cancelled = true
+      clearTimeout(timeoutId)
+    }
+  }, [phase])
+
+  const clamped = Math.max(4, Math.min(100, progress))
+  const phaseLabel =
+    phase === 'uploading_file'
+      ? 'Uploading'
+      : phase === 'reading_resume'
+        ? 'Reading'
+        : phase === 'parsing'
+          ? 'Parsing'
+          : phase === 'scoring'
+            ? 'Scoring'
+            : phase === 'critiquing'
+              ? 'Critiquing'
+              : 'Finishing'
+
   return (
-    <div className="flex flex-col gap-4 py-2">
+    <div className="relative flex min-h-[88px] flex-col gap-4 py-2 pb-8">
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 truncate font-body text-sm text-[#999]">
-          Uploading… <span className="text-white">{file.name}</span>
+          {phaseLabel}…{' '}
+          <span className="text-white">{file.name}</span>
         </p>
         <span className="shrink-0 font-label text-xs font-medium tabular-nums text-[#888]">
-          {Math.round(progress)}%
+          {Math.round(clamped)}%
         </span>
       </div>
 
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.04]">
+      <div className="relative h-2 w-full overflow-visible rounded-full bg-white/[0.04]">
         <div
-          className="h-full rounded-full bg-[#FF6733] shadow-[0_0_12px_rgba(255,103,51,0.6)] transition-all duration-150 ease-out"
-          style={{ width: `${progress}%` }}
+          className="animate-scout-bar-shimmer absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#FF6733]/90 to-[#FF6733] shadow-[0_0_16px_rgba(255,103,51,0.45)] transition-[width] duration-300 ease-out"
+          style={{ width: `${clamped}%` }}
         />
+        <div
+          className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 transition-[left] duration-300 ease-out"
+          style={{ left: `${clamped}%` }}
+          aria-hidden
+        >
+          <div className="animate-scout-comet-strike relative -translate-x-full">
+            <span className="block h-[2px] w-10 bg-gradient-to-r from-transparent via-white/30 to-white/90" />
+            <span className="animate-scout-comet-pulse absolute right-0 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white" />
+          </div>
+        </div>
       </div>
+
+      <p
+        className="absolute bottom-0 right-0 max-w-[min(100%,18rem)] text-right font-body text-xs font-medium leading-snug text-white transition-opacity duration-300"
+        aria-live="polite"
+      >
+        {statusLine}
+      </p>
     </div>
   )
 }

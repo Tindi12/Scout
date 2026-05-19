@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 import { buildApplicationCredits } from '@/lib/application-credits'
+import { ensureSupabaseUser } from '@/lib/ensure-supabase-user'
 import { normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 
 const PROFILE_COLUMNS = [
@@ -65,6 +66,8 @@ export async function GET() {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const ensured = await ensureSupabaseUser(userId)
+
   const { data, error } = await admin
     .from('users')
     .select(PROFILE_COLUMNS.join(', '))
@@ -79,7 +82,8 @@ export async function GET() {
   }
 
   const row = (data ?? {}) as Record<string, unknown>
-  const supabaseUserId = (row.id as string | null) ?? null
+  const supabaseUserId =
+    (row.id as string | null) ?? ensured?.id ?? null
   const subscriptionPlan = normalizeSubscriptionPlan(
     row.subscription_plan as string | null | undefined,
     row.is_pro as boolean | null | undefined,
@@ -108,7 +112,12 @@ export async function GET() {
       target_roles: Array.isArray(row.target_roles)
         ? (row.target_roles as unknown[])
         : [],
-      profile_complete: Boolean(row.profile_complete),
+      profile_complete: Boolean(
+        row.profile_complete ?? ensured?.profile_complete,
+      ),
+      onboarding_complete: Boolean(
+        row.onboarding_complete ?? ensured?.onboarding_complete,
+      ),
       profile: data ? row : null,
     },
     { headers: { 'Cache-Control': 'no-store' } },

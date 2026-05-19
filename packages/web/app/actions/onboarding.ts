@@ -45,9 +45,8 @@ export async function completeOnboarding(data: OnboardingData) {
 
 if (!email) throw new Error("No email found")
 
-  const { error } = await supabase
-    .from('users')
-    .insert({
+  const { error } = await supabase.from('users').upsert(
+    {
       clerk_id: userId,
       name: data.name,
       email: email,
@@ -59,10 +58,12 @@ if (!email) throw new Error("No email found")
       onboarding_complete: true,
       is_pro: false,
       copilot_messages_used: 0,
-    })
+    },
+    { onConflict: 'clerk_id' },
+  )
 
   if (error) {
-    console.error('Supabase insert error:', error)
+    console.error('Supabase upsert error:', error)
     throw new Error('Failed to save onboarding data')
   }
 

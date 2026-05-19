@@ -121,9 +121,28 @@ def _load_json(path: Path) -> list | dict:
         return json.load(f)
 
 
+def _skill_in_description(skill: str, desc_lower: str) -> bool:
+    s = skill.lower().strip()
+    if not s:
+        return False
+    # Single-letter skills like "R" must not match every word with "r" in it.
+    if len(s) <= 2:
+        if s == "r":
+            return bool(
+                re.search(
+                    r"\b(r programming|r language|r studio|r\b(?=\s*(lang|programming|stats)))",
+                    desc_lower,
+                )
+            )
+        return bool(re.search(rf"\b{re.escape(s)}\b", desc_lower))
+    if "+" in s:
+        return s in desc_lower
+    return s in desc_lower
+
+
 def extract_skills(description: str) -> list[str]:
     desc_lower = description.lower()
-    return [skill for skill in COMMON_SKILLS if skill.lower() in desc_lower]
+    return [skill for skill in COMMON_SKILLS if _skill_in_description(skill, desc_lower)]
 
 
 def _slug_matches_company(slug: str, company_lower: str) -> bool:

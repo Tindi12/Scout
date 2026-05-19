@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 
 import { scoutLogo } from '@/lib/scout-logo'
@@ -63,19 +63,10 @@ export function ProfilePromptOverlay({
       />
 
       <div
-        className="glass-card-strong relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0a0a0a]/95 p-6 shadow-[0_0_80px_rgba(255,103,51,0.12)] sm:p-8"
+        className="glass-card-strong relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0a0a0a]/95 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.55)] sm:p-8"
         onClick={(e) => e.stopPropagation()}
         role="document"
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-40"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(255,103,51,0.35) 0%, transparent 70%)',
-          }}
-        />
-
         <div className="relative flex flex-col gap-5">
           <div className="flex items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#FF6733]/30 bg-[#FF6733]/10">
@@ -90,40 +81,45 @@ export function ProfilePromptOverlay({
             </span>
             <div className="min-w-0 space-y-2">
               <p className="font-label text-[10px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
-                One-time setup
+                One-time setup — only once, ever
               </p>
               <h2
                 id="profile-prompt-title"
                 className="font-headline text-xl font-medium tracking-[-0.02em] text-white sm:text-2xl"
               >
-                Complete your profile so Scout can apply for you
+                Complete your profile so scout can apply for you
               </h2>
             </div>
           </div>
 
           <p className="font-body text-sm leading-relaxed text-[#999]">
-            Scout fills real application forms on your behalf — work authorization,
+            scout fills real application forms on your behalf — work authorization,
             contact info, locations, and more.{' '}
             <span className="text-white">
-              You only need to do this once; after that, Scout handles the rest.
+              You only need to complete this once, ever — after that, scout
+              handles the rest.
             </span>
           </p>
 
-          <ul className="space-y-2 font-body text-sm text-[#888]">
-            <li className="flex items-start gap-2">
-              <Sparkles
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#FF6733]"
-                strokeWidth={1.75}
+          <ul className="space-y-2.5 font-body text-sm text-[#888]">
+            <li className="flex items-start gap-2.5">
+              <span
+                className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#666]"
+                aria-hidden
               />
-              That&apos;s the goal of Scout: your profile powers every application.
+              <span>
+                Your profile powers every application scout submits for you.
+              </span>
             </li>
-            <li className="flex items-start gap-2">
-              <Sparkles
-                className="mt-0.5 h-4 w-4 shrink-0 text-[#FF6733]"
-                strokeWidth={1.75}
+            <li className="flex items-start gap-2.5">
+              <span
+                className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#666]"
+                aria-hidden
               />
-              Browse jobs and tailor resumes anytime — profile is required before
-              Send Scout.
+              <span>
+                Browse jobs and tailor resumes anytime — your profile is required
+                before sending scout.
+              </span>
             </li>
           </ul>
 

@@ -33,6 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { useExploreBatch } from '@/contexts/explore-batch-context'
 import { cn } from '@/lib/utils'
+import { RESUME_UPLOAD_SECTION_ID } from '@/lib/scroll-to-resume-upload'
 import { queueApplication } from '@/app/actions/applications'
 import {
   computeProfileCompletion,
@@ -980,7 +981,7 @@ function NoResumeState() {
         </p>
       </div>
       <Link
-        href="/resume"
+        href={`/dashboard#${RESUME_UPLOAD_SECTION_ID}`}
         className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
       >
         Upload Resume →

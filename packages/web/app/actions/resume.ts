@@ -68,7 +68,8 @@ export async function uploadResume(formData: FormData): Promise<{
           email,
           name: `${clerkUser.firstName ?? ''} ${clerkUser.lastName ?? ''}`.trim(),
           is_pro: false,
-          onboarding_complete: true,
+          onboarding_complete: false,
+          profile_complete: false,
           copilot_messages_used: 0,
         })
         .select('id')

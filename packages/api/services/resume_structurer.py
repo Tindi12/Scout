@@ -42,7 +42,7 @@ def _truncate_resume_text(raw_text: str) -> str:
 
 async def structure_resume_text(raw_text: str) -> dict:
     """
-    Call parse LLM with JSON mode, Groq→Gemini fallback, and one retry on bad JSON.
+    Call parse LLM with JSON mode, Gemini→Groq fallback, and one retry on bad JSON.
     """
     system = _load_parse_prompt()
     prompt = _truncate_resume_text(raw_text)

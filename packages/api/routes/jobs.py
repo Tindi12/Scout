@@ -33,7 +33,7 @@ async def get_job_matches(
     def _fetch_user() -> dict:
         result = (
             supabase.table("users")
-            .select("id, is_pro, requires_sponsorship")
+            .select("id, is_pro, requires_sponsorship, target_roles")
             .eq("clerk_id", clerk_id)
             .single()
             .execute()
@@ -43,7 +43,7 @@ async def get_job_matches(
     def _fetch_analysis(user_id: str) -> dict:
         result = (
             supabase.table("analyses")
-            .select("id, resume_id")
+            .select("id, resume_id, score, target_role")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .limit(1)
@@ -82,12 +82,19 @@ async def get_job_matches(
     else:
         embedding = resume["embedding"]
 
+    target_roles = user_row.get("target_roles") or []
+    if not isinstance(target_roles, list):
+        target_roles = []
+
     results = await match_jobs(
         parsed_resume=resume["parsed_content"],
         resume_embedding=embedding,
         is_pro=user_row["is_pro"],
         requires_sponsorship=user_row["requires_sponsorship"],
         limit=request.limit,
+        target_role_ids=[str(r) for r in target_roles if r],
+        target_role_label=analysis.get("target_role"),
+        resume_quality_score=analysis.get("score"),
     )
 
     if request.remote_only:

@@ -183,3 +183,55 @@
     height: 0;
   }
 }
+
+@keyframes scout-comet-strike {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  35% {
+    transform: translateX(4px) scale(1.2);
+  }
+  55% {
+    transform: translateX(1px) scale(0.95);
+  }
+  75% {
+    transform: translateX(5px) scale(1.15);
+  }
+}
+
+@keyframes scout-comet-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.55);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.95);
+  }
+}
+
+@keyframes scout-bar-shimmer {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+.animate-scout-comet-strike {
+  animation: scout-comet-strike 0.55s ease-in-out infinite;
+}
+
+.animate-scout-comet-pulse {
+  animation: scout-comet-pulse 0.55s ease-in-out infinite;
+}
+
+.animate-scout-bar-shimmer {
+  animation: scout-bar-shimmer 0.55s ease-in-out infinite;
+}

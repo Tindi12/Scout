@@ -22,9 +22,11 @@ supabase/       → README only; schema on Supabase (scout-dev), not repo SQL fi
 
 ## AI Architecture
 All AI calls go through packages/api/core/ai_router.py
-- task="fast" → llama-3.1-8b-instant (parsing, scoring)
-- task="quality" → llama-3.3-70b-versatile (rewriting, copilot)
-- Automatic fallback to Gemini 2.0 Flash on Groq rate limit
+- Chat order: Gemini multi-model chain → Groq multi-model chain (see core/gemini_models.py, core/groq_models.py)
+- Gemini chat (power → volume): 3 Flash → 2.5 Flash → 3.1 Flash Lite → 2.5 Flash Lite → Gemma 4 31B → Gemma 4 26B
+- Groq fallback: compound 70k TPM → scout 30k → task-specific 8b/70b/oss
+- Embeddings: OpenAI ada-002 (primary) → Gemini Embedding 2 → Gemini Embedding 1 (1536 dims)
+- User-facing errors summarized in core/ai_errors.py (no raw provider dumps)
 - Never call AI directly from endpoints — always use call_ai()
 
 ## Auth Pattern

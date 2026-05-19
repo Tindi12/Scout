@@ -1,9 +1,11 @@
 import logging
+import re
 
 from dotenv import load_dotenv
 from postgrest.exceptions import APIError
 
 from core.supabase_client import supabase
+from services.role_keywords import role_relevance_score
 
 load_dotenv()
 
@@ -13,6 +15,9 @@ _JOB_SELECT = (
     "id, title, company, location, remote, "
     "skills_required, url, portal, visa_sponsorship, description"
 )
+
+_MIN_ROLE_RELEVANCE = 20.0
+_MIN_FINAL_SCORE = 28.0
 
 
 def _fetch_jobs_table_scan(limit: int) -> list[dict]:
@@ -27,28 +32,28 @@ def _fetch_jobs_table_scan(limit: int) -> list[dict]:
 
 def _get_candidate_jobs(
     resume_embedding: list[float],
-    is_pro: bool,
     requires_sponsorship: bool,
     limit: int,
 ) -> list[dict]:
-    fetch_limit = limit * 3
+    fetch_limit = limit * 4
 
-    if is_pro:
-        try:
-            response = supabase.rpc(
-                "match_jobs_semantic",
-                {
-                    "query_embedding": resume_embedding,
-                    "match_count": fetch_limit,
-                    "filter_sponsorship": requires_sponsorship,
-                },
-            ).execute()
-            return response.data or []
-        except APIError as e:
-            logger.warning(
-                "match_jobs_semantic failed (%s); falling back to table scan",
-                getattr(e, "message", e),
-            )
+    try:
+        response = supabase.rpc(
+            "match_jobs_semantic",
+            {
+                "query_embedding": resume_embedding,
+                "match_count": fetch_limit,
+                "filter_sponsorship": requires_sponsorship,
+            },
+        ).execute()
+        rows = response.data or []
+        if rows:
+            return rows
+    except APIError as e:
+        logger.warning(
+            "match_jobs_semantic failed (%s); falling back to table scan",
+            getattr(e, "message", e),
+        )
 
     return _fetch_jobs_table_scan(fetch_limit)
 
@@ -67,36 +72,74 @@ def _extract_resume_skills(parsed_resume: dict) -> list[str]:
     return [s.lower().strip() for s in resume_skills if isinstance(s, str) and s.strip()]
 
 
+def _normalize_required_skills(required: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    for skill in required:
+        if not isinstance(skill, str):
+            continue
+        s = skill.strip()
+        if not s:
+            continue
+        if len(s) == 1:
+            continue
+        cleaned.append(s)
+    return cleaned
+
+
 def _skill_matches(required: str, resume_skills_lower: list[str]) -> bool:
     req = required.lower().strip()
-    if not req:
+    if not req or len(req) < 2:
         return False
+
     for rs in resume_skills_lower:
-        if req in rs or rs in req:
+        if req == rs:
             return True
+        if "+" in req or "+" in rs:
+            if req in rs or rs in req:
+                return True
+            continue
+        if len(req) >= 3 and len(rs) >= 3:
+            req_tokens = set(re.split(r"[\s/+.]+", req))
+            rs_tokens = set(re.split(r"[\s/+.]+", rs))
+            req_tokens = {t for t in req_tokens if len(t) >= 3}
+            rs_tokens = {t for t in rs_tokens if len(t) >= 3}
+            if req_tokens & rs_tokens:
+                return True
+            if req in rs or rs in req:
+                return True
     return False
 
 
 def _hard_score(
     required: list[str],
     resume_skills_lower: list[str],
-    job: dict,
-    is_pro: bool,
 ) -> tuple[float, list[str]]:
+    required = _normalize_required_skills(required)
     if not required:
-        if is_pro and job.get("similarity") is not None:
-            return float(job["similarity"]) * 100, []
-        return 35.0, []
+        return 0.0, []
 
     matched = [s for s in required if _skill_matches(s, resume_skills_lower)]
     return len(matched) / len(required) * 100, matched
 
 
+def _semantic_score(job: dict) -> float:
+    sim = job.get("similarity")
+    if sim is None:
+        return 0.0
+    value = float(sim)
+    if value > 1.0:
+        value = max(0.0, 1.0 - value)
+    return max(0.0, min(100.0, value * 100))
+
+
+def _resume_quality_factor(resume_quality_score: int | None) -> float:
+    if resume_quality_score is None:
+        return 1.0
+    score = max(0, min(100, int(resume_quality_score)))
+    return 0.45 + 0.55 * (score / 100.0)
+
+
 def _assign_fit_categories(jobs: list[dict]) -> list[dict]:
-    """
-    Bucket by rank within the returned set. Absolute score thresholds cluster
-    most Pro matches in GOOD_FIT (hard floor 50 + semantic blend).
-    """
     n = len(jobs)
     if n == 0:
         return jobs
@@ -131,28 +174,35 @@ def _assign_fit_categories(jobs: list[dict]) -> list[dict]:
 def _score_job(
     job: dict,
     resume_skills_lower: list[str],
-    is_pro: bool,
+    *,
+    target_role_ids: list[str],
+    target_role_label: str | None,
+    resume_quality_score: int | None,
 ) -> dict | None:
     try:
         required: list[str] = job.get("skills_required") or []
-        hard_score, matched_skills = _hard_score(
-            required, resume_skills_lower, job, is_pro
-        )
+        role_score = role_relevance_score(job, target_role_ids, target_role_label)
 
-        if is_pro and job.get("similarity") is not None:
-            semantic_score = float(job["similarity"]) * 100
+        if role_score < _MIN_ROLE_RELEVANCE:
+            return None
+
+        hard_score, matched_skills = _hard_score(required, resume_skills_lower)
+        semantic = _semantic_score(job)
+
+        if hard_score > 0 and semantic > 0:
+            blended = hard_score * 0.35 + semantic * 0.25 + role_score * 0.40
+        elif semantic > 0:
+            blended = semantic * 0.45 + role_score * 0.55
+        elif hard_score > 0:
+            blended = hard_score * 0.45 + role_score * 0.55
         else:
-            semantic_score = hard_score
+            blended = role_score * 0.85
 
-        if is_pro and job.get("similarity") is not None:
-            if required:
-                final_score = hard_score * 0.4 + semantic_score * 0.6
-            else:
-                final_score = semantic_score
-        else:
-            final_score = hard_score
+        final_score = blended * _resume_quality_factor(resume_quality_score)
+        final_score = min(final_score, blended)
+        final_score = max(0.0, min(100.0, final_score))
 
-        if final_score < 25:
+        if final_score < _MIN_FINAL_SCORE:
             return None
 
         return {
@@ -161,13 +211,14 @@ def _score_job(
             "company": job.get("company", ""),
             "location": job.get("location", ""),
             "remote": job.get("remote", False),
-            "skills_required": required,
+            "skills_required": _normalize_required_skills(required),
             "url": job.get("url", ""),
             "portal": job.get("portal", ""),
             "visa_sponsorship": job.get("visa_sponsorship", "unknown"),
             "description": job.get("description") or "",
             "hard_score": round(hard_score, 1),
-            "semantic_score": round(semantic_score, 1),
+            "semantic_score": round(semantic, 1),
+            "role_score": round(role_score, 1),
             "final_score": round(final_score, 1),
             "category": "GOOD_FIT",
             "matched_skills": matched_skills,
@@ -183,11 +234,21 @@ async def match_jobs(
     is_pro: bool = False,
     requires_sponsorship: bool = False,
     limit: int = 50,
+    *,
+    target_role_ids: list[str] | None = None,
+    target_role_label: str | None = None,
+    resume_quality_score: int | None = None,
 ) -> list[dict]:
     from starlette.concurrency import run_in_threadpool
 
+    _ = is_pro  # reserved for future pro-only ranking tweaks
+    role_ids = target_role_ids or []
+
     candidates = await run_in_threadpool(
-        _get_candidate_jobs, resume_embedding, is_pro, requires_sponsorship, limit
+        _get_candidate_jobs,
+        resume_embedding,
+        requires_sponsorship,
+        limit,
     )
 
     resume_skills_lower = _extract_resume_skills(parsed_resume)
@@ -196,7 +257,13 @@ async def match_jobs(
     for job in candidates:
         if requires_sponsorship and job.get("visa_sponsorship") == "no":
             continue
-        result = _score_job(job, resume_skills_lower, is_pro)
+        result = _score_job(
+            job,
+            resume_skills_lower,
+            target_role_ids=role_ids,
+            target_role_label=target_role_label,
+            resume_quality_score=resume_quality_score,
+        )
         if result is not None:
             scored.append(result)
 
@@ -206,6 +273,13 @@ async def match_jobs(
     strong = sum(1 for j in top if j["category"] == "STRONG_FIT")
     good = sum(1 for j in top if j["category"] == "GOOD_FIT")
     stretch = sum(1 for j in top if j["category"] == "STRETCH")
-    logger.info("Matched: %d strong, %d good, %d stretch", strong, good, stretch)
+    logger.info(
+        "Matched: %d strong, %d good, %d stretch (roles=%s, resume_score=%s)",
+        strong,
+        good,
+        stretch,
+        role_ids or target_role_label,
+        resume_quality_score,
+    )
 
     return top
