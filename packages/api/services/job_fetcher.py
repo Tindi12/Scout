@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID")
 ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+USAJOBS_EMAIL = os.getenv("USAJOBS_EMAIL", "tindibrown12@gmail.com")
+USAJOBS_API_KEY = os.getenv("USAJOBS_API_KEY")
 
 if not ADZUNA_APP_ID or not ADZUNA_APP_KEY:
     raise RuntimeError("ADZUNA_APP_ID and ADZUNA_APP_KEY must be set")
@@ -124,6 +126,10 @@ def extract_skills(description: str) -> list[str]:
     return [skill for skill in COMMON_SKILLS if skill.lower() in desc_lower]
 
 
+def _slug_matches_company(slug: str, company_lower: str) -> bool:
+    return slug in company_lower or company_lower.startswith(slug)
+
+
 def get_visa_status(company: str, description: str) -> str:
     desc_lower = description.lower()
     for phrase in NO_SPONSORSHIP_PHRASES:
@@ -135,11 +141,14 @@ def get_visa_status(company: str, description: str) -> str:
             visa_data = json.load(f)
 
         company_lower = company.lower()
+        for slug in visa_data.get("clearance_required", []):
+            if _slug_matches_company(slug, company_lower):
+                return "clearance"
         for slug in visa_data.get("cpt_opt_friendly", []):
-            if slug in company_lower or company_lower.startswith(slug):
+            if _slug_matches_company(slug, company_lower):
                 return "yes"
         for slug in visa_data.get("no_sponsorship", []):
-            if slug in company_lower or company_lower.startswith(slug):
+            if _slug_matches_company(slug, company_lower):
                 return "no"
     except Exception as e:
         logger.warning("Could not load visa_sponsorship.json: %s", e)
@@ -187,17 +196,17 @@ async def _fetch_adzuna_query(client: httpx.AsyncClient, query: str) -> list[dic
 
     results = []
     for listing in data.get("results", []):
-        description = _strip_html(listing.get("description", ""))
-        company = listing.get("company", {}).get("display_name", "")
-        location = listing.get("location", {}).get("display_name", "")
+        description = _strip_html(listing.get("description") or "")
+        company = (listing.get("company") or {}).get("display_name") or ""
+        location = (listing.get("location") or {}).get("display_name") or ""
         results.append({
-            "title": listing.get("title", ""),
+            "title": listing.get("title") or "",
             "company": company,
             "location": location,
             "remote": is_remote(location),
             "description": description,
             "skills_required": extract_skills(description),
-            "url": listing.get("redirect_url", ""),
+            "url": listing.get("redirect_url") or "",
             "source": "adzuna",
             "portal": "unknown",
             "posted_at": listing.get("created", datetime.now(tz=timezone.utc).isoformat()),
@@ -256,16 +265,16 @@ async def fetch_greenhouse_jobs() -> list[dict]:
 
             company = slug.replace("-", " ").title()
             for job in data.get("jobs", []):
-                description = _strip_html(job.get("content", ""))
-                location = job.get("location", {}).get("name", "")
+                description = _strip_html(job.get("content") or "")
+                location = (job.get("location") or {}).get("name") or ""
                 results.append({
-                    "title": job.get("title", ""),
+                    "title": job.get("title") or "",
                     "company": company,
                     "location": location,
                     "remote": is_remote(location),
                     "description": description,
                     "skills_required": extract_skills(description),
-                    "url": job.get("absolute_url", ""),
+                    "url": job.get("absolute_url") or "",
                     "source": "greenhouse",
                     "portal": "greenhouse",
                     "posted_at": job.get("updated_at", datetime.now(tz=timezone.utc).isoformat()),
@@ -300,9 +309,9 @@ async def fetch_lever_jobs() -> list[dict]:
 
             company = slug.replace("-", " ").title()
             for posting in (postings if isinstance(postings, list) else []):
-                categories = posting.get("categories", {})
-                location = categories.get("location", "")
-                created_ms = posting.get("createdAt", 0)
+                categories = posting.get("categories") or {}
+                location = categories.get("location") or ""
+                created_ms = posting.get("createdAt") or 0
                 try:
                     posted_at = datetime.fromtimestamp(
                         created_ms / 1000, tz=timezone.utc
@@ -310,15 +319,15 @@ async def fetch_lever_jobs() -> list[dict]:
                 except Exception:
                     posted_at = datetime.now(tz=timezone.utc).isoformat()
 
-                description = posting.get("descriptionPlain", "")
+                description = posting.get("descriptionPlain") or ""
                 results.append({
-                    "title": posting.get("text", ""),
+                    "title": posting.get("text") or "",
                     "company": company,
                     "location": location,
                     "remote": is_remote(location),
                     "description": description,
                     "skills_required": extract_skills(description),
-                    "url": posting.get("hostedUrl", ""),
+                    "url": posting.get("hostedUrl") or "",
                     "source": "lever",
                     "portal": "lever",
                     "posted_at": posted_at,
@@ -333,6 +342,7 @@ async def fetch_lever_jobs() -> list[dict]:
 # ── Ashby ─────────────────────────────────────────────────────────────────────
 
 async def fetch_ashby_jobs() -> list[dict]:
+    logger.info("Starting ashby fetch...")
     ashby_path = DATA_DIR / "ashby_companies.json"
     slugs: list[str] = await run_in_threadpool(_load_json, ashby_path)
     results = []
@@ -343,6 +353,7 @@ async def fetch_ashby_jobs() -> list[dict]:
             url = f"https://api.ashbyhq.com/posting-api/job-board/{slug}"
             try:
                 resp = await client.get(url)
+                logger.info("Got response: %d from %s", resp.status_code, url)
                 if resp.status_code == 404:
                     continue
                 resp.raise_for_status()
@@ -353,18 +364,25 @@ async def fetch_ashby_jobs() -> list[dict]:
                 logger.error("Ashby error for %s: %s", slug, e)
                 continue
 
+            jobs = data.get("jobs", [])
+            if not jobs:
+                logger.info("No jobs found from ashby: %s", resp.text[:200])
+                continue
+
             company = slug.replace("-", " ").title()
-            for job in data.get("jobs", []):
+            for job in jobs:
+                if not job.get("isListed", False):
+                    continue
                 location = job.get("location") or "Not specified"
                 description = _strip_html(job.get("descriptionHtml", ""))
                 results.append({
-                    "title": job.get("title", ""),
+                    "title": job.get("title") or "",
                     "company": company,
                     "location": location,
-                    "remote": job.get("isRemote", False),
+                    "remote": job.get("isRemote") or False,
                     "description": description,
                     "skills_required": extract_skills(description),
-                    "url": job.get("jobUrl", ""),
+                    "url": f"https://jobs.ashbyhq.com/{slug}/{job['id']}",
                     "source": "ashby",
                     "portal": "ashby",
                     "posted_at": job.get("publishedAt", datetime.now(tz=timezone.utc).isoformat()),
@@ -404,15 +422,15 @@ async def _fetch_jsearch_query(client: httpx.AsyncClient, query: str) -> list[di
         state = job.get("job_state") or ""
         location = f"{city}, {state}".strip(", ")
         description = (job.get("job_description") or "")[:2000]
-        company = job.get("employer_name", "")
+        company = job.get("employer_name") or ""
         results.append({
-            "title": job.get("job_title", ""),
+            "title": job.get("job_title") or "",
             "company": company,
             "location": location,
-            "remote": job.get("job_is_remote", False),
+            "remote": job.get("job_is_remote") or False,
             "description": description,
             "skills_required": job.get("job_required_skills") or [],
-            "url": job.get("job_apply_link", ""),
+            "url": job.get("job_apply_link") or "",
             "source": "jsearch",
             "portal": "unknown",
             "posted_at": job.get("job_posted_at_datetime_utc", datetime.now(tz=timezone.utc).isoformat()),
@@ -456,12 +474,12 @@ async def fetch_jsearch_jobs() -> list[dict]:
 async def _fetch_muse_page(client: httpx.AsyncClient, page: int) -> list[dict]:
     url = "https://www.themuse.com/api/public/jobs"
     params = {
-        "category": "Internship",
         "page": page,
-        "level": "Internship",
+        "descending": "true",
     }
     try:
         resp = await client.get(url, params=params)
+        logger.info("Got response: %d from %s (page %d)", resp.status_code, url, page)
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
@@ -473,25 +491,30 @@ async def _fetch_muse_page(client: httpx.AsyncClient, page: int) -> list[dict]:
         locations = job.get("locations", [])
         location = locations[0]["name"] if locations else "Remote"
         description = _strip_html((job.get("contents") or "")[:2000])
-        company = job.get("company", {}).get("name", "")
+        company = (job.get("company") or {}).get("name") or ""
         results.append({
-            "title": job.get("name", ""),
+            "title": job.get("name") or "",
             "company": company,
             "location": location,
             "remote": "remote" in location.lower(),
             "description": description,
             "skills_required": extract_skills(description),
-            "url": job.get("refs", {}).get("landing_page", ""),
+            "url": (job.get("refs") or {}).get("landing_page") or "",
             "source": "muse",
             "portal": "unknown",
             "posted_at": job.get("publication_date", datetime.now(tz=timezone.utc).isoformat()),
             "expires_at": get_expires_at(),
             "visa_sponsorship": get_visa_status(company, description),
         })
+
+    if not results:
+        logger.info("No jobs found from muse page %d: %s", page, resp.text[:200])
+
     return results
 
 
 async def fetch_muse_jobs() -> list[dict]:
+    logger.info("Starting muse fetch...")
     async with httpx.AsyncClient(timeout=30) as client:
         batches = await asyncio.gather(
             _fetch_muse_page(client, 0),
@@ -517,15 +540,16 @@ async def _fetch_usajobs_query(client: httpx.AsyncClient, keyword: str) -> list[
     url = "https://data.usajobs.gov/api/search"
     headers = {
         "Host": "data.usajobs.gov",
-        "User-Agent": "tindibrown12@gmail.com",
+        "User-Agent": USAJOBS_EMAIL,
+        "Authorization-Key": USAJOBS_API_KEY,
     }
     params = {
         "Keyword": keyword,
         "ResultsPerPage": 50,
-        "PositionOfferingTypeCode": 15328,
     }
     try:
         resp = await client.get(url, headers=headers, params=params)
+        logger.info("Got response: %d from %s (keyword=%s)", resp.status_code, url, keyword)
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
@@ -534,14 +558,17 @@ async def _fetch_usajobs_query(client: httpx.AsyncClient, keyword: str) -> list[
 
     results = []
     items = data.get("SearchResult", {}).get("SearchResultItems", [])
+    if not items:
+        logger.info("No jobs found from usajobs (keyword=%s): %s", keyword, resp.text[:200])
+
     for item in items:
-        desc = item.get("MatchedObjectDescriptor", {})
-        apply_uris = desc.get("ApplyURI", [])
-        description = desc.get("UserArea", {}).get("Details", {}).get("JobSummary", "")
+        desc = item.get("MatchedObjectDescriptor") or {}
+        apply_uris = desc.get("ApplyURI") or []
+        description = ((desc.get("UserArea") or {}).get("Details") or {}).get("JobSummary") or ""
         results.append({
-            "title": desc.get("PositionTitle", ""),
-            "company": desc.get("OrganizationName", ""),
-            "location": desc.get("PositionLocationDisplay", ""),
+            "title": desc.get("PositionTitle") or "",
+            "company": desc.get("OrganizationName") or "",
+            "location": desc.get("PositionLocationDisplay") or "",
             "remote": False,
             "description": description,
             "skills_required": extract_skills(description),
@@ -556,6 +583,10 @@ async def _fetch_usajobs_query(client: httpx.AsyncClient, keyword: str) -> list[
 
 
 async def fetch_usajobs_jobs() -> list[dict]:
+    if not USAJOBS_API_KEY:
+        logger.warning("USAJOBS_API_KEY not set, skipping USAJobs")
+        return []
+    logger.info("Starting usajobs fetch...")
     async with httpx.AsyncClient(timeout=30) as client:
         batches = await asyncio.gather(
             *[_fetch_usajobs_query(client, q) for q in USAJOBS_QUERIES],
@@ -580,6 +611,68 @@ async def fetch_usajobs_jobs() -> list[dict]:
     return results
 
 
+# ── Workday ───────────────────────────────────────────────────────────────────
+
+async def fetch_workday_jobs() -> list[dict]:
+    companies: list[dict] = await run_in_threadpool(_load_json, DATA_DIR / "workday_companies.json")
+    results = []
+
+    async with httpx.AsyncClient(timeout=30, headers={"Content-Type": "application/json", "Accept": "application/json"}) as client:
+        for company in companies:
+            await asyncio.sleep(0.2)
+            subdomain = company.get("subdomain", "")
+            version = company.get("wd_version", 1)
+            company_name = company.get("company", subdomain)
+            url = (
+                f"https://{subdomain}.wd{version}.myworkdayjobs.com"
+                f"/wday/cxs/{subdomain}/careers/jobs"
+            )
+            body = {
+                "appliedFacets": {},
+                "limit": 20,
+                "offset": 0,
+                "searchText": "intern",
+            }
+            try:
+                resp = await client.post(url, json=body)
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+            except Exception as e:
+                logger.error("Workday error for %s: %s", company_name, e)
+                continue
+
+            postings = data.get("jobPostings") or []
+            if not postings:
+                continue
+
+            for posting in postings:
+                external_path = posting.get("externalPath") or ""
+                job_url = f"https://{subdomain}.wd{version}.myworkdayjobs.com{external_path}"
+                location = posting.get("locationsText") or ""
+                remote_type = posting.get("remoteType") or ""
+                description = (posting.get("jobDescription") or "")[:2000]
+                results.append({
+                    "title": posting.get("title") or "",
+                    "company": company_name,
+                    "location": location,
+                    "remote": "remote" in remote_type.lower(),
+                    "description": description,
+                    "skills_required": extract_skills(description),
+                    "url": job_url,
+                    "source": "workday",
+                    "portal": "workday",
+                    "posted_at": posting.get("postedOn") or datetime.now(tz=timezone.utc).isoformat(),
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": get_visa_status(company_name, description),
+                })
+
+            logger.info("Workday %s: %d internships found", company_name, len(postings))
+
+    logger.info("Workday: fetched %d listings", len(results))
+    return results
+
+
 # ── Aggregate ─────────────────────────────────────────────────────────────────
 
 async def fetch_all_jobs() -> list[dict]:
@@ -591,10 +684,11 @@ async def fetch_all_jobs() -> list[dict]:
         fetch_jsearch_jobs(),
         fetch_muse_jobs(),
         fetch_usajobs_jobs(),
+        fetch_workday_jobs(),
         return_exceptions=True,
     )
 
-    source_names = ["adzuna", "greenhouse", "lever", "ashby", "jsearch", "muse", "usajobs"]
+    source_names = ["adzuna", "greenhouse", "lever", "ashby", "jsearch", "muse", "usajobs", "workday"]
     all_jobs: list[dict] = []
 
     for name, batch in zip(source_names, raw_results):

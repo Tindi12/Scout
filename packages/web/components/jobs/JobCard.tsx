@@ -48,6 +48,21 @@ function portalMeta(portal: string): PortalMeta {
   if (value === 'lever') {
     return { label: 'Lever', classes: 'bg-[#3b82f6]/10 text-[#3b82f6]' }
   }
+  if (value === 'ashby') {
+    return { label: 'Ashby', classes: 'bg-purple-500/10 text-purple-400' }
+  }
+  if (value === 'workday') {
+    return { label: 'Workday', classes: 'bg-blue-500/10 text-blue-400' }
+  }
+  if (value === 'usajobs') {
+    return { label: 'USAJobs', classes: 'bg-amber-500/10 text-amber-400' }
+  }
+  if (value === 'jsearch') {
+    return { label: 'JSearch', classes: 'bg-indigo-500/10 text-indigo-400' }
+  }
+  if (value === 'muse') {
+    return { label: 'The Muse', classes: 'bg-pink-500/10 text-pink-400' }
+  }
   return { label: 'Direct', classes: 'bg-white/5 text-[#888]' }
 }
 
@@ -79,6 +94,7 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
 
   const showVisa = job.visa_sponsorship !== 'unknown'
   const visaPositive = job.visa_sponsorship === 'yes'
+  const visaClearance = job.visa_sponsorship === 'clearance'
 
   const companyLabel = (job.company ?? '').trim() || 'Unknown'
   const locationList = parseLocations(job.location ?? '')
@@ -205,10 +221,18 @@ export function JobCard({ job, selected, onToggleSelect }: JobCardProps) {
           <span
             className={cn(
               'text-[10px]',
-              visaPositive ? 'text-[#22c55e]' : 'text-[#ef4444]',
+              visaPositive
+                ? 'text-[#22c55e]'
+                : visaClearance
+                  ? 'text-[#f59e0b]'
+                  : 'text-[#ef4444]',
             )}
           >
-            {visaPositive ? '✓ Sponsors visas' : '✗ No sponsorship'}
+            {visaPositive
+              ? '✓ Sponsors visas'
+              : visaClearance
+                ? '⚠ Some roles need US citizenship'
+                : '✗ No sponsorship'}
           </span>
         ) : null}
       </div>

@@ -1,8 +1,8 @@
-import Image from 'next/image'
-import Link from 'next/link'
+﻿import Link from 'next/link'
+import { ArrowRight, Globe } from 'lucide-react'
 
-import { scoutLogo } from '@/lib/scout-logo'
-import { ArrowRight } from 'lucide-react'
+import { LandingDashboardShowcase } from '@/components/landing/dashboard-showcase'
+import { LANDING_HERO_PILL } from '@/lib/landing-stats'
 
 export function Hero() {
   return (
@@ -47,8 +47,17 @@ export function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
             </span>
-            <span className="font-label text-sm font-medium tracking-wide text-white/90">
-              Scout 1.0 is now live
+            <span className="font-label inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium tracking-wide text-white/90">
+              <span>{LANDING_HERO_PILL.databaseLine}</span>
+              <span className="text-white/35" aria-hidden>
+                ·
+              </span>
+              <Globe
+                className="h-3.5 w-3.5 shrink-0 text-emerald-400"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <span>{LANDING_HERO_PILL.internationalLine}</span>
             </span>
           </span>
         </div>
@@ -93,139 +102,7 @@ export function Hero() {
             filter: 'blur(60px)',
           }}
         />
-        <div className="glass-card overflow-hidden rounded-2xl">
-          <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-            <div className="flex gap-1.5">
-              <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
-              <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
-              <div className="h-2.5 w-2.5 rounded-full bg-white/15" />
-            </div>
-            <div className="ml-2 font-label text-[11px] uppercase tracking-[0.15em] text-[#888888]">
-              scout / dashboard
-            </div>
-          </div>
-
-          <div className="grid grid-cols-12 gap-4 p-6">
-            <aside className="col-span-3 hidden flex-col gap-2 md:flex">
-              {['Dashboard', 'Resume', 'Roles', 'Tracker', 'Copilot'].map(
-                (item, i) => (
-                  <div
-                    key={item}
-                    className={`rounded-xl px-3 py-2.5 font-label text-[13px] ${
-                      i === 0
-                        ? 'glass-card-strong text-white'
-                        : 'text-[#A1A1AA] hover:text-white'
-                    }`}
-                  >
-                    {item}
-                  </div>
-                ),
-              )}
-            </aside>
-
-            <div className="col-span-12 flex flex-col gap-4 md:col-span-9">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-label text-[11px] uppercase tracking-widest text-[#888888]">
-                    Welcome back
-                  </div>
-                  <div className="font-headline text-2xl font-medium tracking-tight text-white">
-                    Adam, you have 12 strong fits today.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="group/send hidden items-center gap-2 rounded-full border border-[#FF6733]/30 bg-[#FF6733]/10 px-3.5 py-1.5 text-[12px] font-medium text-[#FF6733] transition-all duration-300 hover:scale-105 hover:border-[#FF6733]/70 hover:bg-[#FF6733]/20 hover:shadow-[0_0_20px_rgba(255,103,51,0.35)] sm:inline-flex"
-                >
-                  <Image
-                    src={scoutLogo}
-                    alt=""
-                    width={20}
-                    height={20}
-                    draggable={false}
-                    className="h-4 w-auto select-none object-contain"
-                  />
-                  Send Scout
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                <div className="glass-card-strong rounded-xl p-4">
-                  <div className="font-label text-[11px] uppercase tracking-widest text-[#888888]">
-                    Scout Score
-                  </div>
-                  <div className="mt-2 flex items-end gap-1">
-                    <span className="font-headline text-3xl font-medium tracking-tight text-white">
-                      87
-                    </span>
-                    <span className="mb-1 text-[12px] text-emerald-400">
-                      +45
-                    </span>
-                  </div>
-                </div>
-                <div className="glass-card-strong rounded-xl p-4">
-                  <div className="font-label text-[11px] uppercase tracking-widest text-[#888888]">
-                    Applied
-                  </div>
-                  <div className="mt-2 font-headline text-3xl font-medium tracking-tight text-white">
-                    23
-                  </div>
-                </div>
-                <div className="glass-card-strong rounded-xl p-4">
-                  <div className="font-label text-[11px] uppercase tracking-widest text-[#888888]">
-                    Replies
-                  </div>
-                  <div className="mt-2 font-headline text-3xl font-medium tracking-tight text-[#FF6733]">
-                    7
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-card-strong rounded-xl p-5">
-                <div className="font-label text-[11px] uppercase tracking-widest text-[#888888]">
-                  Live agent run
-                </div>
-                <div className="mt-3 space-y-2.5">
-                  {[
-                    {
-                      label: 'Stripe — SWE Intern',
-                      status: 'Submitted',
-                      tone: 'emerald',
-                    },
-                    {
-                      label: 'Linear — Product Eng',
-                      status: 'Filling form',
-                      tone: 'orange',
-                    },
-                    {
-                      label: 'Vercel — DX Intern',
-                      status: 'Queued',
-                      tone: 'muted',
-                    },
-                  ].map((row) => (
-                    <div
-                      key={row.label}
-                      className="flex items-center justify-between text-[13px]"
-                    >
-                      <span className="text-white/90">{row.label}</span>
-                      <span
-                        className={`font-label text-[11px] uppercase tracking-widest ${
-                          row.tone === 'emerald'
-                            ? 'text-emerald-400'
-                            : row.tone === 'orange'
-                              ? 'text-[#FF6733]'
-                              : 'text-[#888888]'
-                        }`}
-                      >
-                        {row.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LandingDashboardShowcase />
 
         <div
           aria-hidden

@@ -1,0 +1,1137 @@
+[
+  {
+    "company": "Apple",
+    "subdomain": "apple",
+    "wd_version": "5"
+  },
+  {
+    "company": "Nike",
+    "subdomain": "nike",
+    "wd_version": "1"
+  },
+  {
+    "company": "Disney",
+    "subdomain": "disney",
+    "wd_version": "5"
+  },
+  {
+    "company": "Ford",
+    "subdomain": "ford",
+    "wd_version": "1"
+  },
+  {
+    "company": "General Motors",
+    "subdomain": "generalmotors",
+    "wd_version": "5"
+  },
+  {
+    "company": "Stellantis",
+    "subdomain": "stellantis",
+    "wd_version": "3"
+  },
+  {
+    "company": "Toyota",
+    "subdomain": "toyota",
+    "wd_version": "1"
+  },
+  {
+    "company": "Honda",
+    "subdomain": "honda",
+    "wd_version": "1"
+  },
+  {
+    "company": "Boeing",
+    "subdomain": "boeing",
+    "wd_version": "1"
+  },
+  {
+    "company": "Lockheed Martin",
+    "subdomain": "lockheedmartin",
+    "wd_version": "5"
+  },
+  {
+    "company": "Raytheon (RTX)",
+    "subdomain": "rtx",
+    "wd_version": "5"
+  },
+  {
+    "company": "Northrop Grumman",
+    "subdomain": "ngc",
+    "wd_version": "1"
+  },
+  {
+    "company": "BASF",
+    "subdomain": "basf",
+    "wd_version": "3"
+  },
+  {
+    "company": "Dow",
+    "subdomain": "dow",
+    "wd_version": "1"
+  },
+  {
+    "company": "3M",
+    "subdomain": "mmm",
+    "wd_version": "1"
+  },
+  {
+    "company": "ExxonMobil",
+    "subdomain": "exxonmobil",
+    "wd_version": "1"
+  },
+  {
+    "company": "Chevron",
+    "subdomain": "chevron",
+    "wd_version": "5"
+  },
+  {
+    "company": "Procter & Gamble",
+    "subdomain": "pg",
+    "wd_version": "1"
+  },
+  {
+    "company": "Unilever",
+    "subdomain": "unilever",
+    "wd_version": "3"
+  },
+  {
+    "company": "Nestlé",
+    "subdomain": "nestle",
+    "wd_version": "3"
+  },
+  {
+    "company": "PepsiCo",
+    "subdomain": "pepsico",
+    "wd_version": "5"
+  },
+  {
+    "company": "Johnson & Johnson",
+    "subdomain": "jnj",
+    "wd_version": "5"
+  },
+  {
+    "company": "Abbott",
+    "subdomain": "abbott",
+    "wd_version": "5"
+  },
+  {
+    "company": "Baxter",
+    "subdomain": "baxter",
+    "wd_version": "1"
+  },
+  {
+    "company": "Becton Dickinson",
+    "subdomain": "bd",
+    "wd_version": "1"
+  },
+  {
+    "company": "Bank of America",
+    "subdomain": "bankofamerica",
+    "wd_version": "5"
+  },
+  {
+    "company": "Wells Fargo",
+    "subdomain": "wellsfargo",
+    "wd_version": "5"
+  },
+  {
+    "company": "Citi",
+    "subdomain": "citi",
+    "wd_version": "1"
+  },
+  {
+    "company": "Walmart",
+    "subdomain": "walmart",
+    "wd_version": "5"
+  },
+  {
+    "company": "Target",
+    "subdomain": "target",
+    "wd_version": "5"
+  },
+  {
+    "company": "Home Depot",
+    "subdomain": "homedepot",
+    "wd_version": "5"
+  },
+  {
+    "company": "Lowe's",
+    "subdomain": "lowes",
+    "wd_version": "5"
+  },
+  {
+    "company": "Comcast",
+    "subdomain": "comcast",
+    "wd_version": "5"
+  },
+  {
+    "company": "Warner Bros Discovery",
+    "subdomain": "wbd",
+    "wd_version": "1"
+  },
+  {
+    "company": "NBCUniversal",
+    "subdomain": "nbcuniversal",
+    "wd_version": "5"
+  },
+  {
+    "company": "AT&T",
+    "subdomain": "att",
+    "wd_version": "5"
+  },
+  {
+    "company": "Verizon",
+    "subdomain": "verizon",
+    "wd_version": "1"
+  },
+  {
+    "company": "T-Mobile",
+    "subdomain": "tmobile",
+    "wd_version": "1"
+  },
+  {
+    "company": "Shell",
+    "subdomain": "shell",
+    "wd_version": "1"
+  },
+  {
+    "company": "BP",
+    "subdomain": "bp",
+    "wd_version": "3"
+  },
+  {
+    "company": "ConocoPhillips",
+    "subdomain": "conocophillips",
+    "wd_version": "1"
+  },
+  {
+    "company": "Allstate",
+    "subdomain": "allstate",
+    "wd_version": "1"
+  },
+  {
+    "company": "State Farm",
+    "subdomain": "statefarm",
+    "wd_version": "1"
+  },
+  {
+    "company": "Progressive",
+    "subdomain": "progressive",
+    "wd_version": "1"
+  },
+  {
+    "company": "Caterpillar",
+    "subdomain": "caterpillar",
+    "wd_version": "1"
+  },
+  {
+    "company": "John Deere",
+    "subdomain": "deere",
+    "wd_version": "5"
+  },
+  {
+    "company": "FedEx",
+    "subdomain": "fedex",
+    "wd_version": "1"
+  },
+  {
+    "company": "UPS",
+    "subdomain": "ups",
+    "wd_version": "5"
+  },
+  {
+    "company": "Pfizer",
+    "subdomain": "pfizer",
+    "wd_version": "1"
+  },
+  {
+    "company": "Merck",
+    "subdomain": "merck",
+    "wd_version": "5"
+  },
+  {
+    "company": "Novartis",
+    "subdomain": "novartis",
+    "wd_version": "1"
+  },
+  {
+    "company": "GSK",
+    "subdomain": "gsk",
+    "wd_version": "3"
+  },
+  {
+    "company": "AstraZeneca",
+    "subdomain": "astrazeneca",
+    "wd_version": "3"
+  },
+  {
+    "company": "Sanofi",
+    "subdomain": "sanofi",
+    "wd_version": "3"
+  },
+  {
+    "company": "Medtronic",
+    "subdomain": "medtronic",
+    "wd_version": "1"
+  },
+  {
+    "company": "Danaher",
+    "subdomain": "danaher",
+    "wd_version": "1"
+  },
+  {
+    "company": "Thermo Fisher Scientific",
+    "subdomain": "thermofisher",
+    "wd_version": "1"
+  },
+  {
+    "company": "Stryker",
+    "subdomain": "stryker",
+    "wd_version": "5"
+  },
+  {
+    "company": "Intel",
+    "subdomain": "intel",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cisco",
+    "subdomain": "cisco",
+    "wd_version": "1"
+  },
+  {
+    "company": "IBM",
+    "subdomain": "ibm",
+    "wd_version": "5"
+  },
+  {
+    "company": "HP",
+    "subdomain": "hp",
+    "wd_version": "5"
+  },
+  {
+    "company": "Dell",
+    "subdomain": "dell",
+    "wd_version": "1"
+  },
+  {
+    "company": "Broadcom",
+    "subdomain": "broadcom",
+    "wd_version": "1"
+  },
+  {
+    "company": "Qualcomm",
+    "subdomain": "qualcomm",
+    "wd_version": "5"
+  },
+  {
+    "company": "Salesforce",
+    "subdomain": "salesforce",
+    "wd_version": "1"
+  },
+  {
+    "company": "Adobe",
+    "subdomain": "adobe",
+    "wd_version": "1"
+  },
+  {
+    "company": "Intuit",
+    "subdomain": "intuit",
+    "wd_version": "1"
+  },
+  {
+    "company": "ServiceNow",
+    "subdomain": "servicenow",
+    "wd_version": "1"
+  },
+  {
+    "company": "Workday",
+    "subdomain": "workday",
+    "wd_version": "5"
+  },
+  {
+    "company": "Mastercard",
+    "subdomain": "mastercard",
+    "wd_version": "1"
+  },
+  {
+    "company": "Visa",
+    "subdomain": "visa",
+    "wd_version": "5"
+  },
+  {
+    "company": "American Express",
+    "subdomain": "amex",
+    "wd_version": "1"
+  },
+  {
+    "company": "Capital One",
+    "subdomain": "capitalone",
+    "wd_version": "1"
+  },
+  {
+    "company": "Morgan Stanley",
+    "subdomain": "morganstanley",
+    "wd_version": "1"
+  },
+  {
+    "company": "BlackRock",
+    "subdomain": "blackrock",
+    "wd_version": "1"
+  },
+  {
+    "company": "Johnson Controls",
+    "subdomain": "johnsoncontrols",
+    "wd_version": "1"
+  },
+  {
+    "company": "Honeywell",
+    "subdomain": "honeywell",
+    "wd_version": "5"
+  },
+  {
+    "company": "GE",
+    "subdomain": "ge",
+    "wd_version": "5"
+  },
+  {
+    "company": "Siemens",
+    "subdomain": "siemens",
+    "wd_version": "3"
+  },
+  {
+    "company": "Philips",
+    "subdomain": "philips",
+    "wd_version": "3"
+  },
+  {
+    "company": "Cummins",
+    "subdomain": "cummins",
+    "wd_version": "1"
+  },
+  {
+    "company": "PACCAR",
+    "subdomain": "paccar",
+    "wd_version": "1"
+  },
+  {
+    "company": "Emerson",
+    "subdomain": "emerson",
+    "wd_version": "5"
+  },
+  {
+    "company": "Eaton",
+    "subdomain": "eaton",
+    "wd_version": "1"
+  },
+  {
+    "company": "Parker Hannifin",
+    "subdomain": "parker",
+    "wd_version": "1"
+  },
+  {
+    "company": "Rockwell Automation",
+    "subdomain": "rockwellautomation",
+    "wd_version": "1"
+  },
+  {
+    "company": "Carrier",
+    "subdomain": "carrier",
+    "wd_version": "5"
+  },
+  {
+    "company": "Otis",
+    "subdomain": "otis",
+    "wd_version": "5"
+  },
+  {
+    "company": "Trane",
+    "subdomain": "trane",
+    "wd_version": "5"
+  },
+  {
+    "company": "Kroger",
+    "subdomain": "kroger",
+    "wd_version": "5"
+  },
+  {
+    "company": "Walgreens",
+    "subdomain": "walgreens",
+    "wd_version": "1"
+  },
+  {
+    "company": "CVS Health",
+    "subdomain": "cvs",
+    "wd_version": "1"
+  },
+  {
+    "company": "McKesson",
+    "subdomain": "mckesson",
+    "wd_version": "1"
+  },
+  {
+    "company": "AmerisourceBergen",
+    "subdomain": "amerisourcebergen",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cardinal Health",
+    "subdomain": "cardinalhealth",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cigna",
+    "subdomain": "cigna",
+    "wd_version": "5"
+  },
+  {
+    "company": "Elevance Health",
+    "subdomain": "elevance",
+    "wd_version": "1"
+  },
+  {
+    "company": "Centene",
+    "subdomain": "centene",
+    "wd_version": "1"
+  },
+  {
+    "company": "Humana",
+    "subdomain": "humana",
+    "wd_version": "5"
+  },
+  {
+    "company": "UnitedHealth Group",
+    "subdomain": "uhg",
+    "wd_version": "1"
+  },
+  {
+    "company": "HCA Healthcare",
+    "subdomain": "hca",
+    "wd_version": "1"
+  },
+  {
+    "company": "Tenet Healthcare",
+    "subdomain": "tenet",
+    "wd_version": "1"
+  },
+  {
+    "company": "Marriott",
+    "subdomain": "marriott",
+    "wd_version": "5"
+  },
+  {
+    "company": "Hilton",
+    "subdomain": "hilton",
+    "wd_version": "1"
+  },
+  {
+    "company": "Delta Air Lines",
+    "subdomain": "delta",
+    "wd_version": "1"
+  },
+  {
+    "company": "United Airlines",
+    "subdomain": "united",
+    "wd_version": "1"
+  },
+  {
+    "company": "American Airlines",
+    "subdomain": "aa",
+    "wd_version": "1"
+  },
+  {
+    "company": "Southwest Airlines",
+    "subdomain": "southwest",
+    "wd_version": "1"
+  },
+  {
+    "company": "Expedia",
+    "subdomain": "expedia",
+    "wd_version": "5"
+  },
+  {
+    "company": "Airbnb",
+    "subdomain": "airbnb",
+    "wd_version": "1"
+  },
+  {
+    "company": "Uber",
+    "subdomain": "uber",
+    "wd_version": "1"
+  },
+  {
+    "company": "Lyft",
+    "subdomain": "lyft",
+    "wd_version": "1"
+  },
+  {
+    "company": "Netflix",
+    "subdomain": "netflix",
+    "wd_version": "1"
+  },
+  {
+    "company": "Electronic Arts",
+    "subdomain": "ea",
+    "wd_version": "1"
+  },
+  {
+    "company": "Take-Two Interactive",
+    "subdomain": "taketwo",
+    "wd_version": "1"
+  },
+  {
+    "company": "Activision Blizzard",
+    "subdomain": "activision",
+    "wd_version": "1"
+  },
+  {
+    "company": "Sony",
+    "subdomain": "sony",
+    "wd_version": "5"
+  },
+  {
+    "company": "Nintendo",
+    "subdomain": "nintendo",
+    "wd_version": "1"
+  },
+  {
+    "company": "Coca-Cola",
+    "subdomain": "cocacola",
+    "wd_version": "1"
+  },
+  {
+    "company": "Mondelez",
+    "subdomain": "mondelez",
+    "wd_version": "1"
+  },
+  {
+    "company": "Kraft Heinz",
+    "subdomain": "kraftheinz",
+    "wd_version": "1"
+  },
+  {
+    "company": "General Mills",
+    "subdomain": "generalmills",
+    "wd_version": "1"
+  },
+  {
+    "company": "Kellogg",
+    "subdomain": "kellogg",
+    "wd_version": "1"
+  },
+  {
+    "company": "Hershey",
+    "subdomain": "hershey",
+    "wd_version": "1"
+  },
+  {
+    "company": "Tyson Foods",
+    "subdomain": "tyson",
+    "wd_version": "1"
+  },
+  {
+    "company": "Archer Daniels Midland",
+    "subdomain": "adm",
+    "wd_version": "1"
+  },
+  {
+    "company": "Bunge",
+    "subdomain": "bunge",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cargill",
+    "subdomain": "cargill",
+    "wd_version": "1"
+  },
+  {
+    "company": "Sysco",
+    "subdomain": "sysco",
+    "wd_version": "1"
+  },
+  {
+    "company": "US Foods",
+    "subdomain": "usfoods",
+    "wd_version": "1"
+  },
+  {
+    "company": "McDonald's",
+    "subdomain": "mcdonalds",
+    "wd_version": "5"
+  },
+  {
+    "company": "Starbucks",
+    "subdomain": "starbucks",
+    "wd_version": "1"
+  },
+  {
+    "company": "Yum! Brands",
+    "subdomain": "yum",
+    "wd_version": "1"
+  },
+  {
+    "company": "Chipotle",
+    "subdomain": "chipotle",
+    "wd_version": "1"
+  },
+  {
+    "company": "Domino's",
+    "subdomain": "dominos",
+    "wd_version": "1"
+  },
+  {
+    "company": "Darden Restaurants",
+    "subdomain": "darden",
+    "wd_version": "1"
+  },
+  {
+    "company": "Macy's",
+    "subdomain": "macys",
+    "wd_version": "5"
+  },
+  {
+    "company": "Kohl's",
+    "subdomain": "kohls",
+    "wd_version": "1"
+  },
+  {
+    "company": "Nordstrom",
+    "subdomain": "nordstrom",
+    "wd_version": "1"
+  },
+  {
+    "company": "Gap",
+    "subdomain": "gap",
+    "wd_version": "1"
+  },
+  {
+    "company": "TJX Companies",
+    "subdomain": "tjx",
+    "wd_version": "1"
+  },
+  {
+    "company": "Ross Stores",
+    "subdomain": "ross",
+    "wd_version": "1"
+  },
+  {
+    "company": "Under Armour",
+    "subdomain": "underarmour",
+    "wd_version": "1"
+  },
+  {
+    "company": "Lululemon",
+    "subdomain": "lululemon",
+    "wd_version": "1"
+  },
+  {
+    "company": "VF Corp",
+    "subdomain": "vfc",
+    "wd_version": "1"
+  },
+  {
+    "company": "Estée Lauder",
+    "subdomain": "esteelauder",
+    "wd_version": "1"
+  },
+  {
+    "company": "L'Oréal",
+    "subdomain": "loreal",
+    "wd_version": "3"
+  },
+  {
+    "company": "Kimberly-Clark",
+    "subdomain": "kimberlyclark",
+    "wd_version": "1"
+  },
+  {
+    "company": "Colgate-Palmolive",
+    "subdomain": "colgate",
+    "wd_version": "1"
+  },
+  {
+    "company": "Clorox",
+    "subdomain": "clorox",
+    "wd_version": "1"
+  },
+  {
+    "company": "Ecolab",
+    "subdomain": "ecolab",
+    "wd_version": "1"
+  },
+  {
+    "company": "DuPont",
+    "subdomain": "dupont",
+    "wd_version": "1"
+  },
+  {
+    "company": "Eastman",
+    "subdomain": "eastman",
+    "wd_version": "1"
+  },
+  {
+    "company": "PPG Industries",
+    "subdomain": "ppg",
+    "wd_version": "1"
+  },
+  {
+    "company": "Sherwin-Williams",
+    "subdomain": "sherwin",
+    "wd_version": "1"
+  },
+  {
+    "company": "International Paper",
+    "subdomain": "ip",
+    "wd_version": "1"
+  },
+  {
+    "company": "WestRock",
+    "subdomain": "westrock",
+    "wd_version": "1"
+  },
+  {
+    "company": "Nucor",
+    "subdomain": "nucor",
+    "wd_version": "1"
+  },
+  {
+    "company": "US Steel",
+    "subdomain": "ussteel",
+    "wd_version": "1"
+  },
+  {
+    "company": "Alcoa",
+    "subdomain": "alcoa",
+    "wd_version": "1"
+  },
+  {
+    "company": "Freeport-McMoRan",
+    "subdomain": "fcx",
+    "wd_version": "1"
+  },
+  {
+    "company": "Newmont",
+    "subdomain": "newmont",
+    "wd_version": "1"
+  },
+  {
+    "company": "Vulcan Materials",
+    "subdomain": "vulcan",
+    "wd_version": "1"
+  },
+  {
+    "company": "Martin Marietta",
+    "subdomain": "martinmarietta",
+    "wd_version": "1"
+  },
+  {
+    "company": "Duke Energy",
+    "subdomain": "dukeenergy",
+    "wd_version": "1"
+  },
+  {
+    "company": "Southern Company",
+    "subdomain": "southerncompany",
+    "wd_version": "1"
+  },
+  {
+    "company": "NextEra Energy",
+    "subdomain": "nextera",
+    "wd_version": "1"
+  },
+  {
+    "company": "Dominion Energy",
+    "subdomain": "dominion",
+    "wd_version": "1"
+  },
+  {
+    "company": "Exelon",
+    "subdomain": "exelon",
+    "wd_version": "1"
+  },
+  {
+    "company": "American Electric Power",
+    "subdomain": "aep",
+    "wd_version": "1"
+  },
+  {
+    "company": "Sempra Energy",
+    "subdomain": "sempra",
+    "wd_version": "1"
+  },
+  {
+    "company": "PG&E",
+    "subdomain": "pge",
+    "wd_version": "1"
+  },
+  {
+    "company": "Edison International",
+    "subdomain": "edison",
+    "wd_version": "1"
+  },
+  {
+    "company": "Consolidated Edison",
+    "subdomain": "coned",
+    "wd_version": "1"
+  },
+  {
+    "company": "PPL Corporation",
+    "subdomain": "ppl",
+    "wd_version": "1"
+  },
+  {
+    "company": "Entergy",
+    "subdomain": "entergy",
+    "wd_version": "1"
+  },
+  {
+    "company": "FirstEnergy",
+    "subdomain": "firstenergy",
+    "wd_version": "1"
+  },
+  {
+    "company": "WEC Energy Group",
+    "subdomain": "wec",
+    "wd_version": "1"
+  },
+  {
+    "company": "DTE Energy",
+    "subdomain": "dte",
+    "wd_version": "1"
+  },
+  {
+    "company": "Eversource Energy",
+    "subdomain": "eversource",
+    "wd_version": "1"
+  },
+  {
+    "company": "CenterPoint Energy",
+    "subdomain": "centerpoint",
+    "wd_version": "1"
+  },
+  {
+    "company": "CMS Energy",
+    "subdomain": "cms",
+    "wd_version": "1"
+  },
+  {
+    "company": "Ameren",
+    "subdomain": "ameren",
+    "wd_version": "1"
+  },
+  {
+    "company": "Evergy",
+    "subdomain": "evergy",
+    "wd_version": "1"
+  },
+  {
+    "company": "Alliant Energy",
+    "subdomain": "alliant",
+    "wd_version": "1"
+  },
+  {
+    "company": "Vistra Corp",
+    "subdomain": "vistra",
+    "wd_version": "1"
+  },
+  {
+    "company": "NRG Energy",
+    "subdomain": "nrg",
+    "wd_version": "1"
+  },
+  {
+    "company": "Kinder Morgan",
+    "subdomain": "kindermorgan",
+    "wd_version": "1"
+  },
+  {
+    "company": "Williams Companies",
+    "subdomain": "williams",
+    "wd_version": "1"
+  },
+  {
+    "company": "ONEOK",
+    "subdomain": "oneok",
+    "wd_version": "1"
+  },
+  {
+    "company": "Targa Resources",
+    "subdomain": "targa",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cheniere Energy",
+    "subdomain": "cheniere",
+    "wd_version": "1"
+  },
+  {
+    "company": "Halliburton",
+    "subdomain": "halliburton",
+    "wd_version": "1"
+  },
+  {
+    "company": "Baker Hughes",
+    "subdomain": "bakerhughes",
+    "wd_version": "1"
+  },
+  {
+    "company": "Schlumberger",
+    "subdomain": "slb",
+    "wd_version": "1"
+  },
+  {
+    "company": "Valero Energy",
+    "subdomain": "valero",
+    "wd_version": "1"
+  },
+  {
+    "company": "Marathon Petroleum",
+    "subdomain": "marathon",
+    "wd_version": "1"
+  },
+  {
+    "company": "Phillips 66",
+    "subdomain": "phillips66",
+    "wd_version": "1"
+  },
+  {
+    "company": "Occidental Petroleum",
+    "subdomain": "oxy",
+    "wd_version": "1"
+  },
+  {
+    "company": "EOG Resources",
+    "subdomain": "eog",
+    "wd_version": "1"
+  },
+  {
+    "company": "Pioneer Natural Resources",
+    "subdomain": "pxd",
+    "wd_version": "1"
+  },
+  {
+    "company": "Devon Energy",
+    "subdomain": "devon",
+    "wd_version": "1"
+  },
+  {
+    "company": "Hess",
+    "subdomain": "hess",
+    "wd_version": "1"
+  },
+  {
+    "company": "Diamondback Energy",
+    "subdomain": "diamondback",
+    "wd_version": "1"
+  },
+  {
+    "company": "Republic Services",
+    "subdomain": "republicservices",
+    "wd_version": "1"
+  },
+  {
+    "company": "Waste Management",
+    "subdomain": "wm",
+    "wd_version": "1"
+  },
+  {
+    "company": "United Rentals",
+    "subdomain": "unitedrentals",
+    "wd_version": "1"
+  },
+  {
+    "company": "Ashtead Group",
+    "subdomain": "ashtead",
+    "wd_version": "3"
+  },
+  {
+    "company": "Cintas",
+    "subdomain": "cintas",
+    "wd_version": "1"
+  },
+  {
+    "company": "Copart",
+    "subdomain": "copart",
+    "wd_version": "1"
+  },
+  {
+    "company": "Rollins",
+    "subdomain": "rollins",
+    "wd_version": "1"
+  },
+  {
+    "company": "ADT",
+    "subdomain": "adt",
+    "wd_version": "1"
+  },
+  {
+    "company": "Equifax",
+    "subdomain": "equifax",
+    "wd_version": "1"
+  },
+  {
+    "company": "TransUnion",
+    "subdomain": "transunion",
+    "wd_version": "1"
+  },
+  {
+    "company": "Gartner",
+    "subdomain": "gartner",
+    "wd_version": "1"
+  },
+  {
+    "company": "IHS Markit",
+    "subdomain": "ihsmarkit",
+    "wd_version": "1"
+  },
+  {
+    "company": "Moody's",
+    "subdomain": "moodys",
+    "wd_version": "1"
+  },
+  {
+    "company": "S&P Global",
+    "subdomain": "spglobal",
+    "wd_version": "1"
+  },
+  {
+    "company": "MSCI",
+    "subdomain": "msci",
+    "wd_version": "1"
+  },
+  {
+    "company": "FactSet",
+    "subdomain": "factset",
+    "wd_version": "1"
+  },
+  {
+    "company": "CoStar Group",
+    "subdomain": "costar",
+    "wd_version": "1"
+  },
+  {
+    "company": "Thomson Reuters",
+    "subdomain": "thomsonreuters",
+    "wd_version": "3"
+  },
+  {
+    "company": "CBRE Group",
+    "subdomain": "cbre",
+    "wd_version": "1"
+  },
+  {
+    "company": "JLL",
+    "subdomain": "jll",
+    "wd_version": "1"
+  },
+  {
+    "company": "Cushman & Wakefield",
+    "subdomain": "cushmanwakefield",
+    "wd_version": "1"
+  },
+  {
+    "company": "Prologis",
+    "subdomain": "prologis",
+    "wd_version": "1"
+  }
+]
