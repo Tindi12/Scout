@@ -26,4 +26,10 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+
+    worker_concurrency=1,  #for dev but switch to 3 for production
+    task_soft_time_limit=300,   # 5 min soft limit per task
+    task_time_limit=360,        # 6 min hard limit per task
+    task_max_retries=2,         # retry failed applications twice
+    task_default_retry_delay=30 # wait 30s before retry
 )
