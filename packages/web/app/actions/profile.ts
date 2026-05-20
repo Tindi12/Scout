@@ -9,10 +9,28 @@ import {
   deriveRequiresSponsorship,
   type DegreeType,
   type HeardAboutUs,
-  type ProfileData,
+  type ProfileData as BaseProfileData,
   type RemotePreference,
   type WorkAuthorization,
 } from '@/lib/profile-completion'
+
+export type OpenEndedPreference = 'auto' | 'library' | 'sms' | 'email'
+
+export type AnswersLibrary = {
+  why_company?: string
+  career_goals?: string
+  about_yourself?: string
+  why_hire_me?: string
+  greatest_strength?: string
+  greatest_weakness?: string
+  challenge_overcome?: string
+  proud_projects?: string
+}
+
+export type ProfileData = BaseProfileData & {
+  open_ended_preference: string | null
+  answers_library: AnswersLibrary
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -53,6 +71,8 @@ const PROFILE_COLUMNS = [
   'race_ethnicity',
   'veteran_status',
   'disability_status',
+  'open_ended_preference',
+  'answers_library',
   'profile_complete',
 ] as const
 
@@ -89,6 +109,35 @@ const ALLOWED_HEARD: ReadonlySet<HeardAboutUs> = new Set<HeardAboutUs>([
   'career_fair',
   'other',
 ])
+
+const ALLOWED_OPEN_ENDED: ReadonlySet<OpenEndedPreference> =
+  new Set<OpenEndedPreference>(['auto', 'library', 'sms', 'email'])
+
+const ANSWERS_LIBRARY_KEYS = [
+  'why_company',
+  'career_goals',
+  'about_yourself',
+  'why_hire_me',
+  'greatest_strength',
+  'greatest_weakness',
+  'challenge_overcome',
+  'proud_projects',
+] as const satisfies ReadonlyArray<keyof AnswersLibrary>
+
+function normalizeAnswersLibrary(value: unknown): AnswersLibrary | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  const source = value as Record<string, unknown>
+  const normalized: AnswersLibrary = {}
+  for (const key of ANSWERS_LIBRARY_KEYS) {
+    const entry = source[key]
+    if (typeof entry !== 'string') continue
+    const trimmed = entry.trim()
+    normalized[key] = trimmed.length > 500 ? trimmed.slice(0, 500) : trimmed
+  }
+  return normalized
+}
 
 function normalizeText(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -215,6 +264,16 @@ function buildUpdates(
     if (v !== undefined) updates.target_roles = v as TargetRole[]
   }
 
+  if (Object.prototype.hasOwnProperty.call(patch, 'open_ended_preference')) {
+    const v = pickEnum(patch.open_ended_preference, ALLOWED_OPEN_ENDED)
+    if (v !== undefined) updates.open_ended_preference = v
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'answers_library')) {
+    const v = normalizeAnswersLibrary(patch.answers_library)
+    if (v !== undefined) updates.answers_library = v
+  }
+
   return updates
 }
 
@@ -254,6 +313,17 @@ export async function updateProfile(
   if (!existing) return { error: 'Profile not found' }
 
   const merged = { ...(existing as unknown as ProfileRow), ...updates } as ProfileRow
+
+  if ('answers_library' in updates) {
+    const existingLibrary = normalizeAnswersLibrary(
+      (existing as unknown as ProfileRow).answers_library,
+    ) ?? {}
+    updates.answers_library = {
+      ...existingLibrary,
+      ...(updates.answers_library as AnswersLibrary),
+    }
+    merged.answers_library = updates.answers_library as AnswersLibrary
+  }
 
   if ('work_authorization' in updates) {
     merged.work_authorization = updates.work_authorization as

@@ -7,6 +7,8 @@ from services.job_store import store_jobs
 from core.supabase_client import supabase
 from datetime import datetime, timezone
 from services.portal_detector import detect_portal
+from services.latex_generator import generate_resume_pdf
+from services.mcp.greenhouse import GreenhouseMCP, NeedsAttentionException
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +54,50 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
 
             resume_to_use = analysis.data["rewritten_resume"] if analysis.data else None
 
+        # 5.5. Generate PDF from resume variant
+        if resume_to_use:
+            resume_pdf = generate_resume_pdf(resume_to_use)
+        else:
+            raise Exception("No resume available to submit")
+
         #6. Detect portal from job.portal field
         portal = detect_portal(url=job_data.get("url", ""), portal=job_data.get("portal", "unknown"))
 
         #7. Call appropriate MCP/browser handler
-        # TODO: wire Browserbase + MCP servers in 7.2-7.4
         logger.info(f"Applying to {job_data['title']} at {job_data['company']} via {portal}")
-        applied = True  # stub - always succeeds for now
+        if portal == "greenhouse":
+            mcp = GreenhouseMCP()
+            result = asyncio.get_event_loop().run_until_complete(
+                mcp.apply(
+                    job_url=job_data["url"],
+                    user_data=user_data,
+                    resume_pdf=resume_pdf,
+                )
+            )
+        else:
+            logger.info(f"Portal {portal} not yet implemented")
+            result = {"success": True, "stub": True}
 
         #8. Update application status → "applied"
         supabase.table("applications").update({"status": "applied", "applied_at": datetime.now(timezone.utc).isoformat()}).eq("id", application_id).execute()
 
         #9. Update scout_run → increment applied_count
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "applied_count"}).execute()
+
+    except NeedsAttentionException as e:
+        supabase.table("applications").update({
+            "status": "needs_attention",
+            "error_message": str(e)
+        }).eq("id", application_id).execute()
+        supabase.rpc("increment_scout_run_counter", {
+            "run_id": scout_run_id,
+            "counter_name": "needs_attention_count"
+        }).execute()
+        return {
+            "success": False,
+            "needs_attention": True,
+            "question": str(e)
+        }
 
     except Exception as e:
         logger.error(f"apply_to_job_task failed: {e}")

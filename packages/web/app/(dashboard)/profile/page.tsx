@@ -1,20 +1,34 @@
 'use client'
 
 import { useUser } from '@clerk/nextjs'
+import Image from 'next/image'
 import {
+  BookOpen,
   ChevronDown,
   FileText,
   GraduationCap,
   Heart,
+  Info,
+  Library,
+  Mail,
   MapPin,
+  MessageSquare,
+  Settings2,
   Shield,
   User,
+  type LucideIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
 import 'react-phone-number-input/style.css'
 
-import { getProfile, updateProfile } from '@/app/actions/profile'
+import {
+  getProfile,
+  updateProfile,
+  type AnswersLibrary,
+  type OpenEndedPreference,
+  type ProfileData,
+} from '@/app/actions/profile'
 import type { TargetRole } from '@/app/actions/onboarding'
 import { CompactRoleGrid } from '@/components/profile/CompactRoleGrid'
 import { CoverLetterOpeningInfo } from '@/components/profile/CoverLetterOpeningInfo'
@@ -31,16 +45,30 @@ import { ProfileProgress } from '@/components/profile/ProfileProgress'
 import { ProfileSection } from '@/components/profile/ProfileSection'
 import { SchoolAutocomplete } from '@/components/profile/SchoolAutocomplete'
 import { Toggle } from '@/components/profile/Toggle'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useToast } from '@/hooks/use-toast'
 import {
   computeProfileCompletion,
   type DegreeType,
   type HeardAboutUs,
-  type ProfileData,
   type RemotePreference,
   type WorkAuthorization,
 } from '@/lib/profile-completion'
+import { scoutLogo } from '@/lib/scout-logo'
 import { cn } from '@/lib/utils'
 
 type SectionId =
@@ -49,7 +77,106 @@ type SectionId =
   | 'education'
   | 'preferences'
   | 'application'
+  | 'application_preferences'
+  | 'answers_library'
   | 'diversity'
+
+function emptyAnswersLibrary(): Record<keyof AnswersLibrary, string> {
+  return {
+    why_company: '',
+    career_goals: '',
+    about_yourself: '',
+    why_hire_me: '',
+    greatest_strength: '',
+    greatest_weakness: '',
+    challenge_overcome: '',
+    proud_projects: '',
+  }
+}
+
+const ANSWER_FIELDS = [
+  {
+    key: 'why_company',
+    label: 'Why do you want to work here?',
+    placeholder: "I'm excited about {company} because...",
+  },
+  {
+    key: 'career_goals',
+    label: 'What are your career goals?',
+    placeholder: 'My goal is to...',
+  },
+  {
+    key: 'about_yourself',
+    label: 'Tell us about yourself',
+    placeholder: "I'm a [year] [degree] student...",
+  },
+  {
+    key: 'why_hire_me',
+    label: 'Why should we hire you?',
+    placeholder: 'I bring a unique combination...',
+  },
+  {
+    key: 'greatest_strength',
+    label: "What's your greatest strength?",
+    placeholder: 'My greatest strength is...',
+  },
+  {
+    key: 'greatest_weakness',
+    label: "What's your greatest weakness?",
+    placeholder: "I'm working on improving...",
+  },
+  {
+    key: 'challenge_overcome',
+    label: 'Describe a challenge you overcame',
+    placeholder: 'One challenge I faced was...',
+  },
+  {
+    key: 'proud_projects',
+    label: 'What projects are you most proud of?',
+    placeholder: "I'm most proud of...",
+  },
+] as const
+
+type AnswerKey = (typeof ANSWER_FIELDS)[number]['key']
+
+const PREFERENCE_OPTIONS: ReadonlyArray<{
+  value: OpenEndedPreference
+  label: string
+  sub: string
+  Icon?: LucideIcon
+  useScoutLogo?: boolean
+  recommended?: boolean
+  requiresPhone?: boolean
+}> = [
+  {
+    value: 'auto',
+    label: 'Auto-generate',
+    sub: 'Scout writes answers using your profile',
+    useScoutLogo: true,
+  },
+  {
+    value: 'library',
+    label: 'Use my answers',
+    sub: 'Scout uses your pre-written answers',
+    Icon: BookOpen,
+    recommended: true,
+  },
+  {
+    value: 'sms',
+    label: 'Ask me via SMS',
+    sub: 'Scout pauses and texts you',
+    Icon: MessageSquare,
+    requiresPhone: true,
+  },
+  {
+    value: 'email',
+    label: 'Ask me via email',
+    sub: 'Scout pauses and emails you',
+    Icon: Mail,
+  },
+]
+
+const ANSWER_LIMIT = 500
 
 const EMPTY_PROFILE: ProfileData = {
   name: null,
@@ -83,6 +210,8 @@ const EMPTY_PROFILE: ProfileData = {
   race_ethnicity: null,
   veteran_status: null,
   disability_status: null,
+  open_ended_preference: 'library',
+  answers_library: emptyAnswersLibrary(),
 }
 
 const WORK_AUTH_OPTIONS: ReadonlyArray<{ value: WorkAuthorization; label: string }> = [
@@ -202,7 +331,14 @@ export default function ProfilePage() {
   const [errorByField, setErrorByField] = useState<FieldErrorMap>({})
   const [addressOpen, setAddressOpen] = useState(true)
   const [diversityOpen, setDiversityOpen] = useState(true)
+  const [previewKey, setPreviewKey] = useState<AnswerKey | null>(null)
+  const [libraryStatusByKey, setLibraryStatusByKey] = useState<
+    Partial<Record<AnswerKey, FieldStatus>>
+  >({})
   const savedTimeouts = useRef<Map<FieldKey, ReturnType<typeof setTimeout>>>(new Map())
+  const librarySavedTimeouts = useRef<
+    Map<AnswerKey, ReturnType<typeof setTimeout>>
+  >(new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -218,6 +354,13 @@ export default function ProfilePage() {
             ;(merged as Record<FieldKey, unknown>)[key] = value as never
           }
         }
+        merged.answers_library = {
+          ...emptyAnswersLibrary(),
+          ...(row.answers_library ?? {}),
+        }
+        if (row.open_ended_preference === undefined || row.open_ended_preference === null) {
+          merged.open_ended_preference = 'library'
+        }
         setProfile(merged)
         baselineRef.current = merged
       }
@@ -230,9 +373,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const timeouts = savedTimeouts.current
+    const libraryTimeouts = librarySavedTimeouts.current
     return () => {
       timeouts.forEach((handle) => clearTimeout(handle))
       timeouts.clear()
+      libraryTimeouts.forEach((handle) => clearTimeout(handle))
+      libraryTimeouts.clear()
     }
   }, [])
 
@@ -268,6 +414,23 @@ export default function ProfilePage() {
     savedTimeouts.current.set(key, handle)
   }, [])
 
+  const flashLibrarySaved = useCallback((key: AnswerKey) => {
+    const existing = librarySavedTimeouts.current.get(key)
+    if (existing) clearTimeout(existing)
+    const handle = setTimeout(() => {
+      setLibraryStatusByKey((prev) => {
+        if (prev[key] !== 'saved') return prev
+        return { ...prev, [key]: 'idle' }
+      })
+      librarySavedTimeouts.current.delete(key)
+    }, 2000)
+    librarySavedTimeouts.current.set(key, handle)
+  }, [])
+
+  const setLibraryFieldStatus = useCallback((key: AnswerKey, status: FieldStatus) => {
+    setLibraryStatusByKey((prev) => ({ ...prev, [key]: status }))
+  }, [])
+
   const equalValue = (a: unknown, b: unknown): boolean => {
     if (Array.isArray(a) && Array.isArray(b)) {
       if (a.length !== b.length) return false
@@ -300,6 +463,41 @@ export default function ProfilePage() {
       setProfile((prev) => ({ ...prev, [key]: value }))
     },
     [],
+  )
+
+  const updateLibraryAnswer = useCallback((key: AnswerKey, value: string) => {
+    const trimmed = value.length > ANSWER_LIMIT ? value.slice(0, ANSWER_LIMIT) : value
+    setProfile((prev) => ({
+      ...prev,
+      answers_library: { ...prev.answers_library, [key]: trimmed },
+    }))
+  }, [])
+
+  const persistLibraryAnswer = useCallback(
+    async (key: AnswerKey) => {
+      const value = profile.answers_library[key] ?? ''
+      const previous = baselineRef.current.answers_library[key] ?? ''
+      if (value === previous) return
+
+      setLibraryFieldStatus(key, 'saving')
+      const nextLibrary: AnswersLibrary = {
+        ...baselineRef.current.answers_library,
+        [key]: value,
+      }
+      const result = await updateProfile({ answers_library: nextLibrary })
+      if ('error' in result) {
+        setLibraryFieldStatus(key, 'error')
+        return
+      }
+      baselineRef.current = {
+        ...baselineRef.current,
+        answers_library: nextLibrary,
+      }
+      setLibraryFieldStatus(key, 'saved')
+      flashLibrarySaved(key)
+      showSectionToast('answers_library', 'Answer saved')
+    },
+    [flashLibrarySaved, profile.answers_library, setLibraryFieldStatus, showSectionToast],
   )
 
   // Pill / select / toggle changes save immediately on selection.
@@ -344,6 +542,8 @@ export default function ProfilePage() {
         Boolean(profile.remote_preference) &&
         Boolean(profile.earliest_start_date),
       application: Boolean(profile.heard_about_us),
+      application_preferences: Boolean(profile.open_ended_preference ?? 'library'),
+      answers_library: true,
       diversity: true,
     }
   }, [profile])
@@ -351,6 +551,8 @@ export default function ProfilePage() {
   const phoneHasValue = Boolean(profile.phone_number?.trim())
   const phoneValid =
     !phoneHasValue || isValidPhoneNumber(profile.phone_number ?? '')
+  const openEndedPreference =
+    (profile.open_ended_preference as OpenEndedPreference | null) ?? 'library'
 
   if (loading) {
     return <ProfileSkeleton />
@@ -975,6 +1177,78 @@ export default function ProfilePage() {
       </ProfileSection>
 
       <ProfileSection
+        title="Application Preferences"
+        icon={Settings2}
+        description="How Scout handles questions it encounters on applications"
+        complete={sectionComplete.application_preferences}
+      >
+        <div
+          role="radiogroup"
+          aria-label="Open-ended question preference"
+          className="space-y-1.5"
+        >
+          {PREFERENCE_OPTIONS.map((option) => {
+            const disabled = Boolean(option.requiresPhone && !phoneHasValue)
+            const selected = openEndedPreference === option.value
+            return (
+              <PreferenceOptionCard
+                key={option.value}
+                option={option}
+                selected={selected}
+                disabled={disabled}
+                onSelect={() =>
+                  void commitImmediate(
+                    'open_ended_preference',
+                    option.value,
+                    'application_preferences',
+                    'Application preference',
+                  )
+                }
+              />
+            )
+          })}
+        </div>
+      </ProfileSection>
+
+      <ProfileSection
+        title="Answers Library"
+        icon={Library}
+        description="Pre-write answers to common application questions. Scout uses these automatically when it encounters matching questions."
+        complete={sectionComplete.answers_library}
+      >
+        <div className="flex gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF6733]" strokeWidth={1.75} />
+          <p className="text-xs text-[#888]">
+            Use {'{company}'} as a placeholder — Scout replaces it with the real
+            company name on each application.
+          </p>
+        </div>
+
+        {ANSWER_FIELDS.map((field) => (
+          <AnswersLibraryField
+            key={field.key}
+            field={field}
+            value={profile.answers_library[field.key] ?? ''}
+            status={libraryStatusByKey[field.key]}
+            onChange={(value) => updateLibraryAnswer(field.key, value)}
+            onBlur={() => void persistLibraryAnswer(field.key)}
+            onPreview={() => setPreviewKey(field.key)}
+          />
+        ))}
+      </ProfileSection>
+
+      <AnswerPreviewDialog
+        open={previewKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewKey(null)
+        }}
+        field={ANSWER_FIELDS.find((f) => f.key === previewKey) ?? null}
+        answer={
+          previewKey ? (profile.answers_library[previewKey] ?? '') : ''
+        }
+      />
+
+      <ProfileSection
         title="Diversity (Optional)"
         icon={Heart}
         description="Many applications ask diversity questions. All fields are completely optional. Scout fills exactly what you specify."
@@ -1159,6 +1433,212 @@ function CoverLetterInput({
         {value.length} / {COVER_LETTER_LIMIT}
       </div>
     </div>
+  )
+}
+
+function PreferenceOptionCard({
+  option,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  option: (typeof PREFERENCE_OPTIONS)[number]
+  selected: boolean
+  disabled: boolean
+  onSelect: () => void
+}) {
+  const Icon = option.Icon
+
+  const cardContent = (
+    <>
+      <span
+        className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200',
+          selected
+            ? 'border-[#FF6733]/40 bg-[#FF6733]/15'
+            : 'border-white/10 bg-white/[0.03]',
+          disabled && 'opacity-70',
+        )}
+      >
+        {option.useScoutLogo ? (
+          <Image
+            src={scoutLogo}
+            alt="Scout"
+            width={14}
+            height={14}
+            className="object-contain"
+          />
+        ) : Icon ? (
+          <Icon className="h-3.5 w-3.5 text-[#FF6733]" strokeWidth={1.75} />
+        ) : null}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-white">{option.label}</span>
+          {option.recommended && (
+            <span className="rounded-full bg-[#FF6733]/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[#FF6733]">
+              Recommended
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 text-[11px] leading-snug text-[#666]">{option.sub}</p>
+      </div>
+    </>
+  )
+
+  const cardClassName = cn(
+    'flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200',
+    selected
+      ? 'border-[#FF6733]/60 bg-[#FF6733]/[0.06] shadow-[0_0_20px_rgba(255,103,51,0.12)]'
+      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]',
+    disabled && 'cursor-not-allowed opacity-50',
+  )
+
+  if (disabled) {
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              role="radio"
+              aria-checked={false}
+              aria-disabled
+              tabIndex={0}
+              className={cardClassName}
+            >
+              {cardContent}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent
+            side="top"
+            sideOffset={8}
+            className="max-w-[260px] border border-white/10 bg-[#111] px-3 py-2 text-xs text-[#aaa]"
+          >
+            Add your phone number above to use this
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(cardClassName, 'active:scale-[0.99]')}
+    >
+      {cardContent}
+    </button>
+  )
+}
+
+function AnswersLibraryField({
+  field,
+  value,
+  status,
+  onChange,
+  onBlur,
+  onPreview,
+}: {
+  field: (typeof ANSWER_FIELDS)[number]
+  value: string
+  status?: FieldStatus
+  onChange: (value: string) => void
+  onBlur: () => void
+  onPreview: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm text-[#888]">{field.label}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onPreview}
+            className="h-7 px-2 text-xs text-[#888] hover:text-white"
+          >
+            Preview
+          </Button>
+          <SaveBadgeInline status={status ?? 'idle'} />
+        </div>
+      </div>
+      <ProfileTextarea
+        value={value}
+        rows={3}
+        onValueChange={onChange}
+        onBlur={onBlur}
+        placeholder={field.placeholder}
+        className="min-h-0 resize-y"
+      />
+      <div className="flex justify-end text-xs text-[#555]">
+        {value.length} / {ANSWER_LIMIT}
+      </div>
+    </div>
+  )
+}
+
+function SaveBadgeInline({ status }: { status: FieldStatus }) {
+  if (status === 'saving') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-[#666]">
+        Saving
+      </span>
+    )
+  }
+  if (status === 'saved') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-[#22c55e]">
+        Saved ✓
+      </span>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] text-[#ef4444]">
+        Error
+      </span>
+    )
+  }
+  return null
+}
+
+function AnswerPreviewDialog({
+  open,
+  onOpenChange,
+  field,
+  answer,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  field: (typeof ANSWER_FIELDS)[number] | null
+  answer: string
+}) {
+  if (!field) return null
+
+  const previewText =
+    answer.trim().length > 0
+      ? answer.replaceAll('{company}', 'Example Company')
+      : 'No answer saved yet.'
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="glass-card-strong max-w-md gap-4 rounded-2xl border-white/10 bg-[#0a0a0a]/90 p-6 text-white">
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-headline text-base font-medium leading-snug text-white">
+            Scout will use this answer when it sees a question like:{' '}
+            <span className="text-[#FF6733]">{field.label}</span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">Answer preview</DialogDescription>
+        </DialogHeader>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#aaa]">
+          {previewText}
+        </p>
+      </DialogContent>
+    </Dialog>
   )
 }
 
