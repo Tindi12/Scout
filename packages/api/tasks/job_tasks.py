@@ -6,6 +6,7 @@ from services.job_fetcher import fetch_all_jobs
 from services.job_store import store_jobs
 from core.supabase_client import supabase
 from datetime import datetime, timezone
+from services.portal_detector import detect_portal
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             resume_to_use = analysis.data["rewritten_resume"] if analysis.data else None
 
         #6. Detect portal from job.portal field
-        portal = job_data.get("portal", "unknown")
+        portal = detect_portal(url=job_data.get("url", ""), portal=job_data.get("portal", "unknown"))
 
         #7. Call appropriate MCP/browser handler
         # TODO: wire Browserbase + MCP servers in 7.2-7.4
