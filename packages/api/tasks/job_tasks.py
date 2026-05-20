@@ -10,6 +10,7 @@ from services.portal_detector import detect_portal
 from services.latex_generator import generate_resume_pdf
 from services.mcp.greenhouse import GreenhouseMCP, NeedsAttentionException
 from services.mcp.lever import LeverMCP
+from services.mcp.ashby import AshbyMCP
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,15 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             )
         elif portal == "lever":
             mcp = LeverMCP()
+            result = asyncio.get_event_loop().run_until_complete(
+                mcp.apply(
+                    job_url=job_data["url"],
+                    user_data=user_data,
+                    resume_pdf=resume_pdf,
+                )
+            )
+        elif portal == "ashby":
+            mcp = AshbyMCP()
             result = asyncio.get_event_loop().run_until_complete(
                 mcp.apply(
                     job_url=job_data["url"],
