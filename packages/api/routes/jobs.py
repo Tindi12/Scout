@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from core.auth import verify_clerk_jwt, verify_resume_api_user
+from core.auth import require_pro, verify_clerk_jwt, verify_resume_api_user
 from core.embedding_service import embed_resume, generate_embedding
 from core.supabase_client import supabase
 from services.job_matcher import match_jobs
-from tasks.job_tasks import refresh_jobs_task
+from tasks.job_tasks import apply_to_job_task, refresh_jobs_task
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,8 @@ class MatchJobsRequest(BaseModel):
     remote_only: bool = False
     visa_friendly_only: bool = False
 
+class ScoutRunRequest(BaseModel):
+    job_ids: list[str]
 
 @router.post("/match")
 async def get_job_matches(
@@ -154,4 +156,91 @@ async def job_refresh_status(task_id: str) -> dict:
         "task_id": task_id,
         "status": result.status,
         "result": result.result if result.ready() else None,
+    }
+
+
+@router.post("/scout/run")
+async def start_scout_run(
+    request: ScoutRunRequest,
+    current_user: dict = Depends(require_pro),
+) -> dict:
+    clerk_id = current_user["sub"]
+
+    def _fetch_user() -> dict | None:
+        result = (
+            supabase.table("users")
+            .select("*")
+            .eq("clerk_id", clerk_id)
+            .single()
+            .execute()
+        )
+        return result.data
+
+    user_data = await run_in_threadpool(_fetch_user)
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    remaining = user_data["applications_limit"] - user_data["applications_used"]
+    if remaining < len(request.job_ids):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not enough credits. {remaining} remaining.",
+        )
+
+    def _create_run_and_applications() -> tuple[str, list[tuple[str, str]]]:
+        scout_run = (
+            supabase.table("scout_runs")
+            .insert({
+                "user_id": user_data["id"],
+                "status": "pending",
+                "total_jobs": len(request.job_ids),
+                "applied_count": 0,
+                "failed_count": 0,
+                "needs_attention_count": 0,
+            })
+            .select("id")
+            .single()
+            .execute()
+        )
+        run_id = scout_run.data["id"]
+
+        created: list[tuple[str, str]] = []
+        for job_id in request.job_ids:
+            application = (
+                supabase.table("applications")
+                .insert({
+                    "user_id": user_data["id"],
+                    "job_id": job_id,
+                    "scout_run_id": run_id,
+                    "status": "queued",
+                })
+                .select("id")
+                .single()
+                .execute()
+            )
+            created.append((application.data["id"], job_id))
+
+        return run_id, created
+
+    run_id, created = await run_in_threadpool(_create_run_and_applications)
+
+    for application_id, job_id in created:
+        apply_to_job_task.delay(
+            scout_run_id=run_id,
+            application_id=application_id,
+            user_id=user_data["id"],
+            job_id=job_id,
+        )
+
+    def _increment_applications_used() -> None:
+        supabase.table("users").update({
+            "applications_used": user_data["applications_used"] + len(request.job_ids),
+        }).eq("id", user_data["id"]).execute()
+
+    await run_in_threadpool(_increment_applications_used)
+
+    return {
+        "scout_run_id": run_id,
+        "queued": len(request.job_ids),
+        "status": "pending",
     }
