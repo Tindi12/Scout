@@ -244,3 +244,41 @@ async def start_scout_run(
         "queued": len(request.job_ids),
         "status": "pending",
     }
+
+@router.get("/scout/runs/{run_id}")
+async def get_scout_run(
+    run_id: str,
+    current_user: dict = Depends(verify_clerk_jwt),
+) -> dict:
+    clerk_id = current_user["sub"]
+
+    def _fetch_user() -> dict | None:
+        result = (
+            supabase.table("users")
+            .select("id")
+            .eq("clerk_id", clerk_id)
+            .single()
+            .execute()
+        )
+        return result.data
+
+    user_data = await run_in_threadpool(_fetch_user)
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    def _fetch_scout_run() -> dict | None:
+        result = (
+            supabase.table("scout_runs")
+            .select("*, applications(*)")
+            .eq("id", run_id)
+            .eq("user_id", user_data["id"])
+            .maybe_single()
+            .execute()
+        )
+        return result.data
+
+    run_data = await run_in_threadpool(_fetch_scout_run)
+    if not run_data:
+        raise HTTPException(status_code=404, detail="Scout run not found")
+
+    return run_data
