@@ -2,19 +2,21 @@
 
 import {
   AlertCircle,
+  Briefcase,
   ChevronDown,
+  CreditCard,
   FileText,
   Loader2,
   RefreshCw,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useTransition,
 } from 'react'
 
 import { JobCard, type JobMatch } from '@/components/jobs/JobCard'
@@ -24,7 +26,6 @@ import { ProfileRequiredDialog } from '@/components/profile/ProfileRequiredDialo
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -34,7 +35,6 @@ import { useToast } from '@/hooks/use-toast'
 import { useExploreBatch } from '@/contexts/explore-batch-context'
 import { cn } from '@/lib/utils'
 import { RESUME_UPLOAD_SECTION_ID } from '@/lib/scroll-to-resume-upload'
-import { queueApplication } from '@/app/actions/applications'
 import {
   computeProfileCompletion,
   type ProfileData,
@@ -62,7 +62,8 @@ const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
 
 export default function ExplorePage() {
   const { toast } = useToast()
-  const { setBatch, requestPulse, credits, refreshCredits } = useExploreBatch()
+  const { setBatch, requestPulse, credits } = useExploreBatch()
+  const router = useRouter()
 
   const [user, setUser] = useState<UserSummary | null>(null)
   const [userLoaded, setUserLoaded] = useState(false)
@@ -83,7 +84,7 @@ export default function ExplorePage() {
   const [showProGate, setShowProGate] = useState(false)
   const [showProfileGate, setShowProfileGate] = useState(false)
   const [showBatchConfirm, setShowBatchConfirm] = useState(false)
-  const [isSending, startSending] = useTransition()
+  const [isSending, setIsSending] = useState(false)
 
   const hasPulsedRef = useRef(false)
   const autoSelectedKeyRef = useRef<string | null>(null)
@@ -363,78 +364,41 @@ export default function ExplorePage() {
       return
     }
     const remaining = credits?.remaining ?? 0
-    if (selectedJobs.length > remaining) {
-      toast({
-        title: 'Not enough application credits',
-        description: `You have ${remaining} credit${remaining === 1 ? '' : 's'} remaining.`,
-        variant: 'destructive',
-      })
-      setShowBatchConfirm(false)
-      return
-    }
-    const batch = selectedJobs
-    startSending(async () => {
-      const results: Awaited<ReturnType<typeof queueApplication>>[] = []
-      for (const job of batch) {
-        const result = await queueApplication({
-          jobId: job.id,
-          company: job.company,
-          role: job.title,
-          url: job.url,
+    if (selectedJobs.length > remaining) return
+
+    const jobIds = selectedJobs.map((j) => j.id)
+    void (async () => {
+      setIsSending(true)
+      try {
+        const res = await fetch('/api/scout/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job_ids: jobIds }),
         })
-        results.push(result)
-        if (
-          !result.ok &&
-          result.error.toLowerCase().includes('credit limit')
-        ) {
-          break
+        if (!res.ok) {
+          let message = 'Could not start Scout run.'
+          try {
+            const body = (await res.json()) as { detail?: string }
+            if (typeof body.detail === 'string') message = body.detail
+          } catch { /* ignore */ }
+          toast({
+            title: 'Failed to send Scout',
+            description: message,
+            variant: 'destructive',
+          })
+          setShowBatchConfirm(false)
+          return
         }
-      }
-      const profileBlocked = results.some(
-        (r) =>
-          !r.ok &&
-          r.error.toLowerCase().includes('complete your profile'),
-      )
-      if (profileBlocked) {
+        const data = (await res.json()) as { scout_run_id?: string }
         setShowBatchConfirm(false)
-        setShowProfileGate(true)
-        return
+        if (data.scout_run_id) {
+          router.push(`/tracker?run_id=${encodeURIComponent(data.scout_run_id)}`)
+        }
+      } finally {
+        setIsSending(false)
       }
-
-      const queued = results.filter((r) => r.ok).length
-      const failed = batch.length - queued
-      const hitCreditLimit = results.some(
-        (r) =>
-          !r.ok && r.error.toLowerCase().includes('credit limit'),
-      )
-      await refreshCredits()
-      setSelectedJobIds(new Set())
-      setShowBatchConfirm(false)
-
-      if (failed === 0) {
-        toast({
-          title: `Scout is queued for ${queued} ${
-            queued === 1 ? 'application' : 'applications'
-          }.`,
-          description: "You'll be notified when done.",
-        })
-      } else if (queued === 0) {
-        toast({
-          title: 'Could not queue applications',
-          description: 'Scout could not queue any of the selected jobs.',
-          variant: 'destructive',
-        })
-      } else {
-        toast({
-          title: `Queued ${queued} of ${batch.length} applications`,
-          description: hitCreditLimit
-            ? `${queued} credit${queued === 1 ? '' : 's'} used — you hit your application limit.`
-            : `${failed} could not be queued — please try again.`,
-          variant: 'destructive',
-        })
-      }
-    })
-  }, [selectedJobs, credits?.remaining, toast, refreshCredits])
+    })()
+  }, [selectedJobs, credits?.remaining, toast, router])
 
   const selectedCount = selectedJobIds.size
 
@@ -535,24 +499,84 @@ export default function ExplorePage() {
               Send Scout to {selectedCount}{' '}
               {selectedCount === 1 ? 'company' : 'companies'}
             </DialogTitle>
-            <DialogDescription className="font-body text-sm text-[#999]">
-              Scout will apply to all{' '}
-              <span className="text-white">{selectedCount}</span>{' '}
-              selected{' '}
-              {selectedCount === 1 ? 'role' : 'roles'} using your optimized
-              resume.
-            </DialogDescription>
           </DialogHeader>
 
-          <p className="font-body text-xs text-[#666]">
-            This will use{' '}
-            <span className="text-[#FF6733]">{selectedCount}</span> of your
-            remaining{' '}
-            <span className="text-[#FF6733]">
-              {creditsRemaining != null ? creditsRemaining : '—'}
-            </span>{' '}
-            applications.
-          </p>
+          {/* Info rows */}
+          <div className="flex flex-col gap-2.5">
+            {/* Row 1 — volume */}
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+                <Briefcase className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="font-label text-sm font-medium text-white">
+                  {selectedCount}{' '}
+                  {selectedCount === 1 ? 'application' : 'applications'} will be submitted
+                </p>
+                <p className="font-body text-xs text-[#666]">
+                  Scout applies autonomously while you study
+                </p>
+              </div>
+            </div>
+
+            {/* Row 2 — resume */}
+            <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+                <FileText className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="font-label text-sm font-medium text-white">
+                  Using your optimized resume
+                </p>
+                <p className="font-body text-xs text-[#666]">
+                  Tailored per job where available
+                </p>
+              </div>
+            </div>
+
+            {/* Row 3 — credits + bar */}
+            <div className="flex flex-col gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+                  <CreditCard className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
+                </div>
+                <p className="font-label text-sm font-medium text-white">
+                  Using {selectedCount} of your{' '}
+                  {creditsRemaining != null ? creditsRemaining : '—'}{' '}
+                  remaining {creditsRemaining === 1 ? 'application' : 'applications'}
+                </p>
+              </div>
+
+              {creditsRemaining != null && creditsRemaining > 0 && (
+                <>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className="h-full rounded-full bg-[#FF6733] transition-all duration-300"
+                      style={{
+                        width: `${Math.min((selectedCount / creditsRemaining) * 100, 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="font-body text-[11px] text-[#555]">
+                    {Math.max(creditsRemaining - selectedCount, 0)} remaining after this run
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Over-limit warning */}
+          {creditsRemaining != null && selectedCount > creditsRemaining && (
+            <div className="flex items-start gap-2 rounded-xl border border-[#ef4444]/20 bg-[#ef4444]/[0.06] p-3">
+              <AlertCircle
+                className="h-4 w-4 shrink-0 text-[#ef4444]"
+                strokeWidth={2}
+              />
+              <p className="font-body text-xs text-[#ef4444]">
+                You don&apos;t have enough credits. Select fewer jobs or upgrade your plan.
+              </p>
+            </div>
+          )}
 
           <DialogFooter className="sm:justify-end">
             <button
@@ -576,7 +600,7 @@ export default function ExplorePage() {
               {isSending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                  Sending…
+                  Sending Scout…
                 </>
               ) : (
                 <>Send Scout →</>

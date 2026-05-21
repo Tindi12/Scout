@@ -38,11 +38,24 @@ const uvicornArgs = [
 
 const children = []
 
-function prefix(name, chunk) {
+/** ANSI colors for prefixed logs (matches dev:concurrent — web=cyan, api=magenta). */
+const PREFIX_COLORS = {
+  web: '\x1b[36m',
+  api: '\x1b[35m',
+  dev: '\x1b[90m',
+}
+const RESET = '\x1b[0m'
+
+function prefix(name, chunk, stream = process.stdout) {
+  const color = PREFIX_COLORS[name] ?? ''
   const lines = chunk.toString().split(/\r?\n/)
   for (const line of lines) {
-    if (line.length) process.stdout.write(`[${name}] ${line}\n`)
+    if (line.length) stream.write(`${color}[${name}]${RESET} ${line}\n`)
   }
+}
+
+function logDev(message) {
+  process.stdout.write(`${PREFIX_COLORS.dev}[dev]${RESET} ${message}\n`)
 }
 
 function start(name, cwd, command, args, useShell = false) {
@@ -54,18 +67,21 @@ function start(name, cwd, command, args, useShell = false) {
     windowsHide: true,
   })
   child.stdout.on('data', (d) => prefix(name, d))
-  child.stderr.on('data', (d) => prefix(name, d))
+  child.stderr.on('data', (d) => prefix(name, d, process.stderr))
   child.on('exit', (code, signal) => {
     if (code !== 0 && code !== null) {
-      console.error(`[${name}] exited with code ${code}${signal ? ` (${signal})` : ''}`)
+      const color = PREFIX_COLORS[name] ?? ''
+      process.stderr.write(
+        `${color}[${name}]${RESET} exited with code ${code}${signal ? ` (${signal})` : ''}\n`,
+      )
     }
   })
   children.push(child)
   return child
 }
 
-console.log('[dev] Starting web (Next.js) + api (uvicorn)…')
-console.log('[dev] API reload watches: routes, services, core, tasks only')
+logDev('Starting web (Next.js) + api (uvicorn)…')
+logDev('API reload watches: routes, services, core, tasks only')
 
 start('web', webDir, isWin ? 'pnpm.cmd' : 'pnpm', ['dev'], isWin)
 start('api', apiDir, python, uvicornArgs, false)
@@ -74,7 +90,8 @@ let shuttingDown = false
 function shutdown() {
   if (shuttingDown) return
   shuttingDown = true
-  console.log('\n[dev] Shutting down…')
+  process.stdout.write('\n')
+  logDev('Shutting down…')
   for (const child of children) {
     if (!child.killed) {
       if (isWin) {

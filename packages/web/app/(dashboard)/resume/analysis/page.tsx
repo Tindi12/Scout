@@ -262,6 +262,40 @@ export default function ResumeAnalysisPage() {
         if (cancelled) return
 
         if (!res.ok || !body) {
+          if (res.status === 403 || res.status === 404) {
+            try {
+              window.localStorage.removeItem(LAST_ANALYSIS_ID_KEY)
+            } catch {
+              // ignore
+            }
+            try {
+              const listRes = await fetch('/api/resume/analyses?limit=1', {
+                method: 'GET',
+                cache: 'no-store',
+              })
+              if (!cancelled && listRes.ok) {
+                const listBody = (await listRes.json()) as {
+                  analyses?: Array<{ id: string }>
+                }
+                const latestId = listBody.analyses?.[0]?.id?.trim()
+                if (latestId && latestId !== analysisId) {
+                  try {
+                    window.localStorage.setItem(LAST_ANALYSIS_ID_KEY, latestId)
+                  } catch {
+                    // ignore
+                  }
+                  router.replace(
+                    `/resume/analysis?id=${encodeURIComponent(latestId)}`,
+                    { scroll: false },
+                  )
+                  return
+                }
+              }
+            } catch {
+              // fall through to error UI
+            }
+          }
+
           const detail =
             typeof body?.detail === 'string'
               ? body.detail
@@ -317,7 +351,7 @@ export default function ResumeAnalysisPage() {
     return () => {
       cancelled = true
     }
-  }, [analysisId])
+  }, [analysisId, router])
 
   useEffect(() => {
     if (!user?.id) return

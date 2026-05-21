@@ -92,27 +92,27 @@ class GreenhouseMCP:
 
                 # 4. Fill basic fields
                 await _fill_if_exists(page, "#first_name", user_data.get("first_name", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 await _fill_if_exists(page, "#last_name", user_data.get("last_name", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 await _fill_if_exists(page, "#email", user_data.get("email", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 await _fill_if_exists(page, "#phone", user_data.get("phone", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 await _fill_if_exists(page, "#job_application_location", user_data.get("location", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 for sel in ('input[id*="linkedin" i]', 'input[placeholder*="linkedin" i]'):
                     await _fill_if_exists(page, sel, user_data.get("linkedin_url", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 for sel in ('input[id*="github" i]', 'input[placeholder*="github" i]'):
                     await _fill_if_exists(page, sel, user_data.get("github_url", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 for sel in ('input[id*="website" i]', 'input[id*="portfolio" i]'):
                     await _fill_if_exists(page, sel, user_data.get("portfolio_url", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 # 5. Upload resume
                 with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -128,7 +128,7 @@ class GreenhouseMCP:
                         if el:
                             await page.set_input_files(resume_sel, tmp_path)
                             logger.info(f"Resume uploaded via {resume_sel}")
-                            await page.wait_for_timeout(500)
+                            await page.wait_for_timeout(6000)
                             break
                     except Exception as e:
                         logger.warning(f"Resume upload failed for {resume_sel}: {e}")
@@ -142,22 +142,22 @@ class GreenhouseMCP:
                 if auth_value:
                     for sel in ('select[id*="work_status" i]', 'select[id*="authorized" i]'):
                         await _select_if_exists(page, sel, auth_value)
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 requires_sponsorship = user_data.get("requires_sponsorship")
                 if requires_sponsorship is not None:
                     sponsor_value = "Yes" if requires_sponsorship else "No"
                     await _select_if_exists(page, 'select[id*="sponsor" i]', sponsor_value)
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 # 7. Education fields
                 await _fill_if_exists(page, 'input[id*="school" i]', user_data.get("school", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 await _select_if_exists(page, 'select[id*="degree" i]', user_data.get("degree", ""))
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
                 gpa = user_data.get("gpa")
                 await _fill_if_exists(page, 'input[id*="gpa" i]', str(gpa) if gpa else "")
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(6000)
 
                 # 8. Custom / open-ended questions
                 company = user_data.get("company") or job_url.split("/")[2]
@@ -193,7 +193,7 @@ class GreenhouseMCP:
                         if answer:
                             await textarea.fill(answer)
                             logger.info(f"Filled textarea '{label_text}'")
-                            await page.wait_for_timeout(500)
+                            await page.wait_for_timeout(6000)
                     except NeedsAttentionException:
                         raise
                     except Exception as e:

@@ -198,14 +198,24 @@ async def start_scout_run(
                 "failed_count": 0,
                 "needs_attention_count": 0,
             })
-            .select("id")
-            .single()
             .execute()
         )
-        run_id = scout_run.data["id"]
+        run_rows = scout_run.data if isinstance(scout_run.data, list) else (
+            [scout_run.data] if scout_run.data else []
+        )
+        if not run_rows or "id" not in run_rows[0]:
+            raise HTTPException(status_code=500, detail="Failed to create scout run")
+        run_id = run_rows[0]["id"]
 
         created: list[tuple[str, str]] = []
         for job_id in request.job_ids:
+            job_details = (
+                supabase.table("jobs")
+                .select("title, company")
+                .eq("id", job_id)
+                .single()
+                .execute()
+            )
             application = (
                 supabase.table("applications")
                 .insert({
@@ -213,12 +223,17 @@ async def start_scout_run(
                     "job_id": job_id,
                     "scout_run_id": run_id,
                     "status": "queued",
+                    "company": job_details.data["company"] if job_details.data else "",
+                    "role": job_details.data["title"] if job_details.data else "",
                 })
-                .select("id")
-                .single()
                 .execute()
             )
-            created.append((application.data["id"], job_id))
+            app_rows = application.data if isinstance(application.data, list) else (
+                [application.data] if application.data else []
+            )
+            if not app_rows or "id" not in app_rows[0]:
+                raise HTTPException(status_code=500, detail="Failed to create application")
+            created.append((app_rows[0]["id"], job_id))
 
         return run_id, created
 
@@ -248,7 +263,7 @@ async def start_scout_run(
 @router.get("/scout/runs/{run_id}")
 async def get_scout_run(
     run_id: str,
-    current_user: dict = Depends(verify_clerk_jwt),
+    current_user: dict = Depends(verify_resume_api_user),
 ) -> dict:
     clerk_id = current_user["sub"]
 

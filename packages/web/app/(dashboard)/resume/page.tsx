@@ -12,12 +12,35 @@ const LAST_ANALYSIS_ID_KEY = 'scout:last_analysis_id'
 
 type AnalysesStatus = 'loading' | 'none' | 'has'
 
+function resolveAnalysisRedirectId(
+  analyses: ReadonlyArray<{ id: string }>,
+): string | null {
+  if (analyses.length === 0) return null
+
+  const ownedIds = new Set(analyses.map((row) => row.id))
+  const latestId = analyses[0]?.id?.trim()
+  if (!latestId) return null
+
+  try {
+    const stored = window.localStorage.getItem(LAST_ANALYSIS_ID_KEY)?.trim()
+    if (stored && ownedIds.has(stored)) return stored
+    if (stored && !ownedIds.has(stored)) {
+      window.localStorage.removeItem(LAST_ANALYSIS_ID_KEY)
+    }
+  } catch {
+    // ignore
+  }
+
+  return latestId
+}
+
 export default function Page() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isLoaded, user } = useUser()
   const [didRedirect, setDidRedirect] = useState(false)
   const [analysesStatus, setAnalysesStatus] = useState<AnalysesStatus>('loading')
+  const [analyses, setAnalyses] = useState<Array<{ id: string }>>([])
 
   useEffect(() => {
     if (!isLoaded) return
@@ -33,20 +56,25 @@ export default function Page() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch('/api/resume/analyses?limit=1', {
+        const res = await fetch('/api/resume/analyses?limit=5', {
           method: 'GET',
           cache: 'no-store',
         })
         if (cancelled) return
         if (!res.ok) {
+          setAnalyses([])
           setAnalysesStatus('none')
           return
         }
         const body = (await res.json()) as { analyses?: Array<{ id: string }> }
         const rows = Array.isArray(body.analyses) ? body.analyses : []
+        setAnalyses(rows)
         setAnalysesStatus(rows.length > 0 ? 'has' : 'none')
       } catch {
-        if (!cancelled) setAnalysesStatus('none')
+        if (!cancelled) {
+          setAnalyses([])
+          setAnalysesStatus('none')
+        }
       }
     })()
 
@@ -58,42 +86,19 @@ export default function Page() {
   useEffect(() => {
     if (!isLoaded || !user?.id || analysesStatus !== 'has') return
 
-    let cancelled = false
-    void (async () => {
-      let analysisId: string | null = null
-      try {
-        analysisId = window.localStorage.getItem(LAST_ANALYSIS_ID_KEY)
-      } catch {
-        // ignore
-      }
+    const analysisId = resolveAnalysisRedirectId(analyses)
+    if (!analysisId) return
 
-      if (!analysisId?.trim()) {
-        try {
-          const res = await fetch('/api/resume/analyses?limit=1', {
-            cache: 'no-store',
-          })
-          if (res.ok) {
-            const body = (await res.json()) as {
-              analyses?: Array<{ id: string }>
-            }
-            analysisId = body.analyses?.[0]?.id ?? null
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (cancelled || !analysisId?.trim()) return
-      setDidRedirect(true)
-      router.replace(
-        `/resume/analysis?id=${encodeURIComponent(analysisId.trim())}`,
-      )
-    })()
-
-    return () => {
-      cancelled = true
+    setDidRedirect(true)
+    try {
+      window.localStorage.setItem(LAST_ANALYSIS_ID_KEY, analysisId)
+    } catch {
+      // ignore
     }
-  }, [isLoaded, user?.id, router, analysesStatus])
+    router.replace(
+      `/resume/analysis?id=${encodeURIComponent(analysisId)}`,
+    )
+  }, [isLoaded, user?.id, router, analysesStatus, analyses])
 
   if (!isLoaded || analysesStatus === 'loading') {
     return (

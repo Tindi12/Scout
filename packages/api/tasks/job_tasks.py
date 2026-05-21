@@ -28,6 +28,36 @@ def refresh_jobs_task() -> dict:
 
 @celery_app.task(name="tasks.apply_to_job", bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=300, time_limit=360)
 def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str, job_id: str) -> dict:
+    def _check_and_complete_run():
+        apps = supabase.table("applications")\
+            .select("status")\
+            .eq("scout_run_id", scout_run_id)\
+            .execute()
+
+        if not apps.data:
+            return
+
+        terminal_states = {"applied", "failed", "needs_attention"}
+        all_done = all(
+            app["status"] in terminal_states
+            for app in apps.data
+        )
+
+        if all_done:
+            applied = sum(
+                1 for a in apps.data
+                if a["status"] == "applied"
+            )
+            supabase.table("scout_runs").update({
+                "status": "completed" if applied > 0 else "failed",
+                "completed_at": datetime.now(
+                    timezone.utc
+                ).isoformat()
+            }).eq("id", scout_run_id).execute()
+            logger.info(
+                f"Scout run {scout_run_id} completed"
+            )
+
     try:
         # 1. Update application status → "in_progress"
         supabase.table("applications").update({"status": "in_progress"}).eq("id", application_id).execute()
@@ -71,7 +101,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         logger.info(f"Applying to {job_data['title']} at {job_data['company']} via {portal}")
         if portal == "greenhouse":
             mcp = GreenhouseMCP()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 mcp.apply(
                     job_url=job_data["url"],
                     user_data=user_data,
@@ -80,7 +110,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             )
         elif portal == "lever":
             mcp = LeverMCP()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 mcp.apply(
                     job_url=job_data["url"],
                     user_data=user_data,
@@ -89,7 +119,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             )
         elif portal == "ashby":
             mcp = AshbyMCP()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 mcp.apply(
                     job_url=job_data["url"],
                     user_data=user_data,
@@ -98,7 +128,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             )
         elif portal == "usajobs":
             mcp = USAJobsMCP()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 mcp.apply(
                     job_url=job_data["url"],
                     user_data=user_data,
@@ -107,7 +137,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             )
         elif portal == "workday":
             mcp = WorkdayMCP()
-            result = asyncio.get_event_loop().run_until_complete(
+            result = asyncio.run(
                 mcp.apply(
                     job_url=job_data["url"],
                     user_data=user_data,
@@ -123,6 +153,8 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
 
         #9. Update scout_run → increment applied_count
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "applied_count"}).execute()
+
+        _check_and_complete_run()
 
     except NeedsAttentionException as e:
         supabase.table("applications").update({
@@ -146,6 +178,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         supabase.table("applications").update({"status": "failed", "error_message": str(e)}).eq("id", application_id).execute()
         #    Update scout_run → increment failed_count
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "failed_count"}).execute()
+        _check_and_complete_run()
         raise self.retry(exc=e)
 
     return {"success": True, "application_id": application_id, "scout_run_id": scout_run_id}

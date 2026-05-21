@@ -1,5 +1,5 @@
 ﻿import Link from 'next/link'
-import { ArrowRight, Globe } from 'lucide-react'
+import { ArrowRight, Globe, Search } from 'lucide-react'
 
 import { LandingDashboardShowcase } from '@/components/landing/dashboard-showcase'
 import { LANDING_HERO_PILL } from '@/lib/landing-stats'
@@ -43,10 +43,11 @@ export function Hero() {
             className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#000000_0%,#000000_50%,#FF6733_100%)]"
           />
           <span className="relative z-10 inline-flex items-center gap-2.5 rounded-full bg-[#0a0a0a] px-4 py-1.5 backdrop-blur-xl">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" />
-            </span>
+            <Search
+              className="h-3.5 w-3.5 shrink-0 text-emerald-400"
+              strokeWidth={1.75}
+              aria-hidden
+            />
             <span className="font-label inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium tracking-wide text-white/90">
               <span>{LANDING_HERO_PILL.databaseLine}</span>
               <span className="text-white/35" aria-hidden>
