@@ -52,7 +52,7 @@ async def list_applications(
             supabase.table("applications")
             .select(
                 "id, user_id, job_id, scout_run_id, status, company, role, "
-                "error_message, applied_at, created_at, updated_at, "
+                "error_message, applied_at, created_at, "
                 "jobs(title, company, url)"
             )
             .eq("user_id", user_id)

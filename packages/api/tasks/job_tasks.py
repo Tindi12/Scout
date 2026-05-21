@@ -78,13 +78,13 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             raise Exception("Job not found")
 
         # 5. Fetch resume variant for this job
-        variant = supabase.table("resume_variants").select("rewritten_resume").eq("user_id", user_id).eq("job_id", job_id).single().execute()
+        variant = supabase.table("resume_variants").select("rewritten_resume").eq("user_id", user_id).eq("job_id", job_id).maybe_single().execute()
 
         if variant.data:
             resume_to_use = variant.data["rewritten_resume"]
         else:
             # Fall back to latest analysis rewritten_resume
-            analysis = supabase.table("analyses").select("rewritten_resume").eq("user_id", user_id).order("created_at", desc=True).limit(1).single().execute()
+            analysis = supabase.table("analyses").select("rewritten_resume").eq("user_id", user_id).order("created_at", desc=True).limit(1).maybe_single().execute()
 
             resume_to_use = analysis.data["rewritten_resume"] if analysis.data else None
 
