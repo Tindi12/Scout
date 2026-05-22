@@ -21,14 +21,44 @@ class NeedsAttentionException(Exception):
         super().__init__(f"Needs user attention: {question}")
 
 
-async def _fill_if_exists(page, selector: str, value: str) -> None:
+async def _fill_if_exists(page, selector: str, value: str, field_name: str = "") -> bool:
+    """
+    Try to fill a single selector. Returns True if the element was found and filled.
+    Logs at DEBUG if the element doesn't exist, WARNING on unexpected errors.
+    """
     try:
-        el = await page.query_selector(selector)
-        if el and value:
-            await el.fill(value)
-            logger.info(f"Filled {selector}")
+        element = await page.query_selector(selector)
+        if element:
+            await element.fill(value)
+            logger.info(f"Filled {field_name or selector}")
+            return True
+        else:
+            logger.debug(f"Field not found: {field_name or selector} ({selector})")
+            return False
     except Exception as e:
-        logger.warning(f"Could not fill {selector}: {e}")
+        logger.warning(f"Failed to fill {field_name or selector} ({selector}): {e}")
+        return False
+
+
+async def _fill_first_match(
+    page,
+    selectors: list[str],
+    value: str,
+    field_name: str,
+) -> bool:
+    """
+    Try each selector in order; stop and return True on the first successful fill.
+    Logs a warning if all selectors fail.
+    """
+    if not value:
+        logger.debug(f"Skipping {field_name}: no value provided")
+        return False
+    for selector in selectors:
+        result = await _fill_if_exists(page, selector, value, field_name)
+        if result:
+            return True
+    logger.warning(f"All selectors failed for: {field_name}")
+    return False
 
 
 async def _select_if_exists(page, selector: str, value: str) -> None:
@@ -72,6 +102,78 @@ _WORK_AUTH_MAP = {
     "other_visa": "Requires Sponsorship",
 }
 
+# ---------------------------------------------------------------------------
+# Selector lists for common Greenhouse fields
+# ---------------------------------------------------------------------------
+
+_FIRST_NAME_SELECTORS = [
+    "#first_name",
+    "#job_application_first_name",
+    "input[name='job_application[first_name]']",
+    "input[autocomplete='given-name']",
+    "input[placeholder*='first' i]",
+]
+
+_LAST_NAME_SELECTORS = [
+    "#last_name",
+    "#job_application_last_name",
+    "input[name='job_application[last_name]']",
+    "input[autocomplete='family-name']",
+    "input[placeholder*='last' i]",
+]
+
+_EMAIL_SELECTORS = [
+    "#email",
+    "#job_application_email",
+    "input[name='job_application[email]']",
+    "input[type='email']",
+    "input[autocomplete='email']",
+]
+
+_PHONE_SELECTORS = [
+    "#phone",
+    "#job_application_phone",
+    "input[name='job_application[phone]']",
+    "input[type='tel']",
+    "input[placeholder*='phone' i]",
+]
+
+_LOCATION_SELECTORS = [
+    "#job_application_location",
+    "input[name='job_application[location]']",
+    "input[placeholder*='location' i]",
+    "input[placeholder*='city' i]",
+]
+
+_LINKEDIN_SELECTORS = [
+    "input[id*='linkedin' i]",
+    "input[name*='linkedin' i]",
+    "input[placeholder*='linkedin' i]",
+]
+
+_GITHUB_SELECTORS = [
+    "input[id*='github' i]",
+    "input[name*='github' i]",
+    "input[placeholder*='github' i]",
+]
+
+_PORTFOLIO_SELECTORS = [
+    "input[id*='website' i]",
+    "input[id*='portfolio' i]",
+    "input[name*='website' i]",
+    "input[placeholder*='website' i]",
+    "input[placeholder*='portfolio' i]",
+]
+
+_CONFIRMATION_SELECTORS = [
+    "text=Thank you for applying",
+    "text=Application submitted",
+    "text=application has been received",
+    "text=We'll be in touch",
+    ".confirmation",
+    "#confirmation",
+]
+
 
 class GreenhouseMCP:
     async def apply(self, job_url: str, user_data: dict, resume_pdf: bytes) -> dict:
@@ -86,35 +188,47 @@ class GreenhouseMCP:
                 page = await browser.new_page()
                 logger.info(f"Playwright connected to session: {session.id}")
 
-                # 3. Navigate to the job URL
+                # Navigate to the job URL
                 await page.goto(job_url, wait_until="networkidle")
                 logger.info(f"Navigated to {job_url}")
 
-                # 4. Fill basic fields
-                await _fill_if_exists(page, "#first_name", user_data.get("first_name", ""))
+                # ---- CAPTCHA detection (before filling any fields) ----
+                captcha_present = await page.query_selector(
+                    "iframe[src*='hcaptcha'], "
+                    "iframe[src*='recaptcha'], "
+                    ".g-recaptcha, "
+                    "[data-sitekey]"
+                )
+                if captcha_present:
+                    logger.warning("CAPTCHA detected on page — cannot proceed automatically")
+                    return {
+                        "success": False,
+                        "portal": "greenhouse",
+                        "session_id": session.id,
+                        "error": "CAPTCHA detected",
+                        "needs_attention": True,
+                        "attention_question": "CAPTCHA verification required",
+                    }
+
+                # ---- Fill basic fields ----
+                await _fill_first_match(page, _FIRST_NAME_SELECTORS, user_data.get("first_name", ""), "first_name")
                 await page.wait_for_timeout(6000)
-                await _fill_if_exists(page, "#last_name", user_data.get("last_name", ""))
+                await _fill_first_match(page, _LAST_NAME_SELECTORS, user_data.get("last_name", ""), "last_name")
                 await page.wait_for_timeout(6000)
-                await _fill_if_exists(page, "#email", user_data.get("email", ""))
+                await _fill_first_match(page, _EMAIL_SELECTORS, user_data.get("email", ""), "email")
                 await page.wait_for_timeout(6000)
-                await _fill_if_exists(page, "#phone", user_data.get("phone", ""))
+                await _fill_first_match(page, _PHONE_SELECTORS, user_data.get("phone", ""), "phone")
                 await page.wait_for_timeout(6000)
-                await _fill_if_exists(page, "#job_application_location", user_data.get("location", ""))
+                await _fill_first_match(page, _LOCATION_SELECTORS, user_data.get("location", ""), "location")
+                await page.wait_for_timeout(6000)
+                await _fill_first_match(page, _LINKEDIN_SELECTORS, user_data.get("linkedin_url", ""), "linkedin")
+                await page.wait_for_timeout(6000)
+                await _fill_first_match(page, _GITHUB_SELECTORS, user_data.get("github_url", ""), "github")
+                await page.wait_for_timeout(6000)
+                await _fill_first_match(page, _PORTFOLIO_SELECTORS, user_data.get("portfolio_url", ""), "portfolio")
                 await page.wait_for_timeout(6000)
 
-                for sel in ('input[id*="linkedin" i]', 'input[placeholder*="linkedin" i]'):
-                    await _fill_if_exists(page, sel, user_data.get("linkedin_url", ""))
-                await page.wait_for_timeout(6000)
-
-                for sel in ('input[id*="github" i]', 'input[placeholder*="github" i]'):
-                    await _fill_if_exists(page, sel, user_data.get("github_url", ""))
-                await page.wait_for_timeout(6000)
-
-                for sel in ('input[id*="website" i]', 'input[id*="portfolio" i]'):
-                    await _fill_if_exists(page, sel, user_data.get("portfolio_url", ""))
-                await page.wait_for_timeout(6000)
-
-                # 5. Upload resume
+                # ---- Upload resume ----
                 with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                     tmp.write(resume_pdf)
                     tmp_path = tmp.name
@@ -136,7 +250,7 @@ class GreenhouseMCP:
                 os.unlink(tmp_path)
                 tmp_path = None
 
-                # 6. Work authorization and sponsorship
+                # ---- Work authorization and sponsorship ----
                 work_auth = user_data.get("work_authorization", "")
                 auth_value = _WORK_AUTH_MAP.get(work_auth, "")
                 if auth_value:
@@ -150,16 +264,16 @@ class GreenhouseMCP:
                     await _select_if_exists(page, 'select[id*="sponsor" i]', sponsor_value)
                 await page.wait_for_timeout(6000)
 
-                # 7. Education fields
-                await _fill_if_exists(page, 'input[id*="school" i]', user_data.get("school", ""))
+                # ---- Education fields ----
+                await _fill_if_exists(page, 'input[id*="school" i]', user_data.get("school", ""), "school")
                 await page.wait_for_timeout(6000)
                 await _select_if_exists(page, 'select[id*="degree" i]', user_data.get("degree", ""))
                 await page.wait_for_timeout(6000)
                 gpa = user_data.get("gpa")
-                await _fill_if_exists(page, 'input[id*="gpa" i]', str(gpa) if gpa else "")
+                await _fill_if_exists(page, 'input[id*="gpa" i]', str(gpa) if gpa else "", "gpa")
                 await page.wait_for_timeout(6000)
 
-                # 8. Custom / open-ended questions
+                # ---- Custom / open-ended questions ----
                 company = user_data.get("company") or job_url.split("/")[2]
                 answers_library: dict = user_data.get("answers_library", {})
                 open_ended_preference: str = user_data.get("open_ended_preference", "library")
@@ -199,7 +313,7 @@ class GreenhouseMCP:
                     except Exception as e:
                         logger.warning(f"Could not fill textarea: {e}")
 
-                # 9. Submit and confirm
+                # ---- Submit ----
                 for submit_sel in (
                     'button[type="submit"]',
                     'input[type="submit"]',
@@ -216,17 +330,44 @@ class GreenhouseMCP:
 
                 await page.wait_for_timeout(10000)
 
-                current_url = page.url.lower()
-                page_text = (await page.inner_text("body")).lower()
-                success = (
-                    any(kw in current_url for kw in ("confirmation", "thank", "success"))
-                    or any(
-                        phrase in page_text
-                        for phrase in ("application has been submitted", "thank you for applying")
-                    )
+                # ---- Strict confirmation check ----
+
+                # Check 1: any required fields still showing validation errors?
+                error_fields = await page.query_selector_all(
+                    "input.invalid, "
+                    "input[aria-invalid='true'], "
+                    ".field_with_errors input, "
+                    "input:required:invalid"
+                )
+                if error_fields:
+                    logger.warning(f"Form has {len(error_fields)} invalid field(s) — submission failed")
+                    return {
+                        "success": False,
+                        "session_id": session.id,
+                        "portal": "greenhouse",
+                        "error": f"Form validation failed: {len(error_fields)} required field(s) missing",
+                        "needs_attention": False,
+                        "attention_question": None,
+                    }
+
+                # Check 2: is the application form still present?
+                form_still_present = await page.query_selector(
+                    "#application_form, form#application, .application-form"
                 )
 
-                if success:
+                # Check 3: explicit confirmation indicators
+                confirmed = False
+                for selector in _CONFIRMATION_SELECTORS:
+                    try:
+                        element = await page.query_selector(selector)
+                        if element:
+                            confirmed = True
+                            logger.info(f"Confirmation detected via: {selector}")
+                            break
+                    except Exception:
+                        continue
+
+                if confirmed or (not form_still_present and not error_fields):
                     return {
                         "success": True,
                         "session_id": session.id,
@@ -235,11 +376,12 @@ class GreenhouseMCP:
                         "needs_attention": False,
                         "attention_question": None,
                     }
+
                 return {
                     "success": False,
                     "session_id": session.id,
                     "portal": "greenhouse",
-                    "error": "No confirmation detected",
+                    "error": "Could not confirm submission",
                     "needs_attention": False,
                     "attention_question": None,
                 }
