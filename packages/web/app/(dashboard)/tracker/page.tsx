@@ -1,42 +1,100 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 
+import { AnswerModal } from '@/components/tracker/AnswerModal'
 import { ApplicationKanban } from '@/components/tracker/ApplicationKanban'
-import { LiveScoutRunPanel } from '@/components/tracker/LiveScoutRunPanel'
+import { LiveApplicationFeed } from '@/components/tracker/LiveApplicationFeed'
+import {
+  MissionControlHeader,
+  MissionControlHeaderSkeleton,
+  MissionControlOverviewHeader,
+} from '@/components/tracker/MissionControlHeader'
+import { TrackerFetchError } from '@/components/tracker/TrackerFetchError'
 import { TrackerLoadingSkeleton } from '@/components/tracker/ScoutRunTracker'
+import { TrackerEmptyState } from '@/components/tracker/TrackerEmptyState'
+import type { ApplicationRecord } from '@/components/tracker/tracker-utils'
+import {
+  lifetimeStatsFromApps,
+  useApplications,
+  useScoutRun,
+} from '@/components/tracker/tracker-utils'
 
 function TrackerPageContent() {
   const searchParams = useSearchParams()
   const runId = searchParams.get('run_id')?.trim() || null
-  const [kanbanRefresh, setKanbanRefresh] = useState(0)
+  const [answerApp, setAnswerApp] = useState<ApplicationRecord | null>(null)
+
+  const { apps, loading: appsLoading, hasLoaded, error, refetch } =
+    useApplications()
 
   const handleRunUpdated = useCallback(() => {
-    setKanbanRefresh((n) => n + 1)
+    refetch(true)
+  }, [refetch])
+
+  const { run, loading: runLoading } = useScoutRun(runId, handleRunUpdated)
+
+  const lifetimeStats = useMemo(() => lifetimeStatsFromApps(apps), [apps])
+
+  const showEmpty = hasLoaded && !error && apps.length === 0
+  const showFetchError = hasLoaded && Boolean(error) && apps.length === 0
+  const showHistory = !showEmpty && !showFetchError
+
+  const handleAnswerClick = useCallback((app: ApplicationRecord) => {
+    setAnswerApp(app)
   }, [])
 
-  return (
-    <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-8">
-      <header>
-        <h1 className="font-headline text-2xl font-medium tracking-[-0.02em] text-white md:text-3xl">
-          Tracker
-        </h1>
-        <p className="mt-1 font-body text-sm text-[#666]">
-          Live Scout runs and your full application history
-        </p>
-      </header>
+  const showHeaderSkeleton =
+    appsLoading || (runId ? runLoading && !run : false)
 
-      {runId ? (
-        <LiveScoutRunPanel runId={runId} onRunUpdated={handleRunUpdated} />
+  const header = showHeaderSkeleton ? (
+    <MissionControlHeaderSkeleton />
+  ) : runId && run ? (
+    <MissionControlHeader run={run} />
+  ) : (
+    <MissionControlOverviewHeader stats={lifetimeStats} />
+  )
+
+  return (
+    <div className="flex w-full flex-col">
+      {header}
+
+      {runId && run ? (
+        <LiveApplicationFeed
+          run={run}
+          applicationRecords={apps}
+          onAnswerClick={handleAnswerClick}
+        />
       ) : null}
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-label text-sm font-semibold uppercase tracking-wider text-[#666]">
-          Applications
-        </h2>
-        <ApplicationKanban refreshKey={kanbanRefresh} />
-      </section>
+      {showFetchError ? (
+        <TrackerFetchError
+          message={error ?? 'Something went wrong.'}
+          onRetry={() => refetch(false)}
+        />
+      ) : showEmpty ? (
+        <TrackerEmptyState />
+      ) : showHistory ? (
+        <div
+          className={`mx-auto w-full max-w-7xl px-0 ${runId ? 'mt-10' : 'pt-6'}`}
+        >
+          <ApplicationKanban
+            apps={apps}
+            loading={appsLoading}
+            onAnswerClick={handleAnswerClick}
+          />
+        </div>
+      ) : null}
+
+      {answerApp ? (
+        <AnswerModal
+          key={answerApp.id}
+          app={answerApp}
+          onClose={() => setAnswerApp(null)}
+          onSuccess={() => refetch(true)}
+        />
+      ) : null}
     </div>
   )
 }

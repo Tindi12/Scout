@@ -447,38 +447,47 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
 
 export function TrackerLoadingSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <div className="h-10 w-10 animate-pulse rounded-xl bg-white/[0.05]" />
-        <div className="flex flex-col gap-2">
-          <div className="h-7 w-48 animate-pulse rounded-lg bg-white/[0.05]" />
-          <div className="h-4 w-32 animate-pulse rounded-md bg-white/[0.04]" />
-        </div>
-      </div>
-
-      <div className="glass-card rounded-2xl border border-white/[0.06] p-5">
-        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-white/[0.05]" />
-        <div className="h-2 w-full animate-pulse rounded-full bg-white/[0.05]" />
-        <div className="mt-4 flex gap-6">
-          <div className="h-6 w-20 animate-pulse rounded bg-white/[0.04]" />
-          <div className="h-6 w-16 animate-pulse rounded bg-white/[0.04]" />
-          <div className="h-6 w-28 animate-pulse rounded bg-white/[0.04]" />
-        </div>
-      </div>
-
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div
-          key={i}
-          className="glass-card flex items-center gap-4 rounded-2xl border border-white/[0.06] px-4 py-3"
-        >
-          <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/[0.05]" />
-          <div className="flex flex-1 flex-col gap-1.5">
-            <div className="h-3.5 w-32 animate-pulse rounded bg-white/[0.05]" />
-            <div className="h-3 w-24 animate-pulse rounded bg-white/[0.04]" />
+    <div className="flex w-full flex-col">
+      <section className="-mx-5 animate-pulse bg-[#0a0a0a] md:-mx-8">
+        <div className="flex flex-col gap-8 px-8 py-8 lg:flex-row lg:justify-between">
+          <div className="flex-1 space-y-3">
+            <div className="h-3 w-24 rounded bg-white/[0.05]" />
+            <div className="h-9 w-72 rounded bg-white/[0.05]" />
+            <div className="h-4 w-52 rounded bg-white/[0.04]" />
           </div>
-          <div className="h-5 w-20 animate-pulse rounded-full bg-white/[0.04]" />
+          <div className="flex gap-10">
+            <div className="h-14 w-14 rounded bg-white/[0.05]" />
+            <div className="h-14 w-14 rounded bg-white/[0.05]" />
+            <div className="h-14 w-14 rounded bg-white/[0.05]" />
+          </div>
         </div>
-      ))}
+        <div className="h-0.5 w-full bg-white/[0.04]" />
+      </section>
+      <section className="-mx-5 md:-mx-8">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex animate-pulse gap-4 border-b border-white/[0.04] px-8 py-4"
+          >
+            <div className="h-3 w-3 rounded-full bg-white/[0.05]" />
+            <div className="h-4 flex-1 rounded bg-white/[0.05]" />
+            <div className="h-4 w-24 rounded bg-white/[0.04]" />
+          </div>
+        ))}
+      </section>
+      <div className="mx-auto mt-10 w-full max-w-7xl px-0">
+        <div className="h-3 w-40 animate-pulse rounded bg-white/[0.05]" />
+        <div className="mt-4 hidden gap-3 lg:grid lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="min-h-[80px] animate-pulse border-t-[3px] border-white/[0.06] pt-3"
+            >
+              <div className="h-16 rounded-xl bg-white/[0.04]" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

@@ -10,7 +10,7 @@ function UniversityItem({ uni }: { uni: University }) {
           alt={uni.name}
           loading="lazy"
           draggable={false}
-          className="h-8 w-auto select-none object-contain"
+          className="h-8 w-auto select-none object-contain grayscale"
         />
       ) : null}
       <span className="font-label text-sm font-medium tracking-wide text-white/90">

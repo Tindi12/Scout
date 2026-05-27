@@ -31,11 +31,11 @@ export type ProfileData = {
   linkedin_url: string | null
   github_url: string | null
   portfolio_url: string | null
-  address_line: string | null
-  city: string | null
-  address_region: string | null
-  postal_code: string | null
-  country: string | null
+  address_street: string | null
+  address_city: string | null
+  address_state: string | null
+  address_zip: string | null
+  address_country: string | null
 
   // Work authorization
   work_authorization: WorkAuthorization | null
@@ -73,6 +73,11 @@ export type ProfileCompletionFieldKey =
   | 'name'
   | 'phone_number'
   | 'linkedin_url'
+  | 'address_street'
+  | 'address_city'
+  | 'address_state'
+  | 'address_zip'
+  | 'address_country'
   | 'work_authorization'
   | 'degree_type'
   | 'major'
@@ -96,6 +101,11 @@ const REQUIRED_FIELDS: ReadonlyArray<{
   { key: 'name', label: 'Full name' },
   { key: 'phone_number', label: 'Phone number' },
   { key: 'linkedin_url', label: 'LinkedIn URL' },
+  { key: 'address_street', label: 'Street address' },
+  { key: 'address_city', label: 'City' },
+  { key: 'address_state', label: 'State' },
+  { key: 'address_zip', label: 'Zip / Postal code' },
+  { key: 'address_country', label: 'Country' },
   { key: 'work_authorization', label: 'Work authorization' },
   { key: 'degree_type', label: 'Degree type' },
   { key: 'major', label: 'Major' },

@@ -418,7 +418,7 @@ class WorkdayMCP:
             'input[data-automation-id*="addressLine1" i]',
             'input[aria-label*="Address" i]',
         ):
-            await _fill_if_exists(page, sel, user_data.get("address", ""))
+            await _fill_if_exists(page, sel, user_data.get("address_street", ""))
 
         # City
         for sel in (
@@ -426,10 +426,10 @@ class WorkdayMCP:
             'input[data-automation-id*="city" i]',
             'input[aria-label*="City" i]',
         ):
-            await _fill_if_exists(page, sel, user_data.get("city", ""))
+            await _fill_if_exists(page, sel, user_data.get("address_city", ""))
 
         # State / Region — try both text input and Workday dropdown
-        state = user_data.get("state", "")
+        state = user_data.get("address_state", "")
         if state:
             for sel in (
                 '[data-automation-id="addressSection_countryRegion"]',
@@ -450,10 +450,10 @@ class WorkdayMCP:
             'input[aria-label*="Postal Code" i]',
             'input[aria-label*="Zip" i]',
         ):
-            await _fill_if_exists(page, sel, user_data.get("zip_code", ""))
+            await _fill_if_exists(page, sel, user_data.get("address_zip", ""))
 
         # Country (Workday custom dropdown)
-        country = user_data.get("country", "")
+        country = user_data.get("address_country", "")
         if country:
             await _select_workday_dropdown(
                 page,

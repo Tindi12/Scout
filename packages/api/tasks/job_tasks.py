@@ -8,11 +8,8 @@ from core.supabase_client import supabase
 from datetime import datetime, timezone
 from services.portal_detector import detect_portal
 from services.latex_generator import generate_resume_pdf
-from services.mcp.greenhouse import GreenhouseMCP, NeedsAttentionException
-from services.mcp.lever import LeverMCP
-from services.mcp.ashby import AshbyMCP
-from services.mcp.usajobs import USAJobsMCP
-from services.mcp.workday import WorkdayMCP
+from services.mcp.greenhouse import NeedsAttentionException
+from services.browser_agent import browser_agent
 
 logger = logging.getLogger(__name__)
 
@@ -77,16 +74,37 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         if not job_data:
             raise Exception("Job not found")
 
-        # 5. Fetch resume variant for this job
-        variant = supabase.table("resume_variants").select("rewritten_resume").eq("user_id", user_id).eq("job_id", job_id).maybe_single().execute()
+        # 5. Fetch resume variant for this job (maybe_single can return None response)
+        resume_to_use = None
+        try:
+            variant_response = (
+                supabase.table("resume_variants")
+                .select("rewritten_resume")
+                .eq("user_id", user_id)
+                .eq("job_id", job_id)
+                .maybe_single()
+                .execute()
+            )
+            if variant_response and variant_response.data:
+                resume_to_use = variant_response.data["rewritten_resume"]
+        except Exception:
+            resume_to_use = None
 
-        if variant.data:
-            resume_to_use = variant.data["rewritten_resume"]
-        else:
-            # Fall back to latest analysis rewritten_resume
-            analysis = supabase.table("analyses").select("rewritten_resume").eq("user_id", user_id).order("created_at", desc=True).limit(1).maybe_single().execute()
-
-            resume_to_use = analysis.data["rewritten_resume"] if analysis.data else None
+        if not resume_to_use:
+            try:
+                analysis_response = (
+                    supabase.table("analyses")
+                    .select("rewritten_resume")
+                    .eq("user_id", user_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .maybe_single()
+                    .execute()
+                )
+                if analysis_response and analysis_response.data:
+                    resume_to_use = analysis_response.data["rewritten_resume"]
+            except Exception:
+                resume_to_use = None
 
         # 5.5. Generate PDF from resume variant
         if resume_to_use:
@@ -97,56 +115,12 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #6. Detect portal from job.portal field
         portal = detect_portal(url=job_data.get("url", ""), portal=job_data.get("portal", "unknown"))
 
-        #7. Call appropriate MCP/browser handler
-        logger.info(f"Applying to {job_data['title']} at {job_data['company']} via {portal}")
-        if portal == "greenhouse":
-            mcp = GreenhouseMCP()
-            result = asyncio.run(
-                mcp.apply(
-                    job_url=job_data["url"],
-                    user_data=user_data,
-                    resume_pdf=resume_pdf,
-                )
-            )
-        elif portal == "lever":
-            mcp = LeverMCP()
-            result = asyncio.run(
-                mcp.apply(
-                    job_url=job_data["url"],
-                    user_data=user_data,
-                    resume_pdf=resume_pdf,
-                )
-            )
-        elif portal == "ashby":
-            mcp = AshbyMCP()
-            result = asyncio.run(
-                mcp.apply(
-                    job_url=job_data["url"],
-                    user_data=user_data,
-                    resume_pdf=resume_pdf,
-                )
-            )
-        elif portal == "usajobs":
-            mcp = USAJobsMCP()
-            result = asyncio.run(
-                mcp.apply(
-                    job_url=job_data["url"],
-                    user_data=user_data,
-                    resume_pdf=resume_pdf,
-                )
-            )
-        elif portal == "workday":
-            mcp = WorkdayMCP()
-            result = asyncio.run(
-                mcp.apply(
-                    job_url=job_data["url"],
-                    user_data=user_data,
-                    resume_pdf=resume_pdf,
-                )
-            )
-        else:
-            logger.info(f"Portal {portal} not yet implemented")
-            result = {"success": True, "stub": True}
+        #7. Apply via BrowserUseAgent
+        result = asyncio.run(browser_agent.apply(job_url=job_data.get("url"), user_data=user_data, resume_pdf=resume_pdf))
+        if result.get("needs_attention"):
+            raise NeedsAttentionException(result.get("attention_question"))
+        if not result.get("success"):
+            raise Exception(result.get("error") or "Browser application failed")
 
         #8. Update application status → "applied"
         supabase.table("applications").update({"status": "applied", "applied_at": datetime.now(timezone.utc).isoformat()}).eq("id", application_id).execute()

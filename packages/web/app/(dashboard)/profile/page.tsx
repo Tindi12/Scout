@@ -184,11 +184,11 @@ const EMPTY_PROFILE: ProfileData = {
   linkedin_url: null,
   github_url: null,
   portfolio_url: null,
-  address_line: null,
-  city: null,
-  address_region: null,
-  postal_code: null,
-  country: 'United States',
+  address_street: null,
+  address_city: null,
+  address_state: null,
+  address_zip: null,
+  address_country: 'United States',
   work_authorization: null,
   cpt_eligible: false,
   opt_eligible: false,
@@ -458,6 +458,23 @@ export default function ProfilePage() {
     [flashSaved, setFieldStatus, showSectionToast],
   )
 
+  const persistRequiredTextField = useCallback(
+    async (
+      key: FieldKey,
+      value: ProfileData[FieldKey],
+      section: SectionId,
+      label: string,
+    ) => {
+      const text = typeof value === 'string' ? value.trim() : ''
+      if (!text) {
+        setFieldStatus(key, 'error', `${label} is required`)
+        return
+      }
+      await persistField(key, text, section, label)
+    },
+    [persistField, setFieldStatus],
+  )
+
   const updateLocal = useCallback(
     <K extends FieldKey>(key: K, value: ProfileData[K]) => {
       setProfile((prev) => ({ ...prev, [key]: value }))
@@ -530,7 +547,12 @@ export default function ProfilePage() {
       personal:
         trimmed(profile.name) &&
         trimmed(profile.phone_number) &&
-        trimmed(profile.linkedin_url),
+        trimmed(profile.linkedin_url) &&
+        trimmed(profile.address_street) &&
+        trimmed(profile.address_city) &&
+        trimmed(profile.address_state) &&
+        trimmed(profile.address_zip) &&
+        trimmed(profile.address_country),
       authorization: Boolean(profile.work_authorization),
       education:
         trimmed(profile.school) &&
@@ -553,6 +575,13 @@ export default function ProfilePage() {
     !phoneHasValue || isValidPhoneNumber(profile.phone_number ?? '')
   const openEndedPreference =
     (profile.open_ended_preference as OpenEndedPreference | null) ?? 'library'
+  const answersLibraryEnabled = openEndedPreference === 'library'
+
+  useEffect(() => {
+    if (!answersLibraryEnabled) {
+      setPreviewKey(null)
+    }
+  }, [answersLibraryEnabled])
 
   if (loading) {
     return <ProfileSkeleton />
@@ -719,107 +748,114 @@ export default function ProfilePage() {
             <FieldRow
               htmlFor="profile-street"
               label="Street address"
-              optional
-              status={statusByField.address_line}
-              errorMessage={errorByField.address_line}
+              status={statusByField.address_street}
+              errorMessage={errorByField.address_street}
               className="md:col-span-2"
             >
               <ProfileInput
                 id="profile-street"
-                value={profile.address_line ?? ''}
-                onValueChange={(value) => updateLocal('address_line', value)}
+                value={profile.address_street ?? ''}
+                onValueChange={(value) => updateLocal('address_street', value)}
                 onBlur={() =>
-                  void persistField(
-                    'address_line',
-                    profile.address_line,
+                  void persistRequiredTextField(
+                    'address_street',
+                    profile.address_street,
                     'personal',
-                    'Address',
+                    'Street address',
                   )
                 }
                 placeholder="1234 Main St"
+                required
               />
             </FieldRow>
 
             <FieldRow
               htmlFor="profile-city"
               label="City"
-              optional
-              status={statusByField.city}
-              errorMessage={errorByField.city}
+              status={statusByField.address_city}
+              errorMessage={errorByField.address_city}
             >
               <ProfileInput
                 id="profile-city"
-                value={profile.city ?? ''}
-                onValueChange={(value) => updateLocal('city', value)}
-                onBlur={() => void persistField('city', profile.city, 'personal', 'City')}
+                value={profile.address_city ?? ''}
+                onValueChange={(value) => updateLocal('address_city', value)}
+                onBlur={() =>
+                  void persistRequiredTextField('address_city', profile.address_city, 'personal', 'City')
+                }
                 placeholder="San Francisco"
+                required
               />
             </FieldRow>
 
             <FieldRow
               label="State"
-              optional
-              status={statusByField.address_region}
-              errorMessage={errorByField.address_region}
+              status={statusByField.address_state}
+              errorMessage={errorByField.address_state}
             >
               <ProfileSelect
-                value={profile.address_region ?? ''}
-                onValueChange={(value) =>
+                value={profile.address_state ?? ''}
+                onValueChange={(value) => {
+                  if (!value) {
+                    updateLocal('address_state', null)
+                    setFieldStatus('address_state', 'error', 'State is required')
+                    return
+                  }
                   void commitImmediate(
-                    'address_region',
-                    value || null,
+                    'address_state',
+                    value,
                     'personal',
                     'State',
                   )
-                }
+                }}
                 options={STATE_OPTIONS}
                 placeholder="Select…"
+                required
               />
             </FieldRow>
 
             <FieldRow
               htmlFor="profile-zip"
               label="Zip / Postal code"
-              optional
-              status={statusByField.postal_code}
-              errorMessage={errorByField.postal_code}
+              status={statusByField.address_zip}
+              errorMessage={errorByField.address_zip}
             >
               <ProfileInput
                 id="profile-zip"
-                value={profile.postal_code ?? ''}
-                onValueChange={(value) => updateLocal('postal_code', value)}
+                value={profile.address_zip ?? ''}
+                onValueChange={(value) => updateLocal('address_zip', value)}
                 onBlur={() =>
-                  void persistField(
-                    'postal_code',
-                    profile.postal_code,
+                  void persistRequiredTextField(
+                    'address_zip',
+                    profile.address_zip,
                     'personal',
-                    'Postal code',
+                    'Zip / Postal code',
                   )
                 }
                 placeholder="94110"
+                required
               />
             </FieldRow>
 
             <FieldRow
               htmlFor="profile-country"
               label="Country"
-              optional
-              status={statusByField.country}
-              errorMessage={errorByField.country}
+              status={statusByField.address_country}
+              errorMessage={errorByField.address_country}
             >
               <ProfileInput
                 id="profile-country"
-                value={profile.country ?? ''}
-                onValueChange={(value) => updateLocal('country', value)}
+                value={profile.address_country ?? ''}
+                onValueChange={(value) => updateLocal('address_country', value)}
                 onBlur={() =>
-                  void persistField(
-                    'country',
-                    profile.country,
+                  void persistRequiredTextField(
+                    'address_country',
+                    profile.address_country,
                     'personal',
                     'Country',
                   )
                 }
                 placeholder="United States"
+                required
               />
             </FieldRow>
           </div>
@@ -1213,28 +1249,65 @@ export default function ProfilePage() {
       <ProfileSection
         title="Answers Library"
         icon={Library}
-        description="Pre-write answers to common application questions. Scout uses these automatically when it encounters matching questions."
-        complete={sectionComplete.answers_library}
+        description={
+          answersLibraryEnabled
+            ? 'Pre-write answers to common application questions. Scout uses these automatically when it encounters matching questions.'
+            : 'Not used with your current application preference. Select "Use my answers" above to edit.'
+        }
+        complete={!answersLibraryEnabled || sectionComplete.answers_library}
       >
-        <div className="flex gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF6733]" strokeWidth={1.75} />
-          <p className="text-xs text-[#888]">
-            Use {'{company}'} as a placeholder — Scout replaces it with the real
-            company name on each application.
-          </p>
-        </div>
+        {!answersLibraryEnabled && (
+          <div className="flex gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#666]" strokeWidth={1.75} />
+            <p className="text-xs text-[#666]">
+              Scout will auto-generate answers, or ask you via SMS or email based on
+              your Application Preferences. Switch to{' '}
+              <span className="text-[#aaa]">Use my answers</span> to fill this
+              library.
+            </p>
+          </div>
+        )}
 
-        {ANSWER_FIELDS.map((field) => (
-          <AnswersLibraryField
-            key={field.key}
-            field={field}
-            value={profile.answers_library[field.key] ?? ''}
-            status={libraryStatusByKey[field.key]}
-            onChange={(value) => updateLibraryAnswer(field.key, value)}
-            onBlur={() => void persistLibraryAnswer(field.key)}
-            onPreview={() => setPreviewKey(field.key)}
-          />
-        ))}
+        <div
+          className={cn(
+            'space-y-4 transition-[opacity,filter] duration-200',
+            !answersLibraryEnabled &&
+              'pointer-events-none select-none opacity-40 grayscale-[0.35]',
+          )}
+          aria-disabled={!answersLibraryEnabled}
+          inert={!answersLibraryEnabled ? true : undefined}
+        >
+          <div className="flex gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+            <Info
+              className={cn(
+                'mt-0.5 h-3.5 w-3.5 shrink-0',
+                answersLibraryEnabled ? 'text-[#FF6733]' : 'text-[#555]',
+              )}
+              strokeWidth={1.75}
+            />
+            <p className="text-xs text-[#888]">
+              Use {'{company}'} as a placeholder — Scout replaces it with the real
+              company name on each application.
+            </p>
+          </div>
+
+          {ANSWER_FIELDS.map((field) => (
+            <AnswersLibraryField
+              key={field.key}
+              field={field}
+              value={profile.answers_library[field.key] ?? ''}
+              status={libraryStatusByKey[field.key]}
+              disabled={!answersLibraryEnabled}
+              onChange={(value) => updateLibraryAnswer(field.key, value)}
+              onBlur={() => {
+                if (answersLibraryEnabled) {
+                  void persistLibraryAnswer(field.key)
+                }
+              }}
+              onPreview={() => setPreviewKey(field.key)}
+            />
+          ))}
+        </div>
       </ProfileSection>
 
       <AnswerPreviewDialog
@@ -1538,6 +1611,7 @@ function AnswersLibraryField({
   field,
   value,
   status,
+  disabled = false,
   onChange,
   onBlur,
   onPreview,
@@ -1545,6 +1619,7 @@ function AnswersLibraryField({
   field: (typeof ANSWER_FIELDS)[number]
   value: string
   status?: FieldStatus
+  disabled?: boolean
   onChange: (value: string) => void
   onBlur: () => void
   onPreview: () => void
@@ -1552,14 +1627,17 @@ function AnswersLibraryField({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm text-[#888]">{field.label}</span>
+        <span className={cn('text-sm', disabled ? 'text-[#555]' : 'text-[#888]')}>
+          {field.label}
+        </span>
         <div className="flex shrink-0 items-center gap-2">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={onPreview}
-            className="h-7 px-2 text-xs text-[#888] hover:text-white"
+            disabled={disabled}
+            className="h-7 px-2 text-xs text-[#888] hover:text-white disabled:pointer-events-none disabled:opacity-50"
           >
             Preview
           </Button>
@@ -1569,10 +1647,15 @@ function AnswersLibraryField({
       <ProfileTextarea
         value={value}
         rows={3}
+        disabled={disabled}
+        readOnly={disabled}
         onValueChange={onChange}
         onBlur={onBlur}
         placeholder={field.placeholder}
-        className="min-h-0 resize-y"
+        className={cn(
+          'min-h-0 resize-y',
+          disabled && 'cursor-not-allowed opacity-80',
+        )}
       />
       <div className="flex justify-end text-xs text-[#555]">
         {value.length} / {ANSWER_LIMIT}

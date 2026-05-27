@@ -1,28 +1,18 @@
 'use client'
 
-import { AlertCircle, ExternalLink, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as Accordion from '@radix-ui/react-accordion'
+import { ChevronDown } from 'lucide-react'
+import { useMemo } from 'react'
 
+import { PortalBadge } from '@/components/tracker/PortalBadge'
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { useToast } from '@/hooks/use-toast'
-import { cn } from '@/lib/utils'
+  detectPortalFromUrl,
+  formatRelativeTime,
+  STATUS_CONFIG,
+  type ApplicationRecord,
+} from '@/components/tracker/tracker-utils'
 
-export type ApplicationRecord = {
-  id: string
-  job_id: string
-  status: string | null
-  company: string
-  role: string
-  job_url: string
-  error_message: string | null
-  applied_at: string | null
-}
+export type { ApplicationRecord } from '@/components/tracker/tracker-utils'
 
 type KanbanColumnId =
   | 'queued'
@@ -34,90 +24,35 @@ type KanbanColumnId =
 const COLUMNS: ReadonlyArray<{
   id: KanbanColumnId
   label: string
-  statuses: readonly string[]
 }> = [
-  { id: 'queued', label: 'Queued', statuses: ['queued'] },
-  { id: 'in_progress', label: 'In Progress', statuses: ['in_progress'] },
-  { id: 'applied', label: 'Applied', statuses: ['applied'] },
-  { id: 'failed', label: 'Failed', statuses: ['failed'] },
-  { id: 'needs_attention', label: 'Needs Attention', statuses: ['needs_attention'] },
+  { id: 'queued', label: 'QUEUED' },
+  { id: 'in_progress', label: 'IN PROGRESS' },
+  { id: 'applied', label: 'APPLIED' },
+  { id: 'failed', label: 'FAILED' },
+  { id: 'needs_attention', label: 'ATTENTION' },
 ]
 
-function formatAppliedAt(iso: string | null): string | null {
-  if (!iso) return null
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  } catch {
-    return null
-  }
-}
-
-function StatusPill({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    queued: 'bg-white/[0.05] text-[#666]',
-    in_progress: 'bg-[#FF6733]/20 text-[#FF6733]',
-    applied: 'bg-[#22c55e]/20 text-[#22c55e]',
-    failed: 'bg-[#ef4444]/20 text-[#ef4444]',
-    needs_attention: 'bg-[#FF6733]/15 text-[#FF6733]',
-  }
-  const labelMap: Record<string, string> = {
-    queued: 'Queued',
-    in_progress: 'In Progress',
-    applied: 'Applied',
-    failed: 'Failed',
-    needs_attention: 'Needs Attention',
-  }
-  const key = status in colorMap ? status : 'queued'
-  return (
-    <span
-      className={cn(
-        'rounded-full px-2 py-0.5 font-label text-[10px] font-medium',
-        colorMap[key],
-      )}
-    >
-      {labelMap[key] ?? status}
-    </span>
-  )
+function defaultOpenColumns(
+  grouped: Record<KanbanColumnId, ApplicationRecord[]>,
+): string[] {
+  const open: string[] = []
+  if (grouped.in_progress.length > 0) open.push('in_progress')
+  if (grouped.needs_attention.length > 0) open.push('needs_attention')
+  if (open.length === 0 && grouped.applied.length > 0) open.push('applied')
+  return open
 }
 
 type ApplicationKanbanProps = {
-  refreshKey?: number
+  apps: ApplicationRecord[]
+  loading?: boolean
+  onAnswerClick?: (app: ApplicationRecord) => void
 }
 
-export function ApplicationKanban({ refreshKey = 0 }: ApplicationKanbanProps) {
-  const { toast } = useToast()
-  const [apps, setApps] = useState<ApplicationRecord[]>([])
-  const [loading, setLoading] = useState(true)
-  const [answerApp, setAnswerApp] = useState<ApplicationRecord | null>(null)
-  const [answerText, setAnswerText] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  const loadApps = useCallback(async () => {
-    try {
-      const res = await fetch('/api/applications', { cache: 'no-store' })
-      if (!res.ok) {
-        setApps([])
-        return
-      }
-      const data = (await res.json()) as ApplicationRecord[]
-      setApps(Array.isArray(data) ? data : [])
-    } catch {
-      setApps([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    void loadApps()
-  }, [loadApps, refreshKey])
-
+export function ApplicationKanban({
+  apps,
+  loading = false,
+  onAnswerClick,
+}: ApplicationKanbanProps) {
   const grouped = useMemo(() => {
     const map: Record<KanbanColumnId, ApplicationRecord[]> = {
       queued: [],
@@ -137,208 +72,192 @@ export function ApplicationKanban({ refreshKey = 0 }: ApplicationKanbanProps) {
     return map
   }, [apps])
 
-  const handleSubmitAnswer = async () => {
-    if (!answerApp || !answerText.trim()) return
-    setSubmitting(true)
-    try {
-      const res = await fetch(`/api/applications/${answerApp.id}/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer: answerText.trim() }),
-      })
-      if (!res.ok) {
-        toast({
-          title: 'Could not submit answer',
-          description: 'Please try again.',
-          variant: 'destructive',
-        })
-        return
-      }
-      toast({
-        title: 'Answer submitted',
-        description: 'Scout will retry this application.',
-      })
-      setAnswerApp(null)
-      setAnswerText('')
-      await loadApps()
-    } catch {
-      toast({
-        title: 'Network error',
-        description: 'Could not reach the server.',
-        variant: 'destructive',
-      })
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const defaultOpen = useMemo(() => defaultOpenColumns(grouped), [grouped])
 
   if (loading) {
-    return (
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-5">
-        {COLUMNS.map((col) => (
-          <div
-            key={col.id}
-            className="glass-card min-h-[120px] animate-pulse rounded-2xl border border-white/[0.06] p-3"
-          />
-        ))}
-      </div>
-    )
+    return <KanbanSkeleton />
   }
 
   return (
-    <>
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-5 lg:items-start lg:gap-3">
-        {COLUMNS.map((col) => {
-          const cards = grouped[col.id]
-          return (
-            <div key={col.id} className="flex min-w-0 flex-col gap-2">
-              <div className="flex items-center justify-between px-0.5">
-                <h3 className="font-label text-[11px] font-semibold uppercase tracking-wider text-[#666]">
-                  {col.label}
-                </h3>
-                <span className="font-mono text-[10px] text-[#555]">{cards.length}</span>
-              </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#444]">
+          APPLICATION HISTORY
+        </p>
+        <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-0.5 font-mono text-[10px] text-[#555]">
+          {apps.length}
+        </span>
+      </div>
 
-              <div className="flex flex-col gap-2">
-                {cards.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-white/[0.06] px-3 py-6 text-center">
-                    <p className="font-body text-xs text-[#555]">No applications</p>
-                  </div>
+      <div className="hidden lg:grid lg:grid-cols-5 lg:gap-3 lg:items-start">
+        {COLUMNS.map((col) => (
+          <KanbanColumn
+            key={col.id}
+            columnId={col.id}
+            label={col.label}
+            cards={grouped[col.id]}
+            onAnswerClick={onAnswerClick}
+          />
+        ))}
+      </div>
+
+      <Accordion.Root
+        type="multiple"
+        defaultValue={defaultOpen}
+        className="flex flex-col gap-2 lg:hidden"
+      >
+        {COLUMNS.map((col) => (
+          <Accordion.Item
+            key={col.id}
+            value={col.id}
+            className="border-t-[3px]"
+            style={{ borderTopColor: STATUS_CONFIG[col.id].columnColor }}
+          >
+            <Accordion.Header>
+              <Accordion.Trigger className="group flex w-full items-center justify-between gap-2 py-3 text-left">
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: STATUS_CONFIG[col.id].color }}
+                  />
+                  <span
+                    className="font-mono text-[10px] uppercase tracking-wider"
+                    style={{ color: STATUS_CONFIG[col.id].color }}
+                  >
+                    {col.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-[#444]">
+                    {grouped[col.id].length}
+                  </span>
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-[#444] transition-transform group-data-[state=open]:rotate-180" />
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+              <div className="flex flex-col gap-2 pb-3">
+                {grouped[col.id].length === 0 ? (
+                  <p className="py-6 text-center font-mono text-[#333]">—</p>
                 ) : (
-                  cards.map((app) => (
-                    <article
+                  grouped[col.id].map((app) => (
+                    <KanbanCard
                       key={app.id}
-                      className="glass-card rounded-xl border border-white/[0.06] p-3"
-                    >
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-label text-sm font-semibold text-white">
-                            {app.company || 'Unknown company'}
-                          </p>
-                          <p className="truncate font-body text-xs text-[#888]">
-                            {app.role || 'Role'}
-                          </p>
-                        </div>
-                        <StatusPill status={app.status || 'queued'} />
-                      </div>
-
-                      {app.status === 'failed' && app.error_message && (
-                        <p className="mb-2 font-body text-[11px] leading-snug text-[#ef4444]/90">
-                          {app.error_message}
-                        </p>
-                      )}
-
-                      {app.status === 'applied' && app.applied_at && (
-                        <p className="mb-2 font-body text-[10px] text-[#555]">
-                          Applied {formatAppliedAt(app.applied_at)}
-                        </p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        {app.job_url ? (
-                          <a
-                            href={app.job_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-label text-[11px] text-[#888] transition-colors hover:text-white"
-                          >
-                            View Job
-                            <ExternalLink className="h-3 w-3" strokeWidth={2} />
-                          </a>
-                        ) : null}
-
-                        {app.status === 'needs_attention' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAnswerApp(app)
-                              setAnswerText('')
-                            }}
-                            className="inline-flex items-center gap-1 rounded-full bg-[#FF6733]/20 px-2 py-0.5 font-label text-[11px] font-semibold text-[#FF6733] transition-colors hover:bg-[#FF6733]/30"
-                          >
-                            <AlertCircle className="h-3 w-3" strokeWidth={2} />
-                            Answer Required
-                          </button>
-                        )}
-                      </div>
-                    </article>
+                      app={app}
+                      onAnswerClick={onAnswerClick}
+                    />
                   ))
                 )}
               </div>
-            </div>
-          )
-        })}
+            </Accordion.Content>
+          </Accordion.Item>
+        ))}
+      </Accordion.Root>
+    </div>
+  )
+}
+
+function KanbanColumn({
+  columnId,
+  label,
+  cards,
+  onAnswerClick,
+}: {
+  columnId: KanbanColumnId
+  label: string
+  cards: ApplicationRecord[]
+  onAnswerClick?: (app: ApplicationRecord) => void
+}) {
+  const color = STATUS_CONFIG[columnId].color
+
+  return (
+    <div
+      className="flex min-w-0 flex-col gap-2 border-t-[3px] pt-3"
+      style={{ borderTopColor: color }}
+    >
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        <span
+          className="font-mono text-[10px] uppercase tracking-wider"
+          style={{ color }}
+        >
+          {label}
+        </span>
+        <span className="font-mono text-[10px] text-[#444]">{cards.length}</span>
       </div>
+      <div className="flex flex-col gap-2">
+        {cards.length === 0 ? (
+          <p className="py-8 text-center font-mono text-[#333]">—</p>
+        ) : (
+          cards.map((app) => (
+            <KanbanCard key={app.id} app={app} onAnswerClick={onAnswerClick} />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
 
-      <Dialog
-        open={answerApp != null}
-        onOpenChange={(open) => {
-          if (submitting) return
-          if (!open) {
-            setAnswerApp(null)
-            setAnswerText('')
-          }
-        }}
-      >
-        <DialogContent className="glass-card-strong max-w-md gap-5 rounded-2xl border-white/10 bg-[#0a0a0a]/90 p-7 text-white">
-          <DialogHeader className="text-left sm:text-left">
-            <DialogTitle className="font-headline text-lg font-medium tracking-[-0.02em] text-white">
-              Answer Required
-            </DialogTitle>
-            {answerApp && (
-              <p className="font-body text-sm text-[#888]">
-                {answerApp.company} — {answerApp.role}
-              </p>
-            )}
-          </DialogHeader>
+function KanbanCard({
+  app,
+  onAnswerClick,
+}: {
+  app: ApplicationRecord
+  onAnswerClick?: (app: ApplicationRecord) => void
+}) {
+  const portal = detectPortalFromUrl(app.job_url)
+  const ts = app.applied_at ?? app.created_at ?? null
 
-          <div className="flex flex-col gap-3">
-            {answerApp?.error_message && (
-              <div className="rounded-xl border border-[#FF6733]/20 bg-[#FF6733]/[0.06] p-3">
-                <p className="font-body text-sm text-white">{answerApp.error_message}</p>
-              </div>
-            )}
+  return (
+    <article className="glass-card rounded-xl border border-white/[0.06] p-3">
+      <p className="truncate text-sm font-semibold text-white">
+        {app.company || 'Unknown company'}
+      </p>
+      <p className="mt-0.5 truncate text-xs text-[#666]">{app.role || 'Role'}</p>
 
-            <textarea
-              value={answerText}
-              onChange={(e) => setAnswerText(e.target.value)}
-              placeholder="Type your answer…"
-              rows={4}
-              disabled={submitting}
-              className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 font-body text-sm text-white placeholder-[#555] outline-none transition focus:border-[#FF6733]/40 focus:ring-0 disabled:opacity-60"
-            />
+      {app.status === 'failed' && app.error_message ? (
+        <p className="mt-1.5 truncate text-[10px] text-[#ef4444]">
+          {app.error_message}
+        </p>
+      ) : null}
+
+      {app.status === 'needs_attention' ? (
+        <button
+          type="button"
+          onClick={() => onAnswerClick?.(app)}
+          className="mt-2 w-full rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 py-1.5 font-label text-[11px] font-semibold text-[#f59e0b] transition-colors hover:bg-[#f59e0b]/15"
+        >
+          Answer Required
+        </button>
+      ) : null}
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <PortalBadge portal={portal} />
+        {ts ? (
+          <span className="shrink-0 font-mono text-xs text-[#444]">
+            {formatRelativeTime(ts)}
+          </span>
+        ) : (
+          <span className="font-mono text-xs text-[#333]">—</span>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function KanbanSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="h-3 w-40 animate-pulse rounded bg-white/[0.05]" />
+      <div className="hidden gap-3 lg:grid lg:grid-cols-5">
+        {COLUMNS.map((col) => (
+          <div
+            key={col.id}
+            className="min-h-[100px] animate-pulse border-t-[3px] border-white/[0.06] pt-3"
+          >
+            <div className="mb-3 h-3 w-16 rounded bg-white/[0.05]" />
+            <div className="h-20 rounded-xl bg-white/[0.04]" />
           </div>
-
-          <DialogFooter className="sm:justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setAnswerApp(null)
-                setAnswerText('')
-              }}
-              disabled={submitting}
-              className="inline-flex h-10 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#999] transition-colors hover:text-white disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSubmitAnswer()}
-              disabled={submitting || !answerText.trim()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                  Submitting…
-                </>
-              ) : (
-                'Submit Answer'
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        ))}
+      </div>
+    </div>
   )
 }
