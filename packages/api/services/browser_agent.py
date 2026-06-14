@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import os
+import random
 import re
 import shutil
 import tempfile
@@ -94,6 +95,22 @@ _PHASE_MAX_TYPE_TIMEOUT_RETRIES = 1
 # emails, and city autocompletes that need real keystrokes to fire suggestions) stay
 # on the normal typing path, so this threshold must sit above any such short value.
 _LONG_TEXT_THRESHOLD = 100
+
+# Humanized typing: enter long free-text as a series of TRUSTED word chunks (one CDP
+# Input.insertText per word) spread over a few seconds, instead of one instantaneous
+# insert. A 263-char essay materializing in 0ms is itself a bot tell even when the
+# events are trusted — Ashby's manual-vs-agent split (a human submitting the SAME
+# posting succeeded) points at automation telemetry like fill cadence. Word-CHUNK
+# insertText (NOT char-by-char key events) is the safe middle: it gives human-like
+# pacing and progressive input events while making only ~one CDP call per word, so it
+# avoids the remote-CDP event-bus deadlock that the slow per-character type path hit
+# (the original reason the JS value-set bypass exists). Toggle off to A/B:
+# SCOUT_HUMANIZED_TYPING=false.
+_HUMANIZED_TYPING = os.getenv("SCOUT_HUMANIZED_TYPING", "true").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+# Randomized delay (seconds) between word chunks — ~45-word essay lands in ~3-8s.
+_HUMAN_WORD_DELAY = (0.06, 0.18)
 
 # A consolidated run does fill + upload + submit in one continuous agent.
 # Bound it by both a step budget and a hard wall-clock cap that sits comfortably
@@ -202,6 +219,84 @@ async def _set_long_text_via_js(browser_session, index: int, text: str):
     if not isinstance(actual, str) or text not in actual:
         return None  # value didn't stick — let the caller type it instead
     msg = f"Entered {len(text)} characters into element {index} (direct value set)."
+    return ActionResult(extracted_content=msg, long_term_memory=msg)
+
+
+async def _set_long_text_trusted(browser_session, index: int, text: str):
+    """
+    Enter a long text value via CDP Input.insertText, so the resulting input/change
+    events fire with isTrusted=true (a real paste/keystroke). The _set_long_text_via_js
+    fallback dispatches synthetic events whose isTrusted=false is a known automation
+    tell to bot/spam detectors (browser-use issue #3829, closed "not planned" — so we
+    handle it). With _HUMANIZED_TYPING on (default), the text goes in as timed word
+    chunks (one insertText per word) so it doesn't materialize instantly — itself a bot
+    tell; off, it's a single one-shot insert. Either way: no slow char-by-char key
+    typing, which is what deadlocked the remote CDP event bus.
+
+    Returns an ActionResult on success, or None so the caller falls back to
+    _set_long_text_via_js when: the element isn't a plain <input>/<textarea>; it
+    already holds text (insertText inserts at the caret and would APPEND, not replace,
+    so we only take this path on an empty field); or the value didn't stick.
+    """
+    node = await browser_session.get_dom_element_by_index(index)
+    if node is None or node.tag_name not in ("input", "textarea"):
+        return None
+    cdp_session = await browser_session.cdp_client_for_node(node)
+    try:
+        await cdp_session.cdp_client.send.DOM.scrollIntoViewIfNeeded(
+            params={"backendNodeId": node.backend_node_id},
+            session_id=cdp_session.session_id,
+        )
+    except Exception:
+        pass  # node may still be settable even if scroll fails
+    resolved = await cdp_session.cdp_client.send.DOM.resolveNode(
+        params={"backendNodeId": node.backend_node_id},
+        session_id=cdp_session.session_id,
+    )
+    object_id = (resolved.get("object") or {}).get("objectId")
+    if not object_id:
+        return None
+
+    async def _read_value():
+        res = await cdp_session.cdp_client.send.Runtime.callFunctionOn(
+            params={
+                "objectId": object_id,
+                "functionDeclaration": "function() { return this.value; }",
+                "returnByValue": True,
+            },
+            session_id=cdp_session.session_id,
+        )
+        return (res.get("result") or {}).get("value")
+
+    # insertText inserts at the caret without clearing — only safe on an empty field.
+    current = await _read_value()
+    if isinstance(current, str) and current.strip():
+        return None
+
+    await cdp_session.cdp_client.send.DOM.focus(
+        params={"backendNodeId": node.backend_node_id},
+        session_id=cdp_session.session_id,
+    )
+    if _HUMANIZED_TYPING:
+        # One trusted insertText per word, with human-like pauses between words. Each
+        # token keeps its trailing whitespace so the reconstructed text is exact.
+        for token in re.findall(r"\S+\s*", text):
+            await cdp_session.cdp_client.send.Input.insertText(
+                params={"text": token},
+                session_id=cdp_session.session_id,
+            )
+            await asyncio.sleep(random.uniform(*_HUMAN_WORD_DELAY))
+        how = "humanized trusted typing"
+    else:
+        await cdp_session.cdp_client.send.Input.insertText(
+            params={"text": text},
+            session_id=cdp_session.session_id,
+        )
+        how = "trusted insert"
+    actual = await _read_value()
+    if not isinstance(actual, str) or text not in actual:
+        return None  # didn't stick — let the JS value-setter try
+    msg = f"Entered {len(text)} characters into element {index} ({how})."
     return ActionResult(extracted_content=msg, long_term_memory=msg)
 
 
@@ -358,19 +453,24 @@ def _build_apply_tools(application_id: str | None = None) -> Tools:
                 )
                 return await _type()
 
-        # Long free-text → one-shot JS value set (avoids slow/deadlock-prone char typing).
+        # Long free-text: trusted CDP insert first (isTrusted=true), then the synthetic
+        # JS value-setter, then plain char typing. The first two avoid the slow/
+        # deadlock-prone char-by-char CDP typing; the trusted path also avoids the
+        # isTrusted=false automation tell. Each falls through to the next on failure.
         if len(text) > _LONG_TEXT_THRESHOLD:
-            try:
-                injected = await _set_long_text_via_js(browser_session, index, text)
-            except Exception as exc:
-                logger.warning(
-                    "JS value injection failed for index %s (%s); falling back to typing.",
-                    index,
-                    exc,
-                )
-                injected = None
-            if injected is not None:
-                return injected
+            for setter in (_set_long_text_trusted, _set_long_text_via_js):
+                try:
+                    injected = await setter(browser_session, index, text)
+                except Exception as exc:
+                    logger.warning(
+                        "%s failed for index %s (%s); trying next text-entry method.",
+                        setter.__name__,
+                        index,
+                        exc,
+                    )
+                    injected = None
+                if injected is not None:
+                    return injected
 
         return await _type()
 
@@ -712,6 +812,78 @@ def resume_filename(applicant_name: str | None) -> str:
     """
     stem = re.sub(r"[^A-Za-z0-9]+", "_", applicant_name or "").strip("_")
     return f"{stem}_Resume.pdf" if stem else "Resume.pdf"
+
+
+# US state name → USPS 2-letter code. Browserbase proxy geolocation wants the
+# 2-letter code for US states; profiles store the full name ("Indiana"). DC included.
+_US_STATE_CODES = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "district of columbia": "DC", "florida": "FL", "georgia": "GA", "hawaii": "HI",
+    "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY",
+}
+
+
+def _country_code(raw: str | None) -> str | None:
+    """
+    Normalize a profile country to a 2-letter code for Browserbase geolocation.
+
+    Empty → "US" (Scout is US-focused and the applicant-context builder defaults the
+    same way). Explicit 2-letter codes pass through. Anything we can't confidently
+    map returns None so the caller skips geo-targeting rather than asserting a wrong
+    location (an incorrect geo would be its own mismatch signal).
+    """
+    v = (raw or "").strip()
+    if not v:
+        return "US"
+    low = v.lower().replace(".", "")
+    if low in {"us", "usa", "united states", "united states of america", "america"}:
+        return "US"
+    if len(v) == 2 and v.isalpha():
+        return v.upper()
+    return None
+
+
+def _state_code(raw: str | None, country: str | None) -> str | None:
+    """US 2-letter state code, or None. Browserbase only accepts state for US proxies."""
+    if country != "US":
+        return None
+    v = (raw or "").strip()
+    if not v:
+        return None
+    if len(v) == 2 and v.isalpha():
+        return v.upper()
+    return _US_STATE_CODES.get(v.lower())
+
+
+def _build_geolocation(user_data: dict) -> dict | None:
+    """
+    Build a Browserbase proxy geolocation from the applicant's profile address so the
+    residential exit IP matches the address on the form (Ashby flags "location
+    mismatch"). Returns None — caller falls back to a plain residential proxy — when
+    there's no city or the country can't be resolved, so we never assert a location
+    we aren't sure of.
+    """
+    city = (user_data.get("address_city") or "").strip()
+    if not city:
+        return None
+    country = _country_code(user_data.get("address_country"))
+    if not country:
+        return None
+    geo = {"city": city, "country": country}
+    state = _state_code(user_data.get("address_state"), country)
+    if state:
+        geo["state"] = state
+    return geo
 
 
 def _national_phone(phone: str) -> str:
@@ -1245,6 +1417,7 @@ class BrowserUseAgent:
         retry_stale_click_once: bool = False,
         retry_type_timeout_once: bool = False,
         application_id: str | None = None,
+        geolocation: dict | None = None,
     ) -> tuple[AgentHistoryList, Browser, str | None]:
         """
         Run a phase with bounded self-healing:
@@ -1283,7 +1456,7 @@ class BrowserUseAgent:
                     session_loss or "watchdog-triggered repeated state failures",
                 )
                 await self._release_browser_session(current_browser, current_session_id)
-                new_session, current_browser = self._new_browser_session()
+                new_session, current_browser = self._new_browser_session(geolocation)
                 current_session_id = new_session.id
                 session_restarts += 1
                 continue
@@ -1324,10 +1497,11 @@ class BrowserUseAgent:
 
             return result, current_browser, current_session_id
 
-    def _new_browser_session(self):
+    def _new_browser_session(self, geolocation: dict | None = None):
         # Hardened, shared session config (timeout/region/block_ads/captcha) lives
-        # in core.browserbase so every session is configured identically.
-        session = create_browserbase_session()
+        # in core.browserbase so every session is configured identically. geolocation
+        # geo-targets the residential proxy to the applicant (no-op unless proxies on).
+        session = create_browserbase_session(geolocation=geolocation)
         browser = Browser(
             browser_profile=BrowserProfile(
                 cdp_url=session.connect_url,
@@ -1377,8 +1551,13 @@ class BrowserUseAgent:
         context = self._build_applicant_context(user_data, tmp_path)
         apply_task = self._build_apply_task(job_url, context, upload_filename)
 
+        # Geo-target the residential proxy to the applicant's address so the exit IP
+        # matches the form (Ashby's named "location mismatch" signal). No-op unless
+        # BROWSERBASE_PROXIES is on; None falls back to a plain residential proxy.
+        geolocation = _build_geolocation(user_data)
+
         try:
-            session, browser = self._new_browser_session()
+            session, browser = self._new_browser_session(geolocation)
             active_session_id = session.id if session else None
 
             # One continuous agent run: fill → upload → submit. A single CDP init and
@@ -1396,6 +1575,7 @@ class BrowserUseAgent:
                 retry_stale_click_once=True,
                 retry_type_timeout_once=True,
                 application_id=application_id,
+                geolocation=geolocation,
             )
             active_session_id = current_session_id
 

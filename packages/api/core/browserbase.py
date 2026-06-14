@@ -34,6 +34,10 @@ BROWSERBASE_REGION = os.getenv("BROWSERBASE_REGION", "us-west-2")
 # 2026-06-11 submission as "possible spam" with the default AWS IP. Off by default
 # because proxied traffic bills per GB (an apply session with block_ads on is a few
 # MB, so pennies); set BROWSERBASE_PROXIES=true to enable.
+# When on, create_session(geolocation=...) geo-targets the residential exit IP to the
+# applicant's city/state — Ashby's one publicly named fraud signal is "location
+# mismatch", so a random US IP (proxies=True alone) is itself a tell. A plain
+# proxies=True is still used as the fallback when no geolocation is supplied.
 BROWSERBASE_PROXIES = os.getenv("BROWSERBASE_PROXIES", "").strip().lower() in {"1", "true", "yes", "on"}
 
 if not BROWSERBASE_API_KEY:
@@ -67,14 +71,32 @@ def get_client() -> Browserbase:
     return _client
 
 
-def create_session(*, api_timeout: int = DEFAULT_SESSION_TIMEOUT):
+def create_session(
+    *,
+    api_timeout: int = DEFAULT_SESSION_TIMEOUT,
+    geolocation: dict | None = None,
+):
     """
     Create a hardened Browserbase session with Scout's standard settings.
 
     Returns the SDK Session (has `.id` and `.connect_url`). The caller owns
     connecting browser-use and releasing the session in a `finally`.
+
+    `geolocation` (e.g. {"city": "Rochester", "state": "IN", "country": "US"}) only
+    takes effect when BROWSERBASE_PROXIES is on: it geo-targets the residential exit
+    IP to the applicant so the egress location matches the address on the form. When
+    proxies are on but no geolocation is given, a plain residential proxy is used.
     """
-    extra: dict = {"proxies": True} if BROWSERBASE_PROXIES else {}
+    if BROWSERBASE_PROXIES:
+        if geolocation:
+            extra: dict = {
+                "proxies": [{"type": "browserbase", "geolocation": geolocation}]
+            }
+        else:
+            extra = {"proxies": True}
+    else:
+        extra = {}
+
     session = get_client().sessions.create(
         project_id=BROWSERBASE_PROJECT_ID,
         api_timeout=api_timeout,
@@ -82,12 +104,21 @@ def create_session(*, api_timeout: int = DEFAULT_SESSION_TIMEOUT):
         browser_settings=_BROWSER_SETTINGS,
         **extra,
     )
+    if not BROWSERBASE_PROXIES:
+        proxy_state = "off"
+    elif geolocation:
+        loc = ", ".join(
+            str(geolocation[k]) for k in ("city", "state", "country") if geolocation.get(k)
+        )
+        proxy_state = f"geo({loc})"
+    else:
+        proxy_state = "on(ungeo)"
     logger.info(
         "Browserbase session created: %s (region=%s, timeout=%ss, block_ads=on, proxies=%s)",
         session.id,
         BROWSERBASE_REGION,
         api_timeout,
-        "on" if BROWSERBASE_PROXIES else "off",
+        proxy_state,
     )
     return session
 
