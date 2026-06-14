@@ -171,9 +171,15 @@ export function ApplicationKanban({
   )
 }
 
-// Same scroll affordance as the jobs page columns (JobColumn.tsx): capped-height
-// column, hidden scrollbar, and a gradient fade + chevron button while there is
-// more content below.
+// Scroll affordance mirroring the jobs page columns (JobColumn.tsx): hidden
+// scrollbar plus a gradient fade + chevron button while there is more content
+// below. Unlike the jobs page (which caps by viewport height), kanban cards are
+// short, so we cap the visible area to the first three cards and let the fade
+// begin on the fourth — the chevron then sits over that fourth, fading card.
+// Card heights vary (action buttons, error messages), so the cap is measured
+// from the fourth card's position rather than hardcoded.
+const VISIBLE_CARDS = 3
+const FADE_HEIGHT_PX = 96 // matches the h-24 gradient; aligns its top to card #4
 const SCROLL_STEP_PX = 400
 const BOTTOM_THRESHOLD_PX = 24
 
@@ -187,20 +193,34 @@ function ScrollFadeArea({
   children: ReactNode
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [maxHeight, setMaxHeight] = useState<number | null>(null)
   const [hasOverflow, setHasOverflow] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
 
   const recompute = useCallback(() => {
-    const node = scrollRef.current
-    if (!node) return
-    const overflows =
-      node.scrollHeight - node.clientHeight > BOTTOM_THRESHOLD_PX
-    setHasOverflow(overflows)
-    setAtBottom(
-      !overflows ||
-        node.scrollTop + node.clientHeight >=
-          node.scrollHeight - BOTTOM_THRESHOLD_PX,
-    )
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const cards = scroller.querySelectorAll<HTMLElement>('[data-kanban-card]')
+    if (cards.length > VISIBLE_CARDS) {
+      // Cap the scroll viewport so the fourth card's top aligns with the top of
+      // the fade gradient: three crisp cards, then the fourth fades out.
+      const fourth = cards[VISIBLE_CARDS]
+      const offsetWithin =
+        fourth.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop
+      const cap = Math.round(offsetWithin + FADE_HEIGHT_PX)
+      setMaxHeight(cap)
+      setHasOverflow(true)
+      setAtBottom(
+        scroller.scrollTop + cap >= scroller.scrollHeight - BOTTOM_THRESHOLD_PX,
+      )
+    } else {
+      setMaxHeight(null)
+      setHasOverflow(false)
+      setAtBottom(true)
+    }
   }, [])
 
   // Recheck when the card set changes.
@@ -208,9 +228,10 @@ function ScrollFadeArea({
     recompute()
   }, [count, recompute])
 
-  // ResizeObserver catches column-height changes (viewport resize etc.).
+  // ResizeObserver on the content catches card-height changes (status flips that
+  // add/remove action buttons) and viewport resizes, re-measuring the cap.
   useEffect(() => {
-    const node = scrollRef.current
+    const node = contentRef.current
     if (!node) return
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', recompute)
@@ -237,13 +258,14 @@ function ScrollFadeArea({
   const showFade = hasOverflow && !atBottom
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className="relative">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="absolute inset-0 overflow-y-auto pb-16 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={maxHeight != null ? { maxHeight } : undefined}
+        className="overflow-y-auto pb-16 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {children}
+        <div ref={contentRef}>{children}</div>
       </div>
 
       {showFade ? (
@@ -283,7 +305,7 @@ function KanbanColumn({
 
   return (
     <div
-      className="flex h-[calc(100vh-300px)] min-h-[420px] min-w-0 flex-col gap-2 border-t-[3px] pt-3"
+      className="flex min-w-0 flex-col gap-2 border-t-[3px] pt-3"
       style={{ borderTopColor: color }}
     >
       <div className="flex items-center gap-2 px-0.5">
@@ -329,7 +351,10 @@ function KanbanCard({
   const ts = app.applied_at ?? app.created_at ?? null
 
   return (
-    <article className="glass-card rounded-xl border border-white/[0.06] p-3">
+    <article
+      data-kanban-card
+      className="glass-card rounded-xl border border-white/[0.06] p-3"
+    >
       <p className="truncate text-sm font-semibold text-white">
         {app.company || 'Unknown company'}
       </p>
