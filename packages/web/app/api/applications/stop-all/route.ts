@@ -4,10 +4,9 @@ import { NextResponse } from 'next/server'
 import { getApiBaseUrl } from '@/lib/api'
 
 /**
- * Browser calls this same-origin route (session cookie). Server forwards to FastAPI
- * with a shared secret so we don't require Clerk's Supabase JWT template in the client.
+ * Stop all active applications for the signed-in user; proxy to FastAPI.
  */
-export async function GET() {
+export async function POST() {
   const { userId } = await auth()
   if (!userId) {
     return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 })
@@ -24,20 +23,13 @@ export async function GET() {
     )
   }
 
-  let upstream: Response
-  try {
-    upstream = await fetch(`${getApiBaseUrl()}/applications/`, {
-      headers: {
-        'X-Scout-Internal': secret,
-        'X-Clerk-User-Id': userId,
-      },
-      cache: 'no-store',
-    })
-  } catch {
-    // FastAPI down or mid-reload — return a clean 502 the client can retry on,
-    // instead of throwing an unhandled error in the route.
-    return NextResponse.json({ detail: 'API server unreachable' }, { status: 502 })
-  }
+  const upstream = await fetch(`${getApiBaseUrl()}/applications/stop-all`, {
+    method: 'POST',
+    headers: {
+      'X-Scout-Internal': secret,
+      'X-Clerk-User-Id': userId,
+    },
+  })
 
   const text = await upstream.text()
   const ct = upstream.headers.get('Content-Type') || 'application/json'
@@ -46,3 +38,4 @@ export async function GET() {
     headers: { 'Content-Type': ct },
   })
 }
+

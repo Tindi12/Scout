@@ -1,16 +1,13 @@
 """
 Gemini models available on Scout's AI Studio quota, ordered for fallback chains.
 
-Chat chain (power ↓, then TPM/RPD volume):
-  1. Gemini 3 Flash        — primary; newest Flash (250K TPM, 5 RPM, 20 RPD)
-  2. Gemini 2.5 Flash      — same TPM tier, proven quality
-  3. Gemini 3.1 Flash Lite — high volume (250K TPM, 15 RPM, 500 RPD)
-  4. Gemini 2.5 Flash Lite — lighter Flash (250K TPM, 10 RPM)
+Chat chain (text-out models first for generate_content compatibility):
+  1. Gemini 3.5 Flash      — primary text-out model
+  2. Gemini 2.5 Flash      — proven fallback
+  3. Gemini 3.1 Flash Lite — high volume fallback
+  4. Gemini 2.5 Flash Lite — lighter Flash fallback
   5. Gemma 4 31B           — unlimited TPM, 15 RPM, 1.5K RPD
   6. Gemma 4 26B           — smaller Gemma, unlimited TPM
-
-Excluded (0 quota or wrong modality): 2.5 Pro, 2 Flash, 2 Flash Lite,
-3.1 Pro, TTS, Imagen, Live API, Robotics, Computer Use.
 
 Embeddings (embedding_service.py): OpenAI ada-002 → Gemini Embedding 2 → Gemini Embedding 1
 """
@@ -18,9 +15,9 @@ Embeddings (embedding_service.py): OpenAI ada-002 → Gemini Embedding 2 → Gem
 from __future__ import annotations
 
 GEMINI_CHAT_MODELS: tuple[tuple[str, str], ...] = (
-    ("gemini-3-flash-preview", "Gemini 3 Flash"),
+    ("gemini-3.5-flash", "Gemini 3.5 Flash"),
     ("gemini-2.5-flash", "Gemini 2.5 Flash"),
-    ("gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite"),
+    ("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
     ("gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
     ("gemma-4-31b-it", "Gemma 4 31B"),
     ("gemma-4-26b-it", "Gemma 4 26B"),
@@ -28,8 +25,11 @@ GEMINI_CHAT_MODELS: tuple[tuple[str, str], ...] = (
 
 # Older / alternate API ids if Google renames models in AI Studio
 GEMINI_CHAT_MODEL_ALIASES: tuple[tuple[str, str], ...] = (
+    ("gemini-3-flash-live", "Gemini 3 Flash Live"),
     ("gemini-3-flash", "Gemini 3 Flash"),
-    ("gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
+    ("gemini-3-flash-preview", "Gemini 3 Flash"),
+    ("gemini-3-flash-live-preview", "Gemini 3 Flash Live"),
+    ("gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite"),
     ("gemma-3-27b-it", "Gemma 3 27B"),
     ("gemma-3-12b-it", "Gemma 3 12B"),
 )

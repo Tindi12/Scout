@@ -4,7 +4,9 @@ import { NextResponse } from 'next/server'
 import { getApiBaseUrl } from '@/lib/api'
 
 /**
- * Submit an answer for a needs_attention application; proxy to FastAPI.
+ * Relay an ATS-emailed verification code into a live apply run (awaiting_code
+ * application); proxy to FastAPI. Unlike /answer this does not re-queue the
+ * application — the agent is parked mid-session waiting for this code.
  */
 export async function POST(
   req: Request,
@@ -31,21 +33,21 @@ export async function POST(
     return NextResponse.json({ detail: 'application id is required' }, { status: 400 })
   }
 
-  let body: { answer?: string }
+  let body: { code?: string }
   try {
-    body = (await req.json()) as { answer?: string }
+    body = (await req.json()) as { code?: string }
   } catch {
     return NextResponse.json({ detail: 'Invalid JSON' }, { status: 400 })
   }
 
-  if (!body.answer?.trim()) {
-    return NextResponse.json({ detail: 'answer is required' }, { status: 422 })
+  if (!body.code?.trim()) {
+    return NextResponse.json({ detail: 'code is required' }, { status: 422 })
   }
 
   let upstream: Response
   try {
     upstream = await fetch(
-      `${getApiBaseUrl()}/applications/${encodeURIComponent(id.trim())}/answer`,
+      `${getApiBaseUrl()}/applications/${encodeURIComponent(id.trim())}/verification-code`,
       {
         method: 'POST',
         headers: {
@@ -53,7 +55,7 @@ export async function POST(
           'X-Scout-Internal': secret,
           'X-Clerk-User-Id': userId,
         },
-        body: JSON.stringify({ answer: body.answer.trim() }),
+        body: JSON.stringify({ code: body.code.trim() }),
       },
     )
   } catch {

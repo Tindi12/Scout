@@ -10,6 +10,7 @@ import {
   isRunComplete,
   isRunRunning,
   progressPct,
+  runStatusCounts,
   type LifetimeOverviewStats,
   type ScoutRun,
 } from './tracker-utils'
@@ -95,16 +96,26 @@ function MissionControlShell({
 
 type MissionControlHeaderProps = {
   run: ScoutRun
+  /**
+   * Lifetime stats (same source as the kanban below). The stat blocks always
+   * show these so the numbers never reset to 0 when a fresh run starts — only
+   * the title, progress bar, Stop All, and completion overlay are run-scoped.
+   */
+  stats: LifetimeOverviewStats
 }
 
-export function MissionControlHeader({ run }: MissionControlHeaderProps) {
+export function MissionControlHeader({ run, stats }: MissionControlHeaderProps) {
   const running = isRunRunning(run)
   const complete = isRunComplete(run)
   const pct = progressPct(run)
   const title = getRunTitle(run)
+  // Run-scoped counts for the completion overlay, derived from application
+  // rows (the scout_runs counter columns miss several failure paths).
+  const counts = runStatusCounts(run)
 
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false)
   const wasCompleteRef = useRef(complete)
+  const [isStopping, setIsStopping] = useState(false)
 
   useEffect(() => {
     if (complete && !wasCompleteRef.current) {
@@ -118,8 +129,7 @@ export function MissionControlHeader({ run }: MissionControlHeaderProps) {
   const allFailed =
     complete &&
     run.applications.length > 0 &&
-    run.applications.every((a) => a.status === 'failed') &&
-    (run.applied_count ?? 0) === 0
+    run.applications.every((a) => a.status === 'failed')
 
   const dot: MissionControlShellProps['dot'] = running
     ? 'pulse-green'
@@ -131,16 +141,48 @@ export function MissionControlHeader({ run }: MissionControlHeaderProps) {
     run.created_at ? formatRelativeTime(run.created_at) : 'recently'
   } · ${run.total_jobs} application${run.total_jobs === 1 ? '' : 's'}`
 
+  const activeCount = run.applications.filter(
+    (a) =>
+      a.status === 'queued' ||
+      a.status === 'in_progress' ||
+      a.status === 'awaiting_code',
+  ).length
+
+  const handleStopAll = async () => {
+    if (!running || activeCount === 0 || isStopping) return
+    setIsStopping(true)
+    try {
+      await fetch('/api/applications/stop-all', {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+    } finally {
+      setIsStopping(false)
+    }
+  }
+
   return (
     <MissionControlShell
       dot={dot}
       title={title}
       subtext={subtext}
-      applied={run.applied_count}
-      failed={run.failed_count}
-      attention={run.needs_attention_count}
+      applied={stats.applied}
+      failed={stats.failed}
+      attention={stats.needsAttention}
       progressPct={pct}
       showProgress={(run.total_jobs ?? 0) > 0}
+      trailingAction={
+        running && activeCount > 0 ? (
+          <button
+            type="button"
+            onClick={handleStopAll}
+            disabled={isStopping}
+            className="inline-flex h-9 items-center justify-center rounded-full border border-white/[0.10] bg-[#ef4444]/10 px-4 font-label text-sm font-semibold text-[#ef4444] transition-colors hover:bg-[#ef4444]/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isStopping ? 'Stopping…' : `Stop all (${activeCount})`}
+          </button>
+        ) : null
+      }
       completionOverlay={
         <AnimatePresence>
           {showCompletionOverlay ? (
@@ -152,8 +194,8 @@ export function MissionControlHeader({ run }: MissionControlHeaderProps) {
               className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-[2px]"
             >
               <p className="font-headline text-xl font-medium text-white">
-                Scout applied to {run.applied_count} internship
-                {run.applied_count === 1 ? '' : 's'}
+                Scout applied to {counts.applied} internship
+                {counts.applied === 1 ? '' : 's'}
               </p>
             </motion.div>
           ) : null}

@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    ports:
+      - '8000:8000'
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_started
+
+  # TODO: AI integration via docker models

@@ -1,128 +1,129 @@
 """
-Browser-use LLM that mirrors Scout's call_ai routing: Gemini chain → Groq chain.
+OpenAI-only LLM for Scout's browser apply agent (browser-use Agent).
+
+Other Scout features still use core.ai_router (Gemini / Groq). This module is
+only imported by services.browser_agent.
 """
 
 from __future__ import annotations
 
-import logging
 import os
-from dataclasses import dataclass, field
-from typing import Any, TypeVar, overload
+import re
 
 from browser_use.llm.exceptions import ModelProviderError
-from browser_use.llm.google.chat import ChatGoogle
-from browser_use.llm.groq.chat import ChatGroq
-from browser_use.llm.messages import BaseMessage
+from browser_use.llm.openai.chat import ChatOpenAI
 from browser_use.llm.views import ChatInvokeCompletion
-from pydantic import BaseModel
 
-from core.gemini_models import GEMINI_PRIMARY_CHAT_MODEL, gemini_chat_chain
-from core.groq_models import groq_chain_for_task, groq_model_label
-
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T", bound=BaseModel)
+BROWSER_AGENT_MODEL = "gpt-5.4-mini"
+# gpt-4o as fallback for non-parse failures (e.g. session loss, API errors).
+# gpt-4o-mini is too weak for multi-step agentic form-filling.
+BROWSER_AGENT_FALLBACK_MODEL = "gpt-4o"
 
 
-@dataclass
-class ScoutBrowserLLM:
-    """Gemini multi-model chain → Groq multi-model chain (same order as core.ai_router.call_ai)."""
+def _extract_first_json_object(text: str) -> str:
+    """
+    Return the first complete JSON object from text, stripping markdown fences
+    and any trailing content after the closing brace.
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+        text = re.sub(r"\n?```\s*$", "", text).strip()
+    start = text.find("{")
+    if start == -1:
+        return text
+    depth = 0
+    in_string = False
+    i = start
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and in_string:
+            i += 2
+            continue
+        if c == '"':
+            in_string = not in_string
+        elif not in_string:
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        i += 1
+    return text[start:]
 
-    _verified_api_keys: bool = False
-    task: str = "quality"
-    temperature: float = 0
-    gemini_api_key: str | None = field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
-    groq_api_key: str | None = field(default_factory=lambda: os.getenv("GROQ_API_KEY"))
 
-    @property
-    def model(self) -> str:
-        chain = gemini_chat_chain()
-        return chain[0][0] if chain else GEMINI_PRIMARY_CHAT_MODEL
+class _RobustChatOpenAI(ChatOpenAI):
+    """
+    Thin subclass of browser-use's ChatOpenAI that recovers from trailing-character
+    JSON parse errors without switching to a weaker fallback model.
 
-    @property
-    def model_name(self) -> str:
-        """Legacy alias expected by browser-use (cloud events, token tracking)."""
-        return self.model
+    Root cause: gpt-5.4-mini with strict json_schema mode occasionally appends a
+    brief comment after the closing brace, causing Pydantic's model_validate_json
+    to raise "Invalid JSON: trailing characters at line 2 column 1". This is
+    intermittent and independent of reasoning_models / use_thinking settings.
 
-    @property
-    def provider(self) -> str:
-        return "scout"
+    Recovery: on parse failure, makes a second call in text mode (no json_schema
+    constraint) and extracts the JSON object manually. The second call uses the
+    same capable model so agentic quality is preserved.
+    """
 
-    @property
-    def name(self) -> str:
-        return f"scout/{self.model}"
+    async def ainvoke(self, messages, output_format=None, **kwargs):
+        if output_format is None:
+            return await super().ainvoke(messages, output_format, **kwargs)
+        try:
+            return await super().ainvoke(messages, output_format, **kwargs)
+        except ModelProviderError as exc:
+            if "trailing characters" not in str(exc).lower():
+                raise
+            # Primary call returned valid JSON + trailing text that strict-mode
+            # should have prevented. Recover by getting the raw text and
+            # extracting the JSON object ourselves.
+            raw = await super().ainvoke(messages, output_format=None, **kwargs)
+            json_str = _extract_first_json_object(raw.completion)
+            parsed = output_format.model_validate_json(json_str)
+            return ChatInvokeCompletion(
+                completion=parsed,
+                usage=raw.usage,
+                stop_reason=raw.stop_reason,
+            )
 
-    @overload
-    async def ainvoke(
-        self,
-        messages: list[BaseMessage],
-        output_format: None = None,
-        **kwargs: Any,
-    ) -> ChatInvokeCompletion[str]: ...
 
-    @overload
-    async def ainvoke(
-        self,
-        messages: list[BaseMessage],
-        output_format: type[T],
-        **kwargs: Any,
-    ) -> ChatInvokeCompletion[T]: ...
+def ScoutBrowserLLM(*, temperature: float = 0, task: str = "") -> _RobustChatOpenAI:
+    """
+    Primary LLM for browser automation steps.
 
-    async def ainvoke(
-        self,
-        messages: list[BaseMessage],
-        output_format: type[T] | None = None,
-        **kwargs: Any,
-    ) -> ChatInvokeCompletion[T] | ChatInvokeCompletion[str]:
-        errors: list[str] = []
+    reasoning_models=[] prevents browser-use from treating gpt-5.4-mini as a
+    reasoning model (it substring-matches 'gpt-5' by default), which would strip
+    temperature and add reasoning_effort — neither of which we want for
+    deterministic, low-latency form filling.
+    """
+    _ = task
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY must be set for browser agent")
+    return _RobustChatOpenAI(
+        model=BROWSER_AGENT_MODEL,
+        api_key=api_key,
+        temperature=temperature,
+        reasoning_models=[],
+    )
 
-        if self.gemini_api_key:
-            for model_id, label in gemini_chat_chain():
-                llm = ChatGoogle(
-                    model=model_id,
-                    api_key=self.gemini_api_key,
-                    temperature=self.temperature,
-                )
-                try:
-                    result = await llm.ainvoke(messages, output_format, **kwargs)
-                    if model_id != self.model:
-                        logger.info("Browser agent using Gemini fallback %s", model_id)
-                    return result
-                except Exception as exc:
-                    msg = f"Gemini {label}: {exc}"
-                    errors.append(msg)
-                    logger.warning("Browser agent %s", msg)
-        else:
-            errors.append("Gemini not configured (missing GEMINI_API_KEY)")
 
-        if self.groq_api_key:
-            groq_chain = groq_chain_for_task(self.task)
-            for model_id in groq_chain:
-                label = groq_model_label(model_id)
-                llm = ChatGroq(
-                    model=model_id,
-                    api_key=self.groq_api_key,
-                    temperature=self.temperature,
-                )
-                try:
-                    result = await llm.ainvoke(messages, output_format, **kwargs)
-                    if model_id != groq_chain[0]:
-                        logger.info(
-                            "Browser agent using Groq fallback %s (task=%s)",
-                            model_id,
-                            self.task,
-                        )
-                    return result
-                except Exception as exc:
-                    msg = f"Groq {label}: {exc}"
-                    errors.append(msg)
-                    logger.warning("Browser agent %s", msg)
-        else:
-            errors.append("Groq not configured (missing GROQ_API_KEY)")
+def ScoutBrowserFallbackLLM(*, temperature: float = 0) -> _RobustChatOpenAI:
+    """
+    Fallback LLM for browser-use step-level failures unrelated to JSON parsing
+    (e.g. API errors, session loss, the primary model genuinely failing a step).
 
-        summary = "; ".join(errors[-4:]) if errors else "no providers configured"
-        raise ModelProviderError(
-            message=f"All Scout browser LLM fallbacks failed. {summary}",
-            status_code=503,
-            model=self.model,
-        )
+    Uses gpt-4o rather than gpt-4o-mini: gpt-4o-mini lacks the agentic reasoning
+    needed to navigate multi-step application forms reliably.
+    """
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY must be set for browser agent")
+    return _RobustChatOpenAI(
+        model=BROWSER_AGENT_FALLBACK_MODEL,
+        api_key=api_key,
+        temperature=temperature,
+        reasoning_models=[],
+    )

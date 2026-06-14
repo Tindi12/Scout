@@ -1,54 +1,966 @@
+import asyncio
+import base64
 import logging
 import os
+import re
+import shutil
 import tempfile
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
 
-from browser_use import Agent, Browser, BrowserProfile
-from browser_use.agent.views import AgentHistoryList
-from browserbase import Browserbase
+from pydantic import BaseModel
 
-from services.browser_llm import ScoutBrowserLLM
+from browser_use import Agent, Browser, BrowserProfile
+from browser_use.agent.views import ActionResult, AgentHistoryList
+from browser_use.tools.service import Tools
+from services.browser_llm import ScoutBrowserFallbackLLM, ScoutBrowserLLM
+
+from core.browserbase import (
+    create_session as create_browserbase_session,
+    release_session as release_browserbase_session,
+)
+from core.redis_client import cancel_key, get_redis, verification_code_key
+from core.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 BROWSERBASE_API_KEY = os.getenv("BROWSERBASE_API_KEY")
 BROWSERBASE_PROJECT_ID = os.getenv("BROWSERBASE_PROJECT_ID")
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-if not GEMINI_API_KEY and not GROQ_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY or GROQ_API_KEY must be set for browser agent")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY must be set for browser agent")
 if not BROWSERBASE_API_KEY:
     raise RuntimeError("BROWSERBASE_API_KEY not set")
 if not BROWSERBASE_PROJECT_ID:
     raise RuntimeError("BROWSERBASE_PROJECT_ID not set")
 
 
+_UPLOAD_STALE_NODE_TOKENS = (
+    "no node found for given backend id",
+    "setfileinputfiles",
+    "uploadfileevent",
+)
+_UPLOAD_FAILURE_TOKENS = (
+    "failed to upload file",
+    "action 'upload_file' failed",
+    "upload failed",
+    "file input",
+)
+_SESSION_LOSS_TOKENS = (
+    "websocket connection closed",
+    "http 410",
+    "reconnection failed",
+    "cdp still not connected",
+    "expected at least one handler to return a non-none result",
+    "browserstaterequestevent",
+    "cannot navigate - browser not connected",
+    "session with given id not found",
+    "tabclosedevent",
+    "failed to open a new tab",
+    "no valid agent focus available",
+    # CDP-level degradation: remote Chrome internal errors / DOM build timeouts.
+    # These show up when a long-lived Browserbase session starts to rot.
+    "-32603",
+    "capturescreenshot",
+    "ax_tree",
+    "build dom tree",
+    "cdp requests failed or timed out",
+)
+_STALE_CLICK_TOKENS = (
+    "index may be stale",
+    "element may not be interactable or visible",
+    "failed to click element",
+    "get fresh browser state before retrying",
+)
+_PHASE_WATCHDOG_TOKENS = (
+    "expected at least one handler to return a non-none result",
+    "browserstaterequestevent",
+)
+_TYPE_TIMEOUT_TOKENS = (
+    "typetextevent",
+    "timed out after 60.0s",
+    "failed to dispatch typetextevent",
+)
+_PHASE_MAX_SESSION_RESTARTS = 1
+_PHASE_MAX_STALE_CLICK_RETRIES = 1
+_PHASE_MAX_TYPE_TIMEOUT_RETRIES = 1
+# Free-text answers longer than this are entered by setting the element value via a
+# single JavaScript assignment instead of dispatching one key event per character.
+# Char-by-char typing over a remote Browserbase CDP link costs ~150ms/char (a 600-char
+# essay is 90s+) and wedges browser-use's event bus mid-type. Short fields (names,
+# emails, and city autocompletes that need real keystrokes to fire suggestions) stay
+# on the normal typing path, so this threshold must sit above any such short value.
+_LONG_TEXT_THRESHOLD = 100
+
+# A consolidated run does fill + upload + submit in one continuous agent.
+# Bound it by both a step budget and a hard wall-clock cap that sits comfortably
+# below the Celery soft_time_limit (900s), so the agent always yields a clean
+# result before Celery can SIGKILL it mid-action. The budget ladder must hold:
+# _AGENT_RUN_TIMEOUT < APPLY_PIPELINE_TIMEOUT (job_tasks) < Celery soft < hard
+# < Browserbase session timeout (core/browserbase). 840s covers a full multi-field
+# form + upload + submit (a clean Greenhouse run is ~25-35 steps) PLUS up to ~6
+# minutes of request_verification_code waiting for the user to paste an emailed
+# ATS code into the tracker.
+_AGENT_MAX_STEPS = 55
+_AGENT_RUN_TIMEOUT = 840  # seconds — hard cap on a single agent.run()
+_AGENT_STEP_TIMEOUT = 150  # seconds — per-step cap so a stuck step fails fast
+# Verification-code relay: one tool call polls Redis for this long (kept under
+# _AGENT_STEP_TIMEOUT so the step never times out), checking every few seconds.
+# The prompt allows up to 3 calls, giving the user ~6 minutes total to respond.
+_VERIFICATION_POLL_TIMEOUT = 120  # seconds per request_verification_code call
+_VERIFICATION_POLL_INTERVAL = 3  # seconds between Redis checks
+_VERIFICATION_MAX_CALLS = 3
+# Stop-all kill switch: a watcher polls the per-application Redis cancel flag this
+# often during agent.run() and calls agent.stop() when it appears, so Stop All
+# aborts a LIVE browser run within seconds instead of only blocking queued tasks.
+_CANCEL_POLL_INTERVAL = 3  # seconds
+
+
+class ApplyCancelled(Exception):
+    """User hit Stop All — the in-flight agent run was aborted cooperatively."""
+# Consecutive-failure budget. Lowered from the browser-use default (5) so a crashed
+# Browserbase tab (repeated CDP -32603 / state-build timeouts) aborts the run in ~2 min
+# and converts to a clean browser_session_lost retry, instead of spamming for 3+ min.
+# Safe to lower because the upload no longer needs retries (path is auto-resolved).
+_AGENT_MAX_FAILURES = 4
+# Cap on `browser.kill()` during session release. On a wedged tab, kill() awaits CDP
+# work that never completes — unbounded it hung the worker for ~7 minutes once. The
+# Browserbase REST release has already run by the time kill() is awaited, so a timeout
+# here loses nothing.
+_BROWSER_KILL_TIMEOUT = 10
+# The ATS records the basename of the injected resume as the filename. apply() writes
+# the temp file under a personalized name (resume_filename() below — e.g.
+# "Rabuor_Tindi_Resume.pdf"), so the basename is always presentable; a
+# generic/random name is a bot tell for spam scoring.
+
+
+class BrowserPhaseTimeout(Exception):
+    """Raised when an agent run exceeds its hard wall-clock budget (likely a CDP stall)."""
+
+
+# React/Vue/Angular-safe value injection. We use the prototype's NATIVE value setter so
+# the framework's change tracking fires, then dispatch input+change. Picks the correct
+# prototype for <textarea> vs <input> — browser-use's own _set_value_directly hardcodes
+# HTMLInputElement.prototype and silently no-ops on textareas, which is exactly where the
+# long essay answers live. `text` is passed as a call argument (not interpolated into the
+# source) so quotes/newlines in answers can't break the script.
+_JS_SET_VALUE = """
+function(text) {
+    const tag = (this.tagName || '').toLowerCase();
+    const proto = tag === 'textarea'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+    try { this.focus(); } catch (e) {}
+    setter.call(this, text);
+    this.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    this.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    return this.value;
+}
+"""
+
+
+async def _set_long_text_via_js(browser_session, index: int, text: str):
+    """
+    Enter a long text value with a single CDP JS value assignment.
+
+    Returns an ActionResult on success, or None if the caller should fall back to
+    character typing (element not found, not an <input>/<textarea>, or the value
+    didn't take — e.g. a masked/managed field or a contenteditable rich-text editor).
+    """
+    node = await browser_session.get_dom_element_by_index(index)
+    if node is None or node.tag_name not in ("input", "textarea"):
+        return None
+    cdp_session = await browser_session.cdp_client_for_node(node)
+    try:
+        await cdp_session.cdp_client.send.DOM.scrollIntoViewIfNeeded(
+            params={"backendNodeId": node.backend_node_id},
+            session_id=cdp_session.session_id,
+        )
+    except Exception:
+        pass  # node may still be settable even if scroll fails
+    resolved = await cdp_session.cdp_client.send.DOM.resolveNode(
+        params={"backendNodeId": node.backend_node_id},
+        session_id=cdp_session.session_id,
+    )
+    object_id = (resolved.get("object") or {}).get("objectId")
+    if not object_id:
+        return None
+    result = await cdp_session.cdp_client.send.Runtime.callFunctionOn(
+        params={
+            "objectId": object_id,
+            "functionDeclaration": _JS_SET_VALUE,
+            "arguments": [{"value": text}],
+            "returnByValue": True,
+        },
+        session_id=cdp_session.session_id,
+    )
+    actual = (result.get("result") or {}).get("value")
+    if not isinstance(actual, str) or text not in actual:
+        return None  # value didn't stick — let the caller type it instead
+    msg = f"Entered {len(text)} characters into element {index} (direct value set)."
+    return ActionResult(extracted_content=msg, long_term_memory=msg)
+
+
+# Seconds to wait after typing before the autocomplete dropdown is expected to render.
+_AUTOCOMPLETE_RENDER_WAIT = 1.3
+
+# Click the first visible suggestion in a location/typeahead dropdown, IN-PAGE, before
+# control returns to the agent loop. This is the whole fix for Lever's location field:
+# its Google-Places input CLEARS itself on blur unless a suggestion is committed, and a
+# 1-action-per-step agent always blurs it between steps. We commit the selection with a
+# real mousedown (fires before blur) + mouseup + click so the field keeps the value.
+# Selectors cover the common typeahead implementations; first match wins.
+_JS_CLICK_FIRST_SUGGESTION = """
+(() => {
+    const selectors = [
+        '.pac-item',
+        '[role="option"]',
+        'ul[role="listbox"] li',
+        '.dropdown-results li',
+        '.location-results li',
+        '.autocomplete-results li',
+        '.tt-suggestion',
+        '.aa-suggestion',
+        '.geosuggest__item',
+    ];
+    const isVisible = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    };
+    for (const sel of selectors) {
+        const els = Array.from(document.querySelectorAll(sel)).filter(isVisible);
+        if (els.length) {
+            const el = els[0];
+            el.scrollIntoView({ block: 'center' });
+            const opts = { bubbles: true, cancelable: true, view: window };
+            el.dispatchEvent(new MouseEvent('mousedown', opts));
+            el.dispatchEvent(new MouseEvent('mouseup', opts));
+            el.dispatchEvent(new MouseEvent('click', opts));
+            return (el.textContent || '').trim().slice(0, 80);
+        }
+    }
+    return null;
+})()
+"""
+
+
+def _is_autocomplete_location(node) -> bool:
+    """Heuristic: is this text input a location/city typeahead that needs a suggestion picked?"""
+    if node is None:
+        return False
+    attrs = node.attributes or {}
+    idv = (attrs.get("id") or "").lower()
+    namev = (attrs.get("name") or "").lower()
+    if "location" in idv or "location" in namev or namev in ("city", "current_location"):
+        return True
+    if attrs.get("aria-autocomplete") in ("list", "both"):
+        return True
+    if attrs.get("role") == "combobox":
+        return True
+    return False
+
+
+async def _fill_autocomplete_location(browser_session, node, original_fn, type_kwargs):
+    """
+    Type a city into an autocomplete field, then commit the first dropdown suggestion
+    in one atomic action so the field can't clear-on-blur before a suggestion is picked.
+
+    Returns an ActionResult. Falls back to the plain type result if no suggestion appears
+    (e.g. the field is actually plain text, or the dropdown didn't load) — the prompt then
+    tells the agent to skip it if it isn't required, instead of looping.
+    """
+    type_result = await original_fn(**type_kwargs)
+    await asyncio.sleep(_AUTOCOMPLETE_RENDER_WAIT)
+    try:
+        cdp_session = await browser_session.cdp_client_for_node(node)
+        res = await cdp_session.cdp_client.send.Runtime.evaluate(
+            params={"expression": _JS_CLICK_FIRST_SUGGESTION, "returnByValue": True},
+            session_id=cdp_session.session_id,
+        )
+        picked = (res.get("result") or {}).get("value")
+    except Exception as exc:
+        logger.warning("Location autocomplete selection failed (%s); leaving typed value.", exc)
+        picked = None
+    if picked:
+        msg = f"Selected location suggestion '{picked}'."
+        return ActionResult(extracted_content=msg, long_term_memory=msg)
+    return type_result
+
+
+def _build_apply_tools(application_id: str | None = None) -> Tools:
+    """
+    Build a browser-use Tools registry with two hardened overrides and one addition:
+
+    - `input` enters long free-text answers (essays/cover letters) with ONE JS value
+      assignment instead of char-by-char CDP typing, which is slow over a remote link
+      and deadlocks browser-use's event bus mid-type. Short values (incl. autocomplete
+      fields, which need real keystrokes) keep the built-in typing path.
+    - `upload_file` is replaced with a remote-safe implementation that injects the
+      file's bytes in-page instead of sending a local path over CDP
+      (see _install_robust_upload / _attach_resume_bytes).
+    - `request_verification_code` relays an emailed ATS code from the user mid-run
+      (see _install_verification_relay); needs `application_id` to address the
+      tracker card and the Redis mailbox.
+    """
+    tools = Tools()
+    registry = tools.registry.registry
+    original = registry.actions.get("input")
+    if original is None:
+        return tools
+    original_fn = original.function
+    param_model = original.param_model
+    description = original.description
+
+    @tools.registry.action(description, param_model=param_model)
+    async def input(  # noqa: A001 - must match the built-in action name being overridden
+        params,
+        browser_session,
+        has_sensitive_data: bool = False,
+        sensitive_data=None,
+    ):
+        type_kwargs = dict(
+            params=params,
+            browser_session=browser_session,
+            has_sensitive_data=has_sensitive_data,
+            sensitive_data=sensitive_data,
+        )
+
+        async def _type():
+            return await original_fn(**type_kwargs)
+
+        text = params.text or ""
+        index = getattr(params, "index", None)
+        if has_sensitive_data or index is None or not text:
+            return await _type()
+
+        node = None
+        try:
+            node = await browser_session.get_dom_element_by_index(index)
+        except Exception:
+            node = None
+
+        # Autocomplete location/city field: type + commit the first suggestion atomically,
+        # because these clear on blur if no suggestion is picked (the Lever location trap).
+        if node is not None and _is_autocomplete_location(node):
+            try:
+                return await _fill_autocomplete_location(
+                    browser_session, node, original_fn, type_kwargs
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Autocomplete location fill failed for index %s (%s); typing instead.",
+                    index,
+                    exc,
+                )
+                return await _type()
+
+        # Long free-text → one-shot JS value set (avoids slow/deadlock-prone char typing).
+        if len(text) > _LONG_TEXT_THRESHOLD:
+            try:
+                injected = await _set_long_text_via_js(browser_session, index, text)
+            except Exception as exc:
+                logger.warning(
+                    "JS value injection failed for index %s (%s); falling back to typing.",
+                    index,
+                    exc,
+                )
+                injected = None
+            if injected is not None:
+                return injected
+
+        return await _type()
+
+    _install_robust_upload(tools)
+    _install_verification_relay(tools, application_id)
+    return tools
+
+
+class _RequestCodeAction(BaseModel):
+    """Params for request_verification_code — both optional, used for the user-facing message."""
+
+    sent_to: str | None = None  # email address the page says the code went to
+    code_length: int | None = None  # number of characters/boxes the page expects
+
+
+def _install_verification_relay(tools: Tools, application_id: str | None) -> None:
+    """
+    Register `request_verification_code`: the live human-in-the-loop code relay.
+
+    ATSs (Greenhouse's "confirm you're human" wall) email the applicant a code at
+    submit time. The agent has no inbox, so this tool (1) flips the application row
+    to status='awaiting_code' with instructions — the tracker UI polls run status
+    every 5s and shows a CODE NEEDED input — and (2) polls Redis for the code the
+    user pastes (FastAPI drops it at apply:code:{application_id}). The code is
+    consumed on read and never persisted. One call waits ~2 minutes; the prompt
+    allows up to 3 calls before the agent gives up and reports the timeout.
+    """
+    call_count = {"n": 0}
+
+    verification_desc = (
+        "Request an emailed verification/security code from the user. Use ONLY when "
+        "the page says a code was emailed to the applicant (e.g. 'enter the code sent "
+        "to your email to confirm you are human'). Optionally pass sent_to (the email "
+        "address shown) and code_length (number of characters expected). Notifies the "
+        "user in Scout and waits up to 2 minutes for them to paste the code; returns "
+        f"the code if provided. May be called up to {_VERIFICATION_MAX_CALLS} times "
+        "total to keep waiting."
+    )
+
+    @tools.registry.action(verification_desc, param_model=_RequestCodeAction)
+    async def request_verification_code(params):
+        if not application_id:
+            return ActionResult(
+                error=(
+                    "Verification-code relay is unavailable for this run. Call done and "
+                    "report that an emailed verification code blocked submission."
+                )
+            )
+        call_count["n"] += 1
+        attempt = call_count["n"]
+        if attempt > _VERIFICATION_MAX_CALLS:
+            return ActionResult(
+                error=(
+                    "Verification-code wait budget exhausted. Call done now and report "
+                    "that the emailed verification code was not provided in time."
+                )
+            )
+
+        where = f" to {params.sent_to}" if params.sent_to else ""
+        length = f"{params.code_length}-character " if params.code_length else ""
+        message = (
+            f"The job site emailed a {length}verification code{where}. "
+            "Paste it into Scout's CODE NEEDED prompt within the next few minutes "
+            "so the application can be submitted."
+        )
+
+        def _mark_awaiting():
+            supabase.table("applications").update(
+                {"status": "awaiting_code", "error_message": message}
+            ).eq("id", application_id).execute()
+
+        await asyncio.to_thread(_mark_awaiting)
+        logger.info(
+            "Awaiting verification code for application %s (attempt %s/%s)",
+            application_id, attempt, _VERIFICATION_MAX_CALLS,
+        )
+
+        redis_client = get_redis()
+        key = verification_code_key(application_id)
+        stop_key = cancel_key(application_id)
+        deadline = asyncio.get_event_loop().time() + _VERIFICATION_POLL_TIMEOUT
+        code: str | None = None
+        while asyncio.get_event_loop().time() < deadline:
+            value = await asyncio.to_thread(redis_client.get, key)
+            if value and str(value).strip():
+                code = str(value).strip()
+                await asyncio.to_thread(redis_client.delete, key)
+                break
+            # Honor Stop All promptly even while parked waiting for a code — the
+            # run-level watcher has already called agent.stop(); ending this action
+            # lets the run loop exit at the step boundary instead of waiting out
+            # the full poll window.
+            try:
+                if await asyncio.to_thread(redis_client.get, stop_key):
+                    return ActionResult(
+                        error="Application stopped by the user. Call done immediately reporting the cancellation."
+                    )
+            except Exception:
+                pass
+            await asyncio.sleep(_VERIFICATION_POLL_INTERVAL)
+
+        if code:
+            def _mark_resumed():
+                supabase.table("applications").update(
+                    {"status": "in_progress", "error_message": None}
+                ).eq("id", application_id).execute()
+
+            await asyncio.to_thread(_mark_resumed)
+            logger.info("Verification code received for application %s", application_id)
+            msg = (
+                f"Verification code received: {code} — click the FIRST code input box, "
+                "then type the entire code in one input action (the boxes auto-advance). "
+                "Then continue the submission."
+            )
+            return ActionResult(extracted_content=msg, long_term_memory=msg)
+
+        if attempt >= _VERIFICATION_MAX_CALLS:
+            return ActionResult(
+                extracted_content=(
+                    "No code was provided after the final wait. Call done now and report "
+                    "that the emailed verification code was not provided in time."
+                )
+            )
+        return ActionResult(
+            extracted_content=(
+                f"No code yet (attempt {attempt} of {_VERIFICATION_MAX_CALLS}). The user "
+                "has been notified in the Scout tracker. Call request_verification_code "
+                "again to keep waiting."
+            )
+        )
+
+
+class _UploadResumeAction(BaseModel):
+    """Upload params with an OPTIONAL index so a path-only call is not schema-rejected."""
+
+    path: str
+    index: int | None = None
+
+
+# Attach a file to an <input type=file> entirely in-page. `this` is the input element;
+# the bytes arrive as base64 (call argument, never interpolated into source). A real
+# File set through DataTransfer + input/change events is what react-dropzone-style ATS
+# widgets listen for, and it works on hidden inputs without any clicking.
+_JS_ATTACH_FILE = """
+function(b64, name, mime) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], name, { type: mime }));
+    this.files = dt.files;
+    this.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    this.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    const f = this.files && this.files[0];
+    return { count: this.files ? this.files.length : 0, name: f ? f.name : '', size: f ? f.size : 0 };
+}
+"""
+
+
+async def _attach_resume_bytes(browser_session, node, path: str) -> ActionResult:
+    """
+    Attach the resume to a file input by injecting its BYTES in-page.
+
+    Never hand CDP a file path: DOM.setFileInputFiles resolves paths on the machine
+    running Chrome, and with a remote Browserbase browser the worker's local temp
+    path doesn't exist there. Chrome accepts it anyway ("Successfully uploaded" false
+    positive), the ATS JS then reads a phantom File, its S3 upload dies ('Failed to
+    fetch') and the pending blob read wedges the tab's CDP target — the 2026-06-11
+    Ashby failure. Base64-ing the bytes across CDP and rebuilding a real File in the
+    page sidesteps the filesystem entirely.
+
+    Verifies in-page that the input holds exactly one file of the expected size, so
+    "attached" can never be a false positive again.
+    """
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if not data:
+        return ActionResult(error=f"Resume file {path} is empty (0 bytes); nothing to upload.")
+    mime = "application/pdf" if path.lower().endswith(".pdf") else "application/octet-stream"
+
+    cdp_session = await browser_session.cdp_client_for_node(node)
+    resolved = await cdp_session.cdp_client.send.DOM.resolveNode(
+        params={"backendNodeId": node.backend_node_id},
+        session_id=cdp_session.session_id,
+    )
+    object_id = (resolved.get("object") or {}).get("objectId")
+    if not object_id:
+        return ActionResult(
+            error="Could not resolve the file input element; refresh page state and retry the upload once."
+        )
+    result = await cdp_session.cdp_client.send.Runtime.callFunctionOn(
+        params={
+            "objectId": object_id,
+            "functionDeclaration": _JS_ATTACH_FILE,
+            "arguments": [
+                {"value": base64.b64encode(data).decode("ascii")},
+                {"value": os.path.basename(path)},
+                {"value": mime},
+            ],
+            "returnByValue": True,
+        },
+        session_id=cdp_session.session_id,
+    )
+    attached = (result.get("result") or {}).get("value") or {}
+    if attached.get("count") == 1 and attached.get("size") == len(data):
+        msg = (
+            f"Attached resume as '{attached.get('name')}' ({attached.get('size')} bytes). "
+            f"The form should now show '{attached.get('name')}' — verify it does before submitting."
+        )
+        return ActionResult(extracted_content=msg, long_term_memory=msg)
+    return ActionResult(
+        error=f"Resume upload failed: file injection did not stick (input reports {attached})."
+    )
+
+
+async def _count_attached_files(browser_session, node) -> int | None:
+    """Number of files a file input currently holds, or None if unreadable."""
+    try:
+        cdp_session = await browser_session.cdp_client_for_node(node)
+        resolved = await cdp_session.cdp_client.send.DOM.resolveNode(
+            params={"backendNodeId": node.backend_node_id},
+            session_id=cdp_session.session_id,
+        )
+        object_id = (resolved.get("object") or {}).get("objectId")
+        if not object_id:
+            return None
+        result = await cdp_session.cdp_client.send.Runtime.callFunctionOn(
+            params={
+                "objectId": object_id,
+                "functionDeclaration": "function() { return this.files ? this.files.length : 0; }",
+                "returnByValue": True,
+            },
+            session_id=cdp_session.session_id,
+        )
+        value = (result.get("result") or {}).get("value")
+        return value if isinstance(value, int) else None
+    except Exception:
+        return None
+
+
+def _install_robust_upload(tools: Tools) -> None:
+    """
+    Replace `upload_file` with a remote-safe, byte-injecting implementation.
+
+    Two failure modes of the built-in are closed here:
+    - Schema fumbles: browser-use ships `upload_file` with an empty description and a
+      REQUIRED `index`, so a weaker model emits `{path}` with no index (schema-rejected)
+      or types the path into a text field. Our param model makes `index` optional and
+      the file input is auto-detected when it's omitted or wrong.
+    - Remote-path poison: the built-in forwards the LOCAL worker path to CDP
+      DOM.setFileInputFiles on the REMOTE browser (see _attach_resume_bytes). We inject
+      the file's bytes in-page instead, so no path ever crosses the wire.
+
+    Multi-input forms (resume + cover-letter upload): auto-detection prefers the first
+    EMPTY file input, so a second `upload_file` call lands on the cover-letter slot
+    instead of silently re-attaching to the already-filled resume input.
+    """
+    upload_desc = (
+        "Upload a local file (e.g. the resume) to a file input on the page. "
+        "Provide 'path' (the absolute file path). 'index' is optional — if omitted, "
+        "the first file input on the page that does not already hold a file is "
+        "auto-detected. For a form with a second upload field (e.g. a required "
+        "cover-letter upload), call this again with the 'index' of that field. "
+        "Do NOT type the path into a field and do NOT click a button that opens a "
+        "system file-picker dialog."
+    )
+
+    @tools.registry.action(upload_desc, param_model=_UploadResumeAction)
+    async def upload_file(  # noqa: A001 - must match the built-in action name being overridden
+        params,
+        browser_session,
+        available_file_paths,
+    ):
+        # Resolve the path: don't trust the model's typed path — it frequently
+        # mis-transcribes the random temp filename (e.g. tmpXXXXk4w.pdf -> ...k4f.pdf).
+        # If the given path isn't a known available file and there is exactly one
+        # available file (the resume), use that instead.
+        path = params.path
+        available = available_file_paths or []
+        if path not in available and len(available) == 1:
+            path = available[0]
+
+        # Resolve the ACTUAL <input type=file> node. A model-supplied index usually
+        # points at the visible dropzone/button, not the (often hidden) input itself.
+        try:
+            selector_map = await browser_session.get_selector_map()
+        except Exception:
+            selector_map = {}
+        file_input_node = None
+        if params.index is not None and params.index in selector_map:
+            try:
+                # browser-use's own resolution: walks the element's children/siblings
+                # for the file input the clicked-on widget wraps.
+                file_input_node = browser_session.find_file_input_near_element(
+                    selector_map[params.index]
+                )
+            except Exception:
+                file_input_node = None
+        if file_input_node is None:
+            # Prefer the first EMPTY file input. On forms with several upload fields
+            # (resume + cover letter), the resume input already holds a file by the
+            # time a second upload runs, so "first empty" targets the right slot even
+            # when the model omitted or fumbled the index. Fall back to the first
+            # file input of any state (e.g. a retry after a failed attach).
+            first_any = None
+            for element in selector_map.values():
+                if not browser_session.is_file_input(element):
+                    continue
+                if first_any is None:
+                    first_any = element
+                if await _count_attached_files(browser_session, element) == 0:
+                    file_input_node = element
+                    break
+            if file_input_node is None:
+                file_input_node = first_any
+        if file_input_node is None:
+            return ActionResult(
+                error="No file input element found on the page to upload the resume to."
+            )
+
+        try:
+            return await _attach_resume_bytes(browser_session, file_input_node, path)
+        except Exception as exc:
+            logger.warning("In-page resume injection failed: %s", exc)
+            return ActionResult(
+                error=f"Resume upload failed ({exc}); the resume is NOT attached. "
+                "Refresh page state and retry the upload once."
+            )
+
+
+def resume_filename(applicant_name: str | None) -> str:
+    """
+    ATS-visible resume filename, personalized from the applicant's name
+    ("Rabuor Tindi" -> "Rabuor_Tindi_Resume.pdf").
+
+    The ATS records the basename of the attached file. A generic or random name
+    (Resume.pdf, tmpXXXX.pdf) is both a bot tell for spam scoring and ugly for
+    recruiters.
+    """
+    stem = re.sub(r"[^A-Za-z0-9]+", "_", applicant_name or "").strip("_")
+    return f"{stem}_Resume.pdf" if stem else "Resume.pdf"
+
+
+def _national_phone(phone: str) -> str:
+    """
+    Return the national significant number (no country code, digits only).
+
+    intl-tel-input shows the country code (+1) outside the input box, so the
+    input itself must receive only the national digits — 10 for US numbers.
+
+    Examples:
+      +15742017358  →  5742017358
+      15742017358   →  5742017358
+       5742017358   →  5742017358
+      574-201-7358  →  5742017358
+    """
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits
+
+
+# Profile self-ID vocabulary → answer text for EEO/diversity form questions. Keys
+# mirror the profile page's select values (packages/web/app/(dashboard)/profile/
+# page.tsx: GENDER_OPTIONS / RACE_OPTIONS / VETERAN_OPTIONS / DISABILITY_OPTIONS).
+# A "prefer_not_to_say" profile value maps to the decline-style answer rather than
+# being omitted, so the agent declines explicitly instead of improvising.
+_SELF_ID_DECLINE = "Decline to self identify / I don't wish to answer"
+_GENDER_ANSWERS = {
+    "man": "Male / Man",
+    "woman": "Female / Woman",
+    "non_binary": "Non-binary",
+    "self_describe": "Prefer to self-describe",
+    "prefer_not_to_say": _SELF_ID_DECLINE,
+}
+_RACE_ANSWERS = {
+    "american_indian": "American Indian or Alaska Native",
+    "asian": "Asian",
+    "black": "Black or African American",
+    "hispanic": "Hispanic or Latino",
+    "pacific_islander": "Native Hawaiian or Other Pacific Islander",
+    "white": "White",
+    "two_or_more": "Two or more races",
+    "prefer_not_to_say": _SELF_ID_DECLINE,
+}
+_VETERAN_ANSWERS = {
+    "not_veteran": "I am not a protected veteran",
+    "veteran": "I identify as one or more of the classes of protected veteran",
+    "active_duty": "Active duty service member",
+    "prefer_not_to_say": _SELF_ID_DECLINE,
+}
+_DISABILITY_ANSWERS = {
+    "no": "No, I do not have a disability and have not had one in the past",
+    "yes": "Yes, I have a disability, or have had one in the past",
+    "prefer_not_to_say": _SELF_ID_DECLINE,
+}
+
+
+def _self_identification_lines(user_data: dict) -> list[str]:
+    """
+    Voluntary self-ID answers from the user's profile (the Diversity section),
+    mapped to the phrasing EEO dropdowns typically use. Only fields the user
+    actually filled are included — the STAGE 1 prompt tells the agent to decline
+    anything not listed, so an empty profile section degrades to decline-all.
+    """
+    def answer(field: str, mapping: dict[str, str]) -> str | None:
+        raw = (user_data.get(field) or "").strip()
+        if not raw:
+            return None
+        return mapping.get(raw, raw.replace("_", " "))
+
+    pairs = (
+        ("Gender", answer("gender_identity", _GENDER_ANSWERS)),
+        ("Race / Ethnicity", answer("race_ethnicity", _RACE_ANSWERS)),
+        ("Veteran status", answer("veteran_status", _VETERAN_ANSWERS)),
+        ("Disability status", answer("disability_status", _DISABILITY_ANSWERS)),
+    )
+    lines = [f"- {label}: {value}" for label, value in pairs if value]
+
+    # Many forms ask Hispanic/Latino as its own yes/no question, separate from race.
+    race = (user_data.get("race_ethnicity") or "").strip()
+    if race and race != "prefer_not_to_say":
+        lines.append(f"- Hispanic or Latino: {'Yes' if race == 'hispanic' else 'No'}")
+
+    if lines:
+        lines.insert(
+            0,
+            "Voluntary self-identification answers (match each to the closest option on the form):",
+        )
+    return lines
+
+
+def resolve_apply_company(*, job_url: str | None, job_company: str | None) -> str:
+    """
+    Resolve employer display name for answers_library placeholders.
+
+    Prefer jobs.company from Supabase; fall back to Greenhouse board slug in the URL.
+    """
+    company = (job_company or "").strip()
+    if company:
+        return company
+    if not job_url:
+        return "the company"
+    parsed = urlparse(job_url)
+    host = (parsed.netloc or "").lower()
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if "greenhouse.io" in host and path_parts:
+        slug = path_parts[0]
+        if slug not in {"jobs", "embed"} and not slug.isdigit():
+            return slug.replace("-", " ").title()
+    if parsed.netloc:
+        return parsed.netloc.split(".")[0].replace("-", " ").title()
+    return "the company"
+
+
+def _substitute_answer_placeholders(text: str, user_data: dict) -> str:
+    """Replace {company} / {role} in canned answers before sending to the browser agent."""
+    company = (user_data.get("company") or "the company").strip() or "the company"
+    role = (
+        user_data.get("job_title")
+        or user_data.get("role")
+        or "this role"
+    ).strip() or "this role"
+    return text.replace("{company}", company).replace("{role}", role)
+
+
+def _collect_errors(result: AgentHistoryList) -> list[str]:
+    return [error for error in result.errors() if error]
+
+
+def _is_stale_upload_failure(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    combined = " ".join(errors).lower()
+    if not any(token in combined for token in _UPLOAD_FAILURE_TOKENS):
+        return False
+    return any(token in combined for token in _UPLOAD_STALE_NODE_TOKENS)
+
+
+def _is_any_upload_failure(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    combined = " ".join(errors).lower()
+    return any(token in combined for token in _UPLOAD_FAILURE_TOKENS)
+
+
+def _is_stale_click_failure(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    combined = " ".join(errors).lower()
+    return all(
+        token in combined
+        for token in ("failed to click element", "stale")
+    ) or (
+        "failed to click element" in combined
+        and any(token in combined for token in _STALE_CLICK_TOKENS)
+    )
+
+
+def _phase_watchdog_triggered(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    combined = " ".join(errors).lower()
+    return any(token in combined for token in _PHASE_WATCHDOG_TOKENS)
+
+
+def _is_type_timeout_failure(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    combined = " ".join(errors).lower()
+    return any(token in combined for token in _TYPE_TIMEOUT_TOKENS)
+
+
+def _session_loss_reason(result: AgentHistoryList) -> str | None:
+    """
+    Return a human-readable reason if this phase indicates browser session loss.
+
+    We treat empty phase history as terminal for browser-use phase orchestration,
+    because follow-up phases cannot recover state.
+    """
+    if len(result) == 0:
+        return "Browser phase returned no actions/results (empty state)."
+    errors = _collect_errors(result)
+    if not errors:
+        # A wedged tab makes every state fetch fail with EMPTY error strings
+        # ("Result failed 1/5 times: " — nothing after the colon), and browser-use's
+        # consecutive-failures exit breaks out of the run loop WITHOUT appending
+        # anything to history. The phase then looks like a clean early finish that
+        # never called done, and the session-restart machinery built for exactly this
+        # case never fires. A healthy run can only end via done or max-steps, and the
+        # max-steps exit DOES append an error item — so done-less + error-less + short
+        # is unambiguously a dead tab. (The length guard protects against a future
+        # browser-use dropping that max-steps error item.)
+        if not result.is_done() and len(result) < _AGENT_MAX_STEPS:
+            return (
+                "Agent stopped early with no done and no recorded errors "
+                "(consecutive empty state-fetch failures — wedged tab/CDP)."
+            )
+        return None
+    combined = " ".join(errors).lower()
+    if any(token in combined for token in _SESSION_LOSS_TOKENS):
+        return errors[0]
+    return None
+
+
 def _interpret_agent_result(result: AgentHistoryList) -> dict:
     """Map browser-use AgentHistoryList to Scout apply result."""
-    if result.has_errors():
-        errors = [e for e in result.errors() if e]
-        combined = " ".join(errors).lower()
-        if any(
-            token in combined
-            for token in ("429", "resource_exhausted", "quota", "rate limit")
-        ):
-            return {
-                "success": False,
-                "error": "AI quota exceeded — try again later or enable billing on Gemini",
-                "needs_attention": False,
-            }
-        return {
-            "success": False,
-            "error": errors[0] if errors else "Browser agent failed",
-            "needs_attention": False,
-        }
-
     agent_success = result.is_successful()
+    final = (result.final_result() or "").lower()
     if agent_success is True:
         return {"success": True, "error": None, "needs_attention": False}
+
+    # Explicit blocks the agent reported in its done text. Classified BEFORE the
+    # generic done(success=False) arm — which is where they land otherwise — so they
+    # reach the user as needs_attention instead of an opaque failure. Neither may
+    # ever auto-retry: re-filling and re-submitting a spam-flagged application only
+    # reinforces the ATS's flag (and risks a duplicate application reaching the
+    # employer if the block was soft).
+    if "spam" in final:
+        return {
+            "success": False,
+            "error_code": "spam_blocked",
+            "error": "The job site rejected the submission as possible spam",
+            "needs_attention": True,
+            "attention_question": (
+                "The job site flagged this application as possible spam and refused it. "
+                "Please submit it manually on the job page."
+            ),
+        }
+    if "verification code" in final or "security code" in final:
+        return {
+            "success": False,
+            "error_code": "verification_code_timeout",
+            "error": "The job site required an emailed verification code that was not provided in time",
+            "needs_attention": True,
+            "attention_question": (
+                "This site emailed a verification code during submission, but no code was "
+                "entered in time. Re-run this application and watch the tracker for the "
+                "CODE NEEDED prompt — or apply manually."
+            ),
+        }
+    if "captcha" in final:
+        return {
+            "success": False,
+            "error_code": "captcha_detected",
+            "error": "CAPTCHA detected",
+            "needs_attention": True,
+            "attention_question": "CAPTCHA verification required — please apply manually",
+        }
+
     if agent_success is False:
         return {
             "success": False,
@@ -56,13 +968,38 @@ def _interpret_agent_result(result: AgentHistoryList) -> dict:
             "needs_attention": False,
         }
 
-    final = (result.final_result() or "").lower()
-    if "captcha" in final:
+    if result.has_errors():
+        errors = _collect_errors(result)
+        combined = " ".join(errors).lower()
+        if _is_stale_upload_failure(errors):
+            return {
+                "success": False,
+                "error_code": "resume_upload_failed",
+                "error": "Resume upload target became stale during upload. Retrying may succeed.",
+                "needs_attention": False,
+            }
+        if _is_any_upload_failure(errors):
+            return {
+                "success": False,
+                "error_code": "resume_upload_failed",
+                "error": errors[0] if errors else "Resume upload failed",
+                "needs_attention": False,
+            }
+        if any(
+            token in combined
+            for token in ("429", "resource_exhausted", "quota", "rate limit")
+        ):
+            return {
+                "success": False,
+                "error_code": "ai_quota_exceeded",
+                "error": "AI quota exceeded — try again later or enable billing on Gemini",
+                "needs_attention": False,
+            }
         return {
             "success": False,
-            "error": "CAPTCHA detected",
-            "needs_attention": True,
-            "attention_question": "CAPTCHA verification required — please apply manually",
+            "error_code": "browser_agent_failed",
+            "error": errors[0] if errors else "Browser agent failed",
+            "needs_attention": False,
         }
 
     success = any(
@@ -74,43 +1011,47 @@ def _interpret_agent_result(result: AgentHistoryList) -> dict:
             "confirmed",
         )
     )
+    if success:
+        return {
+            "success": True,
+            "error_code": None,
+            "error": None,
+            "needs_attention": False,
+        }
+    # Submission could not be confirmed. The agent may have actually submitted —
+    # we just did not see confirmation evidence. Auto-retrying here would re-fill
+    # and re-submit the SAME job, producing duplicate applications to the employer.
+    # Route to manual verification instead of retrying.
     return {
-        "success": success,
-        "error": None if success else "Could not confirm submission",
-        "needs_attention": False,
+        "success": False,
+        "error_code": "submission_unconfirmed",
+        "error": "Could not confirm the application was submitted",
+        "needs_attention": True,
+        "attention_question": (
+            "Could not confirm this application was submitted. Please verify it on the "
+            "job site (and only re-apply if it did not go through) to avoid a duplicate."
+        ),
     }
 
 
 class BrowserUseAgent:
     def __init__(self):
-        self.llm = ScoutBrowserLLM(task="quality", temperature=0)
-        self.bb = Browserbase(api_key=BROWSERBASE_API_KEY)
+        self.llm = ScoutBrowserLLM(temperature=0)
+        self.fallback_llm = ScoutBrowserFallbackLLM(temperature=0)
 
-    async def apply(self, job_url: str, user_data: dict, resume_pdf: bytes) -> dict:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(resume_pdf)
-            tmp_path = tmp.name
-
-        session = self.bb.sessions.create(project_id=BROWSERBASE_PROJECT_ID, browser_settings={"session_timeout": 900})
-        logger.info(f"Browserbase session created: {session.id}")
-
-        browser = Browser(
-            browser_profile=BrowserProfile(cdp_url=session.connect_url)
-        )
-
-        # Extract user info
+    def _build_applicant_context(self, user_data: dict, tmp_path: str) -> str:
         name_parts = user_data.get("name", "").split(" ", 1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        # Format answers library
         answers = user_data.get("answers_library", {})
         answers_text = "\n".join([
-            f"- {k.replace('_', ' ').title()}: {v}"
+            f"- {k.replace('_', ' ').title()}: {_substitute_answer_placeholders(str(v), user_data)}"
             for k, v in answers.items() if v
         ])
+        company = (user_data.get("company") or "the company").strip() or "the company"
+        job_title = (user_data.get("job_title") or user_data.get("role") or "").strip()
 
-        # Work authorization mapping
         work_auth = user_data.get("work_authorization", "us_citizen")
         auth_map = {
             "us_citizen": "Yes, I am authorized to work in the US",
@@ -126,7 +1067,7 @@ class BrowserUseAgent:
         state = user_data.get("address_state") or ""
         street = user_data.get("address_street") or ""
         zipcode = user_data.get("address_zip") or ""
-        address_lines = "\n        ".join(
+        address_lines = "\n".join(
             line
             for line in (
                 f"- Street address: {street}" if street else "",
@@ -137,53 +1078,369 @@ class BrowserUseAgent:
             if line
         )
 
-        task = f"""
-        Go to this job application URL and complete the application form:
+        phone_national = _national_phone(user_data.get("phone_number", ""))
+        details = [
+            f"- First name: {first_name}",
+            f"- Last name: {last_name}",
+            f"- Email: {user_data.get('email', '')}",
+            f"- Phone (10-digit national number, no country code): {phone_national}",
+        ]
+        if address_lines:
+            details.extend(address_lines.splitlines())
+        trailing = [
+            f"- Country: {user_data.get('address_country') or 'United States'}",
+            f"- LinkedIn: {user_data.get('linkedin_url', '')}",
+            f"- GitHub: {user_data.get('github_url', '')}",
+            f"- University/School: {user_data.get('school', '')}",
+            f"- Degree: {user_data.get('degree_type', '')}",
+            f"- GPA: {user_data.get('gpa', '')}",
+            f"- Resume file path: {tmp_path}",
+            f"- Work authorization question: {auth_answer}",
+            f"- Requires visa sponsorship: {sponsorship}",
+            f"- Employer for this application: {company}",
+        ]
+        if job_title:
+            trailing.append(f"- Role for this application: {job_title}")
+        trailing.extend(_self_identification_lines(user_data))
+        trailing.extend([
+            "For any open-ended text questions use these answers (placeholders already resolved):",
+            answers_text if answers_text else "Use professional, concise answers based on the applicant's background.",
+        ])
+        details.extend(trailing)
+        return "\n".join(details)
+
+    def _build_apply_task(self, job_url: str, context: str, resume_filename: str) -> str:
+        return f"""
+        Go to this job application URL and complete the ENTIRE application:
         {job_url}
 
-        Fill in the following information:
-        - First name: {first_name}
-        - Last name: {last_name}
-        - Email: {user_data.get('email', '')}
-        - Phone: {user_data.get('phone_number', '')}
-        {address_lines}
-        - Country: {user_data.get('address_country') or 'United States'}
-        - LinkedIn: {user_data.get('linkedin_url', '')}
-        - GitHub: {user_data.get('github_url', '')}
-        - University/School: {user_data.get('school', '')}
-        - Degree: {user_data.get('degree_type', '')}
-        - GPA: {user_data.get('gpa', '')}
+        The applicant data below is a reference pool — use it to answer whatever fields THIS SPECIFIC FORM shows.
+        Not every form has fields for every piece of data. Do not expect to use all of it.
+        {context}
 
-        Upload the resume from this file path: {tmp_path}
+        Complete the application in this order. Do not skip ahead to a later stage before the earlier one is done.
 
-        Work authorization question: {auth_answer}
-        Requires visa sponsorship: {sponsorship}
+        STAGE 1 — Fill the visible fields:
+        - Look at the actual form fields first. Only fill fields that are VISIBLE and PRESENT on this specific form.
+        - If a field type (address, GPA, school, LinkedIn, etc.) does not appear on the form, skip it entirely. Do not search for it or waste steps on it.
+        - For phone fields with an intl-tel-input prefix (flag/country-code shown OUTSIDE the input box): type the Phone value from the data exactly as given — it is already the 10-digit national number with no country code or leading 1. Do not prepend 1 or +1.
+        - Select radio buttons, checkboxes, and dropdown options by CLICKING them. Never type text into a radio, checkbox, or dropdown — only into text inputs and textareas.
+        - For autocomplete location fields: if the applicant data includes a State, type "City, State" (e.g. "Rochester, Indiana") ONCE — otherwise the city alone — wait for the suggestion list, then click the suggestion that matches the applicant's state. Do not separately fill state or country fields that the autocomplete already populated.
+        - For voluntary self-identification questions (gender, race/ethnicity, Hispanic/Latino, veteran status, disability): use the "Voluntary self-identification answers" from the applicant data, picking the closest matching option the form offers. For any self-ID question the data does NOT cover, select the "Decline to self identify" / "I don't wish to answer" style option. Never guess or invent a demographic answer.
+        - Do NOT retype a field that does not retain your value. If a field looks empty after ONE attempt and it is not required (no red asterisk / "required" marker), skip it and move on — do not loop on it. Only an autocomplete-location field should be retried, and only by clicking a suggestion (not by retyping).
+        - Before clicking any dropdown option, refresh page state after typing and use the latest index only. Never reuse an index after any input, scroll, or click.
 
-        For any open-ended text questions use these answers:
-        {answers_text if answers_text else "Use professional, concise answers based on the applicant's background."}
+        STAGE 2 — Upload the resume:
+        - Only after the visible non-resume fields are filled, upload the resume as its own isolated action.
+        - To upload, call the `upload_file` action with the resume file path. The file input may be hidden — you do NOT need to click anything first; `upload_file` will locate it. You may omit the index.
+        - Do NOT type the file path into any field. Do NOT click a button that opens a system file-picker dialog (you cannot interact with OS dialogs).
+        - The uploaded file will appear on the form as "{resume_filename}". Verify that filename / an upload confirmation is visible before moving on.
+        - If the form has a REQUIRED cover-letter FILE-upload field, upload the same resume file into it with a SECOND `upload_file` action, passing the `index` of the cover-letter upload field. Skip cover-letter uploads that are optional. (A cover-letter TEXT box is not an upload — treat it as an open-ended text question in STAGE 1/3.)
 
-        Important instructions:
-        - Fill every required field before submitting
-        - If you see a CAPTCHA, stop and report it
-        - Upload the resume file when asked
-        - Click submit only when all required fields are filled
-        - Confirm the application was submitted successfully
-        - If the form has errors after submit, report what fields failed
+        STAGE 3 — Submit:
+        - Fill any remaining VISIBLE required fields that are still empty. Skip applicant data that has no corresponding form field.
+        - Submit the application only after the resume upload is confirmed and all visible required fields are satisfied.
+        - Confirm success with clear evidence (submitted / thank you / application received) and state that evidence in your done message.
+        - If after submitting a banner says the application was flagged as possible spam, wait 15 seconds, then click Submit ONCE more (the banner itself invites a resubmit). If it is flagged as spam again, stop — do not keep retrying — and call done reporting the spam block (include the word "spam" in your done text).
+        - If submitting reveals an emailed verification/security code step ("a code was sent to <email>"), call `request_verification_code` (pass sent_to and code_length from the page). When it returns the code: click the FIRST code input box, type the ENTIRE code in one input action, then continue the submission. If it returns without a code, call it again — up to 3 calls total. If no code arrives after 3 calls, call done reporting that the emailed verification code was not provided (include the words "verification code").
+        - If blocked by a CAPTCHA, report it explicitly in your done message.
+
+        Notes:
+        - You may put a long free-text answer in a single input action; the system enters it instantly in one shot. Do not break essay answers up yourself.
+        - Call done only when the application has been submitted and you have seen a confirmation, OR when you are genuinely blocked (CAPTCHA, or required info you cannot answer from the data).
         """
 
-        try:
-            agent = Agent(task=task, llm=self.llm, browser=browser, available_file_paths=[tmp_path])
-            result = await agent.run()
-            logger.info(f"Agent completed for {job_url}: {result}")
+    async def _run_phase(
+        self,
+        *,
+        phase_name: str,
+        task: str,
+        browser: Browser,
+        tmp_path: str,
+        max_actions_per_step: int = 5,
+        step_timeout: int = _AGENT_STEP_TIMEOUT,
+        application_id: str | None = None,
+    ) -> AgentHistoryList:
+        logger.info("Starting browser agent phase: %s", phase_name)
+        agent = Agent(
+            task=task,
+            llm=self.llm,
+            fallback_llm=self.fallback_llm,
+            use_thinking=False,
+            browser=browser,
+            tools=_build_apply_tools(application_id),
+            available_file_paths=[tmp_path],
+            max_actions_per_step=max_actions_per_step,
+            max_failures=_AGENT_MAX_FAILURES,
+            step_timeout=step_timeout,
+            include_attributes=[ 'id', 'type', 'aria-label', 'aria-labelledby',
+                                 'placeholder', 'role', 'aria-required', 'value',
+                                 'aria-expanded', 'name'],
+        )
+        # Stop-all watcher: aborts this live run within seconds of the user
+        # clicking Stop All (the DB-status check alone only blocks queued tasks).
+        cancelled = asyncio.Event()
+        watcher: asyncio.Task | None = None
+        if application_id:
+            redis_client = get_redis()
+            flag_key = cancel_key(application_id)
 
-            if not isinstance(result, AgentHistoryList):
-                result = AgentHistoryList.model_validate(result)
+            async def _watch_cancel():
+                while True:
+                    await asyncio.sleep(_CANCEL_POLL_INTERVAL)
+                    try:
+                        flagged = await asyncio.to_thread(redis_client.get, flag_key)
+                    except Exception:
+                        continue  # Redis blip — keep watching
+                    if flagged:
+                        cancelled.set()
+                        logger.info(
+                            "Stop-all received — stopping agent run for application %s",
+                            application_id,
+                        )
+                        agent.stop()
+                        return
+
+            watcher = asyncio.create_task(_watch_cancel())
+
+        try:
+            result = await asyncio.wait_for(
+                agent.run(max_steps=_AGENT_MAX_STEPS),
+                timeout=_AGENT_RUN_TIMEOUT,
+            )
+        except asyncio.TimeoutError as exc:
+            # A CDP stall/deadlock (e.g. screenshot -32603, ax_tree hang) can make
+            # agent.run() spin forever. Surface it as a recoverable session loss
+            # instead of letting the worker hang until Celery SIGKILLs it.
+            logger.error(
+                "Phase %s exceeded hard timeout of %ss; treating as browser session loss.",
+                phase_name,
+                _AGENT_RUN_TIMEOUT,
+            )
+            raise BrowserPhaseTimeout(
+                f"Phase {phase_name} exceeded {_AGENT_RUN_TIMEOUT}s hard timeout"
+            ) from exc
+        finally:
+            if watcher is not None:
+                watcher.cancel()
+        if cancelled.is_set():
+            raise ApplyCancelled(
+                f"Application {application_id} cancelled by user mid-run (stop-all)"
+            )
+        if not isinstance(result, AgentHistoryList):
+            result = AgentHistoryList.model_validate(result)
+        logger.info("Completed browser agent phase %s: %s", phase_name, result)
+        return result
+
+    async def _run_phase_resilient(
+        self,
+        *,
+        phase_name: str,
+        task: str,
+        browser: Browser,
+        session_id: str | None,
+        tmp_path: str,
+        max_actions_per_step: int,
+        step_timeout: int,
+        retry_stale_click_once: bool = False,
+        retry_type_timeout_once: bool = False,
+        application_id: str | None = None,
+    ) -> tuple[AgentHistoryList, Browser, str | None]:
+        """
+        Run a phase with bounded self-healing:
+        - fast session recreation on hard session-loss/watchdog failures
+        - one targeted rerun for stale click failures
+        """
+        stale_click_retries = 0
+        type_timeout_retries = 0
+        session_restarts = 0
+        attempt = 0
+        current_browser = browser
+        current_session_id = session_id
+        current_task = task
+
+        while True:
+            attempt += 1
+            result = await self._run_phase(
+                phase_name=f"{phase_name}_attempt_{attempt}",
+                task=current_task,
+                browser=current_browser,
+                tmp_path=tmp_path,
+                max_actions_per_step=max_actions_per_step,
+                step_timeout=step_timeout,
+                application_id=application_id,
+            )
+            errors = _collect_errors(result)
+            session_loss = _session_loss_reason(result)
+            watchdog_hit = _phase_watchdog_triggered(errors)
+
+            if session_loss or watchdog_hit:
+                if session_restarts >= _PHASE_MAX_SESSION_RESTARTS:
+                    return result, current_browser, current_session_id
+                logger.warning(
+                    "Phase %s detected unstable browser state (%s). Recreating session and rerunning.",
+                    phase_name,
+                    session_loss or "watchdog-triggered repeated state failures",
+                )
+                await self._release_browser_session(current_browser, current_session_id)
+                new_session, current_browser = self._new_browser_session()
+                current_session_id = new_session.id
+                session_restarts += 1
+                continue
+
+            if retry_stale_click_once and _is_stale_click_failure(errors):
+                if stale_click_retries >= _PHASE_MAX_STALE_CLICK_RETRIES:
+                    return result, current_browser, current_session_id
+                stale_click_retries += 1
+                logger.warning(
+                    "Phase %s stale click failure detected; retrying with fresh-state click guidance.",
+                    phase_name,
+                )
+                current_task = (
+                    f"{task}\n\n"
+                    "Retry guidance:\n"
+                    "- The previous attempt failed due to a stale click target.\n"
+                    "- Re-read page state immediately before every dropdown-option click.\n"
+                    "- Never click an option index from earlier state.\n"
+                )
+                continue
+
+            if retry_type_timeout_once and _is_type_timeout_failure(errors):
+                if type_timeout_retries >= _PHASE_MAX_TYPE_TIMEOUT_RETRIES:
+                    return result, current_browser, current_session_id
+                type_timeout_retries += 1
+                logger.warning(
+                    "Phase %s text-entry timeout detected; retrying with break-up guidance.",
+                    phase_name,
+                )
+                current_task = (
+                    f"{task}\n\n"
+                    "Retry guidance:\n"
+                    "- A previous text entry timed out. Re-select the field, then enter the answer again.\n"
+                    "- If it times out a second time, split the answer across two shorter input actions into the same field (use clear=False on the second so it appends).\n"
+                    "- After entering, verify the field shows the text before moving on.\n"
+                )
+                continue
+
+            return result, current_browser, current_session_id
+
+    def _new_browser_session(self):
+        # Hardened, shared session config (timeout/region/block_ads/captcha) lives
+        # in core.browserbase so every session is configured identically.
+        session = create_browserbase_session()
+        browser = Browser(
+            browser_profile=BrowserProfile(
+                cdp_url=session.connect_url,
+                keep_alive=True,
+            )
+        )
+        return session, browser
+
+    async def _release_browser_session(self, browser: Browser | None, session_id: str | None) -> None:
+        # REST release FIRST: a plain HTTPS call that terminates the remote browser even
+        # when the tab's CDP target is wedged. The old kill-then-release order deadlocked
+        # for ~7 minutes on a wedged socket (kill() awaits CDP/event-bus work with no
+        # timeout) and the release never ran — a zombie session burning plan minutes
+        # until the 900s session timeout. Releasing remotely also closes the WebSocket,
+        # so the bounded local kill() below fails fast instead of hanging. The release
+        # call is synchronous on purpose: it cannot be interrupted by task cancellation.
+        if session_id:
+            release_browserbase_session(session_id)
+        if browser is not None:
+            try:
+                await asyncio.wait_for(browser.kill(), timeout=_BROWSER_KILL_TIMEOUT)
+            except Exception:
+                logger.debug(
+                    "browser.kill() failed or timed out after REST release", exc_info=True
+                )
+
+    async def apply(
+        self,
+        job_url: str,
+        user_data: dict,
+        resume_pdf: bytes,
+        application_id: str | None = None,
+    ) -> dict:
+        # Own temp dir so the file's basename is the personalized, ATS-visible
+        # filename (e.g. Rabuor_Tindi_Resume.pdf) — the byte-inject upload names the
+        # in-page File after the basename, and a generic/random name is a spam tell.
+        tmp_dir = tempfile.mkdtemp(prefix="scout_resume_")
+        upload_filename = resume_filename(user_data.get("name"))
+        tmp_path = os.path.join(tmp_dir, upload_filename)
+        with open(tmp_path, "wb") as fh:
+            fh.write(resume_pdf)
+
+        session = None
+        active_session_id: str | None = None
+        browser = None
+
+        context = self._build_applicant_context(user_data, tmp_path)
+        apply_task = self._build_apply_task(job_url, context, upload_filename)
+
+        try:
+            session, browser = self._new_browser_session()
+            active_session_id = session.id if session else None
+
+            # One continuous agent run: fill → upload → submit. A single CDP init and
+            # one continuous agent memory keep the Browserbase session lifetime short,
+            # which is the main defense against the mid-application session rot that
+            # the old per-phase handoff caused.
+            result, browser, current_session_id = await self._run_phase_resilient(
+                phase_name="apply",
+                task=apply_task,
+                browser=browser,
+                session_id=active_session_id,
+                tmp_path=tmp_path,
+                max_actions_per_step=1,
+                step_timeout=_AGENT_STEP_TIMEOUT,
+                retry_stale_click_once=True,
+                retry_type_timeout_once=True,
+                application_id=application_id,
+            )
+            active_session_id = current_session_id
+
+            session_loss = _session_loss_reason(result)
+            if session_loss:
+                return {
+                    "success": False,
+                    "portal": "browser_use",
+                    "session_id": active_session_id,
+                    "error_code": "browser_session_lost",
+                    "error": f"Browser session lost: {session_loss}",
+                    "needs_attention": False,
+                }
 
             outcome = _interpret_agent_result(result)
             return {
                 "portal": "browser_use",
-                "session_id": session.id,
+                "session_id": active_session_id,
                 **outcome,
+            }
+
+        except ApplyCancelled:
+            # Stop-all: the row is already failed/cancelled_by_user (the endpoint set
+            # it); just report the cancellation so job_tasks takes its no-retry path.
+            logger.info("Apply run cancelled by user (application %s)", application_id)
+            return {
+                "success": False,
+                "portal": "browser_use",
+                "session_id": active_session_id,
+                "error_code": "cancelled_by_user",
+                "error": "stopped from the tracker",
+                "needs_attention": False,
+            }
+
+        except BrowserPhaseTimeout as e:
+            # Hard wall-clock cap hit (likely a CDP stall). Report as a recoverable
+            # session loss so the task is retried with backoff rather than failed hard.
+            logger.error(f"BrowserUseAgent timed out: {e}")
+            return {
+                "success": False,
+                "portal": "browser_use",
+                "session_id": active_session_id,
+                "error_code": "browser_session_lost",
+                "error": f"Browser session lost: {e}",
+                "needs_attention": False,
             }
 
         except Exception as e:
@@ -191,27 +1448,14 @@ class BrowserUseAgent:
             return {
                 "success": False,
                 "portal": "browser_use",
-                "session_id": session.id if session else None,
+                "session_id": active_session_id,
                 "error": str(e),
                 "needs_attention": False
             }
 
         finally:
-            try:
-                await browser.stop()
-            except Exception:
-                pass
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
-            try:
-                self.bb.sessions.update(
-                    session.id,
-                    status="REQUEST_RELEASE"
-                )
-            except Exception:
-                pass
+            await self._release_browser_session(browser, active_session_id)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 browser_agent = BrowserUseAgent()

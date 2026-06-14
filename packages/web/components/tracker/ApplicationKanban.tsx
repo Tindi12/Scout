@@ -2,7 +2,14 @@
 
 import * as Accordion from '@radix-ui/react-accordion'
 import { ChevronDown } from 'lucide-react'
-import { useMemo } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import { PortalBadge } from '@/components/tracker/PortalBadge'
 import {
@@ -46,12 +53,14 @@ type ApplicationKanbanProps = {
   apps: ApplicationRecord[]
   loading?: boolean
   onAnswerClick?: (app: ApplicationRecord) => void
+  onCodeClick?: (app: ApplicationRecord) => void
 }
 
 export function ApplicationKanban({
   apps,
   loading = false,
   onAnswerClick,
+  onCodeClick,
 }: ApplicationKanbanProps) {
   const grouped = useMemo(() => {
     const map: Record<KanbanColumnId, ApplicationRecord[]> = {
@@ -65,6 +74,11 @@ export function ApplicationKanban({
       const status = (app.status || 'queued') as KanbanColumnId
       if (status in map) {
         map[status].push(app)
+      } else if (app.status === 'awaiting_code') {
+        // Time-sensitive live state: surface it in ATTENTION (which auto-opens)
+        // so the Enter Email Code card is impossible to miss. When the code is
+        // sent the status flips back to in_progress and the card moves home.
+        map.needs_attention.push(app)
       } else {
         map.queued.push(app)
       }
@@ -97,6 +111,7 @@ export function ApplicationKanban({
             label={col.label}
             cards={grouped[col.id]}
             onAnswerClick={onAnswerClick}
+            onCodeClick={onCodeClick}
           />
         ))}
       </div>
@@ -143,6 +158,7 @@ export function ApplicationKanban({
                       key={app.id}
                       app={app}
                       onAnswerClick={onAnswerClick}
+                      onCodeClick={onCodeClick}
                     />
                   ))
                 )}
@@ -155,22 +171,119 @@ export function ApplicationKanban({
   )
 }
 
+// Same scroll affordance as the jobs page columns (JobColumn.tsx): capped-height
+// column, hidden scrollbar, and a gradient fade + chevron button while there is
+// more content below.
+const SCROLL_STEP_PX = 400
+const BOTTOM_THRESHOLD_PX = 24
+
+function ScrollFadeArea({
+  count,
+  label,
+  children,
+}: {
+  count: number
+  label: string
+  children: ReactNode
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const [hasOverflow, setHasOverflow] = useState(false)
+  const [atBottom, setAtBottom] = useState(true)
+
+  const recompute = useCallback(() => {
+    const node = scrollRef.current
+    if (!node) return
+    const overflows =
+      node.scrollHeight - node.clientHeight > BOTTOM_THRESHOLD_PX
+    setHasOverflow(overflows)
+    setAtBottom(
+      !overflows ||
+        node.scrollTop + node.clientHeight >=
+          node.scrollHeight - BOTTOM_THRESHOLD_PX,
+    )
+  }, [])
+
+  // Recheck when the card set changes.
+  useEffect(() => {
+    recompute()
+  }, [count, recompute])
+
+  // ResizeObserver catches column-height changes (viewport resize etc.).
+  useEffect(() => {
+    const node = scrollRef.current
+    if (!node) return
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', recompute)
+      return () => window.removeEventListener('resize', recompute)
+    }
+    const observer = new ResizeObserver(() => recompute())
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [recompute])
+
+  const handleScroll = useCallback(() => {
+    const node = scrollRef.current
+    if (!node) return
+    setAtBottom(
+      node.scrollTop + node.clientHeight >=
+        node.scrollHeight - BOTTOM_THRESHOLD_PX,
+    )
+  }, [])
+
+  const handleScrollDown = useCallback(() => {
+    scrollRef.current?.scrollBy({ top: SCROLL_STEP_PX, behavior: 'smooth' })
+  }, [])
+
+  const showFade = hasOverflow && !atBottom
+
+  return (
+    <div className="relative flex-1 overflow-hidden">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="absolute inset-0 overflow-y-auto pb-16 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </div>
+
+      {showFade ? (
+        <button
+          type="button"
+          aria-label={`Scroll ${label} column down`}
+          onClick={handleScrollDown}
+          className="group pointer-events-auto absolute inset-x-0 bottom-0 flex h-24 cursor-pointer items-end justify-center pb-3 transition-opacity duration-200"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(8,8,8,0) 0%, rgba(8,8,8,0.85) 60%, #080808 100%)',
+          }}
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.1] bg-[#1a1a1a] text-white shadow-[0_4px_14px_rgba(0,0,0,0.45)] transition-all duration-200 group-hover:translate-y-0.5 group-hover:border-[#FF6733]/40 group-hover:bg-[#FF6733] group-hover:shadow-[0_0_22px_rgba(255,103,51,0.45)]">
+            <ChevronDown className="h-4 w-4" strokeWidth={2.25} />
+          </span>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function KanbanColumn({
   columnId,
   label,
   cards,
   onAnswerClick,
+  onCodeClick,
 }: {
   columnId: KanbanColumnId
   label: string
   cards: ApplicationRecord[]
   onAnswerClick?: (app: ApplicationRecord) => void
+  onCodeClick?: (app: ApplicationRecord) => void
 }) {
   const color = STATUS_CONFIG[columnId].color
 
   return (
     <div
-      className="flex min-w-0 flex-col gap-2 border-t-[3px] pt-3"
+      className="flex h-[calc(100vh-300px)] min-h-[420px] min-w-0 flex-col gap-2 border-t-[3px] pt-3"
       style={{ borderTopColor: color }}
     >
       <div className="flex items-center gap-2 px-0.5">
@@ -183,15 +296,22 @@ function KanbanColumn({
         </span>
         <span className="font-mono text-[10px] text-[#444]">{cards.length}</span>
       </div>
-      <div className="flex flex-col gap-2">
-        {cards.length === 0 ? (
-          <p className="py-8 text-center font-mono text-[#333]">—</p>
-        ) : (
-          cards.map((app) => (
-            <KanbanCard key={app.id} app={app} onAnswerClick={onAnswerClick} />
-          ))
-        )}
-      </div>
+      <ScrollFadeArea count={cards.length} label={label}>
+        <div className="flex flex-col gap-2">
+          {cards.length === 0 ? (
+            <p className="py-8 text-center font-mono text-[#333]">—</p>
+          ) : (
+            cards.map((app) => (
+              <KanbanCard
+                key={app.id}
+                app={app}
+                onAnswerClick={onAnswerClick}
+                onCodeClick={onCodeClick}
+              />
+            ))
+          )}
+        </div>
+      </ScrollFadeArea>
     </div>
   )
 }
@@ -199,9 +319,11 @@ function KanbanColumn({
 function KanbanCard({
   app,
   onAnswerClick,
+  onCodeClick,
 }: {
   app: ApplicationRecord
   onAnswerClick?: (app: ApplicationRecord) => void
+  onCodeClick?: (app: ApplicationRecord) => void
 }) {
   const portal = detectPortalFromUrl(app.job_url)
   const ts = app.applied_at ?? app.created_at ?? null
@@ -226,6 +348,16 @@ function KanbanCard({
           className="mt-2 w-full rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 py-1.5 font-label text-[11px] font-semibold text-[#f59e0b] transition-colors hover:bg-[#f59e0b]/15"
         >
           Answer Required
+        </button>
+      ) : null}
+
+      {app.status === 'awaiting_code' ? (
+        <button
+          type="button"
+          onClick={() => onCodeClick?.(app)}
+          className="mt-2 w-full rounded-lg border border-[#22d3ee]/25 bg-[#22d3ee]/10 py-1.5 font-label text-[11px] font-semibold text-[#22d3ee] transition-colors hover:bg-[#22d3ee]/15"
+        >
+          Enter Email Code
         </button>
       ) : null}
 

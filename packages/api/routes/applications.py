@@ -5,8 +5,15 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from core.auth import verify_resume_api_user
+from core.redis_client import (
+    CANCEL_FLAG_TTL,
+    VERIFICATION_CODE_TTL,
+    cancel_key,
+    get_redis,
+    verification_code_key,
+)
 from core.supabase_client import supabase
-from tasks.job_tasks import apply_to_job_task
+from tasks.job_tasks import apply_to_job_task, finalize_run_if_complete
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +22,12 @@ router = APIRouter()
 
 class AnswerRequest(BaseModel):
     answer: str = Field(..., min_length=1)
+
+class VerificationCodeRequest(BaseModel):
+    code: str = Field(..., min_length=3, max_length=32)
+
+class StopAllResponse(BaseModel):
+    stopped: int
 
 
 def _fetch_user_row(clerk_id: str) -> dict:
@@ -149,3 +162,144 @@ async def answer_application(
                 detail="Application is not awaiting an answer",
             ) from exc
         raise
+
+
+@router.post("/{application_id}/verification-code")
+async def submit_verification_code(
+    application_id: str,
+    body: VerificationCodeRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """
+    Live relay for ATS-emailed verification codes (e.g. Greenhouse's "confirm you're
+    human" wall). Unlike /answer, this does NOT re-queue the application — the agent
+    is still mid-run, parked in status 'awaiting_code', polling Redis for this code.
+    A re-run would just trigger a fresh code email, so the only useful path is
+    injecting the code into the live session.
+    """
+    clerk_id = current_user["sub"]
+    code = body.code.strip().replace(" ", "")
+    if not code:
+        raise HTTPException(status_code=422, detail="Code is empty")
+
+    def _submit() -> dict:
+        user_row = _fetch_user_row(clerk_id)
+        user_id = user_row["id"]
+
+        app_result = (
+            supabase.table("applications")
+            .select("id, user_id, status")
+            .eq("id", application_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        app_data = app_result.data
+        if not app_data:
+            raise ValueError("not_found")
+        if app_data.get("status") != "awaiting_code":
+            raise ValueError("not_awaiting_code")
+
+        get_redis().setex(
+            verification_code_key(application_id), VERIFICATION_CODE_TTL, code
+        )
+        # Flip back to in_progress right away so the tracker shows the agent resuming
+        # (the agent's poll would do this too, but only on its next ~3s tick).
+        supabase.table("applications").update({
+            "status": "in_progress",
+            "error_message": None,
+        }).eq("id", application_id).eq("user_id", user_id).execute()
+
+        return {"success": True, "application_id": application_id}
+
+    try:
+        return await run_in_threadpool(_submit)
+    except ValueError as exc:
+        error_code = str(exc)
+        if error_code == "user_not_found":
+            raise HTTPException(status_code=404, detail="User not found") from exc
+        if error_code == "not_found":
+            raise HTTPException(status_code=404, detail="Application not found") from exc
+        if error_code == "not_awaiting_code":
+            raise HTTPException(
+                status_code=422,
+                detail="This application is no longer awaiting a verification code",
+            ) from exc
+        raise
+
+
+@router.post("/stop-all", response_model=StopAllResponse)
+async def stop_all_applications(
+    current_user: dict = Depends(verify_resume_api_user),
+) -> StopAllResponse:
+    """
+    Stop all active applications for the current user.
+
+    Two signals per application: the row is marked failed/cancelled_by_user (catches
+    tasks that have not started yet — the apply task checks it at step 0), and a Redis
+    cancel flag is set (catches tasks ALREADY mid-run — the browser agent's watcher
+    polls it every few seconds and aborts the live browser session).
+    """
+    clerk_id = current_user["sub"]
+
+    def _stop() -> StopAllResponse:
+        user_row = (
+            supabase.table("users")
+            .select("id")
+            .eq("clerk_id", clerk_id)
+            .single()
+            .execute()
+        )
+        if not user_row.data:
+            return StopAllResponse(stopped=0)
+
+        user_id = user_row.data["id"]
+
+        # Supabase Python client update doesn't provide affected rowcount consistently across versions.
+        # We'll fetch candidate ids first, then update.
+        active = (
+            supabase.table("applications")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("status", ["queued", "in_progress", "awaiting_code"])
+            .execute()
+        )
+        ids = [row["id"] for row in (active.data or []) if isinstance(row, dict) and row.get("id")]
+        if not ids:
+            return StopAllResponse(stopped=0)
+
+        # Capture the affected runs before flipping the apps, so we can finalize them.
+        runs_resp = (
+            supabase.table("applications")
+            .select("scout_run_id")
+            .in_("id", ids)
+            .execute()
+        )
+        run_ids = {
+            r["scout_run_id"]
+            for r in (runs_resp.data or [])
+            if isinstance(r, dict) and r.get("scout_run_id")
+        }
+
+        supabase.table("applications").update({
+            "status": "failed",
+            "error_message": "cancelled_by_user",
+        }).in_("id", ids).eq("user_id", user_id).execute()
+
+        # Kill switches for runs already in flight: the agent's in-run watcher
+        # polls these and calls agent.stop() within seconds.
+        try:
+            redis_client = get_redis()
+            for app_id in ids:
+                redis_client.setex(cancel_key(app_id), CANCEL_FLAG_TTL, "1")
+        except Exception:
+            logger.warning("Could not set stop-all cancel flags", exc_info=True)
+
+        # Finalize any run whose applications are now all terminal — otherwise the run
+        # lingers at status='running' and the UI keeps showing it as active.
+        for run_id in run_ids:
+            finalize_run_if_complete(run_id)
+
+        return StopAllResponse(stopped=len(ids))
+
+    return await run_in_threadpool(_stop)

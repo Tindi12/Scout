@@ -11,12 +11,11 @@ const webDir = path.join(root, 'packages', 'web')
 const apiDir = path.join(root, 'packages', 'api')
 const isWin = process.platform === 'win32'
 
-const python = isWin
-  ? path.join(apiDir, '.venv', 'Scripts', 'python.exe')
-  : path.join(apiDir, '.venv', 'bin', 'python')
+// API runs via uv, which manages the .venv from pyproject.toml + uv.lock.
+const uvCmd = isWin ? 'uv.exe' : 'uv'
 
 const uvicornArgs = [
-  '-m',
+  'run',
   'uvicorn',
   'main:app',
   '--host',
@@ -84,7 +83,7 @@ logDev('Starting web (Next.js) + api (uvicorn)…')
 logDev('API reload watches: routes, services, core, tasks only')
 
 start('web', webDir, isWin ? 'pnpm.cmd' : 'pnpm', ['dev'], isWin)
-start('api', apiDir, python, uvicornArgs, false)
+start('api', apiDir, uvCmd, uvicornArgs, false)
 
 let shuttingDown = false
 function shutdown() {

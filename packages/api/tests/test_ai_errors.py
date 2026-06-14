@@ -30,9 +30,10 @@ def test_groq_chains_include_high_tpm_models():
 
 def test_gemini_chat_chain_power_then_volume():
     chain = [m for m, _ in gemini_chat_chain()]
-    assert chain[0] == "gemini-3-flash-preview"
+    assert chain[0] == "gemini-3.5-flash"
+    assert "gemini-3.5-flash" in chain
     assert "gemini-2.5-flash" in chain
-    assert "gemini-3.1-flash-lite-preview" in chain
+    assert "gemini-3.1-flash-lite" in chain
     assert "gemma-4-31b-it" in chain
     assert len(GEMINI_CHAT_MODELS) >= 6
 

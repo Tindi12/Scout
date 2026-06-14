@@ -32,16 +32,23 @@ export async function GET(
     return NextResponse.json({ detail: 'run_id is required' }, { status: 400 })
   }
 
-  const upstream = await fetch(
-    `${getApiBaseUrl()}/jobs/scout/runs/${encodeURIComponent(run_id.trim())}`,
-    {
-      headers: {
-        'X-Scout-Internal': secret,
-        'X-Clerk-User-Id': userId,
+  let upstream: Response
+  try {
+    upstream = await fetch(
+      `${getApiBaseUrl()}/jobs/scout/runs/${encodeURIComponent(run_id.trim())}`,
+      {
+        headers: {
+          'X-Scout-Internal': secret,
+          'X-Clerk-User-Id': userId,
+        },
+        cache: 'no-store',
       },
-      cache: 'no-store',
-    },
-  )
+    )
+  } catch {
+    // FastAPI down or mid-reload — the tracker polls every 5s, so a clean 502
+    // self-heals; an unhandled throw here does not.
+    return NextResponse.json({ detail: 'API server unreachable' }, { status: 502 })
+  }
 
   const text = await upstream.text()
   const ct = upstream.headers.get('Content-Type') || 'application/json'

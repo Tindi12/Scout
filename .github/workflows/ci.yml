@@ -54,28 +54,19 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       # Backend checks
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.11'
-
-      - name: Sanity-check requirements encoding
-        run: |
-          python - <<'PY'
-          p = "packages/api/requirements.txt"
-          b = open(p, "rb").read()
-          if b"\x00" in b:
-            raise SystemExit(f"{p} contains NUL bytes (bad encoding like UTF-16). Re-save as UTF-8.")
-          print("requirements.txt looks OK")
-          PY
+          version: "0.11.16"
+          enable-cache: true
 
       - name: Install FastAPI dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r packages/api/requirements.txt
+        run: uv sync --frozen --no-dev
+        working-directory: packages/api
 
       - name: Python syntax check
-        run: python -m compileall packages/api
+        run: uv run python -m compileall .
+        working-directory: packages/api
 
       - name: FastAPI health check
         run: |
@@ -95,7 +86,7 @@ jobs:
           # Required at import time via core.embedding_service
           export OPENAI_API_KEY=ci-placeholder-openai
 
-          uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
+          uv run uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!
 
           for i in $(seq 1 30); do

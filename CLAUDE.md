@@ -16,7 +16,7 @@ supabase/       → README only; schema on Supabase (scout-dev), not repo SQL fi
 - Backend: FastAPI, Python 3.11, Supabase Python, Groq, Gemini
 - Database: Supabase (PostgreSQL + pgvector + RLS)
 - Queue: Celery + Redis
-- Browser automation: Browserbase + Playwright
+- Browser automation: Browserbase + browser-use AI agent (services/browser_agent.py — agent-only; per-ATS Playwright adapters were removed)
 - Payments: Stripe (not yet implemented — Epic 10)
 - Deployment: Vercel (web) + Railway (api)
 
@@ -106,7 +106,13 @@ pnpm dev:api   # :8000 — no reload during long AI requests: pnpm --filter api 
 pnpm dev:concurrent
 
 # FastAPI only (reloads routes/services/core/tasks only, not data/ or tests/)
-cd packages/api && .venv\Scripts\activate && pnpm dev
+cd packages/api && pnpm dev   # uv run manages the .venv — no activation needed
+
+# Python deps (uv) — run from packages/api
+uv sync          # create/refresh .venv from pyproject.toml + uv.lock
+uv add <pkg>     # add a dependency (updates pyproject.toml + uv.lock)
+uv lock          # re-resolve the lockfile
+# Celery worker:  uv run celery -A core.celery_app worker --pool=solo -l info
 
 # TypeScript check
 pnpm --filter web tsc --noEmit
@@ -115,12 +121,12 @@ pnpm --filter web tsc --noEmit
 pnpm --filter web lint
 
 # Python syntax check
-python -m compileall packages/api
+cd packages/api && uv run python -m compileall .
 ```
 
 ## What NOT to Do
 - Never hardcode localhost URLs in committed code
-- Never use system Python — always activate .venv first
+- Never use system Python — run Python through uv (uv run / uv sync manage .venv)
 - Never store secrets in code — only os.getenv()
 - Never call AI outside of ai_router.py
 - Never skip ownership verification on database queries

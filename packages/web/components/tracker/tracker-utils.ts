@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 export type AppStatus =
   | 'queued'
   | 'in_progress'
+  | 'awaiting_code'
   | 'applied'
   | 'failed'
   | 'needs_attention'
@@ -36,6 +37,7 @@ export type ScoutRun = {
 export type ApplicationRecord = {
   id: string
   job_id: string
+  scout_run_id?: string | null
   status: string | null
   company: string
   role: string
@@ -46,18 +48,56 @@ export type ApplicationRecord = {
   updated_at?: string | null
 }
 
+/**
+ * The scout_run_id of any application that is still actively being worked
+ * (queued / in_progress / awaiting_code). Lets the tracker find the ongoing run
+ * with no ?run_id= in the URL and nothing in sessionStorage — e.g. a brand-new
+ * tab opened mid-run.
+ */
+export function activeRunIdFromApps(apps: ApplicationRecord[]): string | null {
+  const active = apps.find(
+    (a) =>
+      (a.status === 'in_progress' ||
+        a.status === 'awaiting_code' ||
+        a.status === 'queued') &&
+      a.scout_run_id,
+  )
+  return active?.scout_run_id ?? null
+}
+
 export const TERMINAL_STATUSES = new Set<AppStatus>([
   'applied',
   'failed',
   'needs_attention',
 ])
 
+const KNOWN_APP_STATUSES = new Set<string>([
+  'queued',
+  'in_progress',
+  'awaiting_code',
+  'applied',
+  'failed',
+  'needs_attention',
+])
+
+/**
+ * Runtime guard for statuses coming off the API. The DB column is unconstrained
+ * text, so a bare `as AppStatus` cast lets unknown values straight into
+ * STATUS_CONFIG lookups — `undefined.color` then crashes the whole tracker
+ * (seen live when an old bundle met the then-new 'awaiting_code'). Anything
+ * unrecognized renders as queued instead of throwing.
+ */
+export function normalizeAppStatus(status: string | null | undefined): AppStatus {
+  return status && KNOWN_APP_STATUSES.has(status) ? (status as AppStatus) : 'queued'
+}
+
 export const STATUS_ORDER: Record<AppStatus, number> = {
-  in_progress: 0,
-  queued: 1,
-  needs_attention: 2,
-  applied: 3,
-  failed: 4,
+  awaiting_code: 0,
+  in_progress: 1,
+  queued: 2,
+  needs_attention: 3,
+  applied: 4,
+  failed: 5,
 }
 
 export const STATUS_CONFIG: Record<
@@ -66,6 +106,7 @@ export const STATUS_CONFIG: Record<
 > = {
   queued: { color: '#444', label: 'QUEUED', columnColor: '#444' },
   in_progress: { color: '#FF6733', label: 'APPLYING', columnColor: '#FF6733' },
+  awaiting_code: { color: '#22d3ee', label: 'CODE NEEDED', columnColor: '#22d3ee' },
   applied: { color: '#22c55e', label: 'APPLIED', columnColor: '#22c55e' },
   failed: { color: '#ef4444', label: 'FAILED', columnColor: '#ef4444' },
   needs_attention: {
@@ -89,13 +130,50 @@ export function isRunRunning(run: ScoutRun): boolean {
   return run.status === 'pending' || run.status === 'running'
 }
 
+export type RunStatusCounts = {
+  applied: number
+  failed: number
+  attention: number
+}
+
+/**
+ * Header counts derived from the actual application rows. The scout_runs
+ * counter columns (applied_count etc.) are bumped by RPC calls that several
+ * failure paths never make (cancellations, kill artifacts, backfills), so they
+ * can read 0 while the kanban — which counts rows — shows the truth. Always
+ * derive from rows; fall back to the stored counters only when the payload has
+ * no applications attached. `attention` includes awaiting_code: it needs the
+ * user's eyes just as urgently.
+ */
+export function runStatusCounts(run: ScoutRun): RunStatusCounts {
+  if (run.applications.length === 0) {
+    return {
+      applied: run.applied_count ?? 0,
+      failed: run.failed_count ?? 0,
+      attention: run.needs_attention_count ?? 0,
+    }
+  }
+  let applied = 0
+  let failed = 0
+  let attention = 0
+  for (const a of run.applications) {
+    if (a.status === 'applied') applied += 1
+    else if (a.status === 'failed') failed += 1
+    else if (a.status === 'needs_attention' || a.status === 'awaiting_code')
+      attention += 1
+  }
+  return { applied, failed, attention }
+}
+
 export function progressPct(run: ScoutRun): number {
   const total = run.total_jobs ?? 0
   if (total <= 0) return 0
   const done =
-    (run.applied_count ?? 0) +
-    (run.failed_count ?? 0) +
-    (run.needs_attention_count ?? 0)
+    run.applications.length > 0
+      ? run.applications.filter((a) => TERMINAL_STATUSES.has(a.status)).length
+      : (run.applied_count ?? 0) +
+        (run.failed_count ?? 0) +
+        (run.needs_attention_count ?? 0)
   return Math.round((done / total) * 100)
 }
 
@@ -112,7 +190,11 @@ export function lifetimeStatsFromApps(
 ): LifetimeOverviewStats {
   const applied = apps.filter((a) => a.status === 'applied').length
   const failed = apps.filter((a) => a.status === 'failed').length
-  const needsAttention = apps.filter((a) => a.status === 'needs_attention').length
+  // awaiting_code counts as attention — it's shown in the kanban ATTENTION
+  // column and needs the user's eyes just as urgently.
+  const needsAttention = apps.filter(
+    (a) => a.status === 'needs_attention' || a.status === 'awaiting_code',
+  ).length
   const terminal = applied + failed + needsAttention
   const progressPct =
     terminal > 0 ? Math.round((applied / terminal) * 100) : 0
@@ -131,7 +213,7 @@ export function getRunTitle(run: ScoutRun): string {
     const allFailed =
       run.applications.length > 0 &&
       run.applications.every((a) => a.status === 'failed')
-    if (allFailed && (run.applied_count ?? 0) === 0) return 'Run failed'
+    if (allFailed) return 'Run failed'
     return 'Run complete'
   }
   return 'Scout is applying...'
@@ -230,7 +312,7 @@ export function useScoutRun(runId: string | null, onRunUpdated?: () => void) {
           ...data,
           applications: (data.applications ?? []).map((a) => ({
             ...a,
-            status: (a.status || 'queued') as AppStatus,
+            status: normalizeAppStatus(a.status),
           })),
         }
         runRef.current = normalized
@@ -264,6 +346,11 @@ export function useScoutRun(runId: string | null, onRunUpdated?: () => void) {
 
 const APPLICATIONS_MAX_AUTH_RETRIES = 4
 const APPLICATIONS_AUTH_RETRY_MS = 600
+// Transient failures (FastAPI mid-reload in dev, brief network blips) self-heal in
+// seconds — keep showing skeletons and retry quietly instead of flashing the
+// "Could not load applications" screen on the first miss.
+const APPLICATIONS_MAX_TRANSIENT_RETRIES = 5
+const APPLICATIONS_TRANSIENT_RETRY_MS = 1500
 
 export type UseApplicationsResult = {
   apps: ApplicationRecord[]
@@ -284,6 +371,7 @@ export function useApplications(): UseApplicationsResult {
   const requestIdRef = useRef(0)
   const appsRef = useRef<ApplicationRecord[]>([])
   const authRetryRef = useRef(0)
+  const transientRetryRef = useRef(0)
 
   useEffect(() => {
     appsRef.current = apps
@@ -310,6 +398,24 @@ export function useApplications(): UseApplicationsResult {
         setIsFetching(true)
       }
 
+      // Retry quietly on transient failures (5xx / network). While retrying with
+      // no cached data, hasLoaded stays false so the skeleton shows instead of
+      // the error screen; the screen only appears once retries are exhausted.
+      const scheduleTransientRetry = (): boolean => {
+        if (transientRetryRef.current >= APPLICATIONS_MAX_TRANSIENT_RETRIES) {
+          return false
+        }
+        transientRetryRef.current += 1
+        keepFetching = true
+        setError('Reconnecting…')
+        window.setTimeout(() => {
+          if (requestId === requestIdRef.current) {
+            void fetchApps({ background: hasCachedData })
+          }
+        }, APPLICATIONS_TRANSIENT_RETRY_MS)
+        return true
+      }
+
       try {
         const res = await fetch('/api/applications', {
           cache: 'no-store',
@@ -331,6 +437,8 @@ export function useApplications(): UseApplicationsResult {
             return
           }
 
+          if (res.status !== 401 && scheduleTransientRetry()) return
+
           setError(
             res.status === 401
               ? 'Your session expired. Refresh the page or sign in again.'
@@ -347,11 +455,13 @@ export function useApplications(): UseApplicationsResult {
         if (requestId !== requestIdRef.current) return
 
         authRetryRef.current = 0
+        transientRetryRef.current = 0
         setApps(list)
         setError(null)
         setHasLoaded(true)
       } catch {
         if (requestId !== requestIdRef.current) return
+        if (scheduleTransientRetry()) return
         setError('Network error. Check your connection and try again.')
         if (!hasCachedData) setApps([])
         setHasLoaded(true)
@@ -366,6 +476,7 @@ export function useApplications(): UseApplicationsResult {
 
   const refetch = useCallback(
     (background = true) => {
+      transientRetryRef.current = 0
       void fetchApps({ background })
     },
     [fetchApps],
@@ -374,6 +485,7 @@ export function useApplications(): UseApplicationsResult {
   useEffect(() => {
     if (!authLoaded) return
     authRetryRef.current = 0
+    transientRetryRef.current = 0
     void fetchApps({ background: false })
   }, [authLoaded, isSignedIn, fetchApps])
 
