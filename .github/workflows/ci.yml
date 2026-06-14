@@ -85,6 +85,10 @@ jobs:
           export ADZUNA_APP_KEY=ci-placeholder-adzuna
           # Required at import time via core.embedding_service
           export OPENAI_API_KEY=ci-placeholder-openai
+          # Required at import time via routes.applications → tasks.job_tasks
+          # → services.browser_agent → core.browserbase
+          export BROWSERBASE_API_KEY=ci-placeholder-browserbase
+          export BROWSERBASE_PROJECT_ID=ci-placeholder-project
 
           uv run uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!
