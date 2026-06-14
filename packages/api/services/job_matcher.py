@@ -30,6 +30,34 @@ def _fetch_jobs_table_scan(limit: int) -> list[dict]:
     return response.data or []
 
 
+def _get_applied_job_ids(user_id: str) -> set[str]:
+    """Job ids the user has already successfully applied to (status='applied').
+
+    Failed / needs_attention applications are intentionally excluded so those jobs
+    reappear in matches and can be retried.
+    """
+    try:
+        response = (
+            supabase.table("applications")
+            .select("job_id")
+            .eq("user_id", user_id)
+            .eq("status", "applied")
+            .execute()
+        )
+    except APIError as e:
+        logger.warning(
+            "applied-jobs lookup failed (%s); not excluding any",
+            getattr(e, "message", e),
+        )
+        return set()
+
+    return {
+        row["job_id"]
+        for row in (response.data or [])
+        if isinstance(row, dict) and row.get("job_id")
+    }
+
+
 def _get_candidate_jobs(
     resume_embedding: list[float],
     requires_sponsorship: bool,
@@ -235,6 +263,7 @@ async def match_jobs(
     requires_sponsorship: bool = False,
     limit: int = 50,
     *,
+    user_id: str | None = None,
     target_role_ids: list[str] | None = None,
     target_role_label: str | None = None,
     resume_quality_score: int | None = None,
@@ -251,10 +280,16 @@ async def match_jobs(
         limit,
     )
 
+    applied_job_ids: set[str] = set()
+    if user_id:
+        applied_job_ids = await run_in_threadpool(_get_applied_job_ids, user_id)
+
     resume_skills_lower = _extract_resume_skills(parsed_resume)
 
     scored: list[dict] = []
     for job in candidates:
+        if job.get("id") in applied_job_ids:
+            continue
         if requires_sponsorship and job.get("visa_sponsorship") == "no":
             continue
         result = _score_job(

@@ -94,6 +94,7 @@ async def get_job_matches(
         is_pro=user_row["is_pro"],
         requires_sponsorship=user_row["requires_sponsorship"],
         limit=request.limit,
+        user_id=user_row["id"],
         target_role_ids=[str(r) for r in target_roles if r],
         target_role_label=analysis.get("target_role"),
         resume_quality_score=analysis.get("score"),
