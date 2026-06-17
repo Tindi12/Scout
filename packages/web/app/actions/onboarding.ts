@@ -25,10 +25,19 @@ export type TargetRole =
 export type OnboardingData = {
   name: string
   school: string
-  grad_year: number
+  // Expected graduation as a month string ("YYYY-MM"); stored as a DATE.
+  education_end_date: string
   gpa?: number
   target_roles: TargetRole[]
   phone_number?: string
+}
+
+/** Normalize a month input ("YYYY-MM") to a full DATE ("YYYY-MM-01"), or null. */
+function toEducationDate(value: string): string | null {
+  const trimmed = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`
+  return null
 }
 
 
@@ -51,7 +60,7 @@ if (!email) throw new Error("No email found")
       name: data.name,
       email: email,
       school: data.school,
-      grad_year: data.grad_year,
+      education_end_date: toEducationDate(data.education_end_date),
       gpa: data.gpa ?? null,
       target_roles: data.target_roles,
       phone_number: data.phone_number ?? null,

@@ -26,15 +26,17 @@ export async function UniversityBelt() {
 
   return (
     <section className="relative px-6 py-16 lg:px-12">
-      <p className="text-center font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#888888]">
-        used by students at
-      </p>
+      <div className="mx-auto max-w-7xl">
+        <p className="text-center font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#888888]">
+          used by students at
+        </p>
 
-      <div className="belt-mask relative mt-10 overflow-hidden">
-        <div className="animate-marquee pause-on-hover flex w-max items-center gap-20">
-          {doubled.map((uni, i) => (
-            <UniversityItem key={`${uni.slug ?? uni.name}-${i}`} uni={uni} />
-          ))}
+        <div className="belt-mask relative mt-10 overflow-hidden">
+          <div className="animate-marquee pause-on-hover flex w-max items-center gap-20">
+            {doubled.map((uni, i) => (
+              <UniversityItem key={`${uni.slug ?? uni.name}-${i}`} uni={uni} />
+            ))}
+          </div>
         </div>
       </div>
     </section>

@@ -1,4 +1,5 @@
-import { Rocket, ScanLine, SlidersHorizontal } from 'lucide-react'
+import { Fragment } from 'react'
+import { ArrowDown, ArrowRight, Rocket, ScanLine, SlidersHorizontal } from 'lucide-react'
 
 const STEPS = [
   {
@@ -41,33 +42,48 @@ export function HowItWorks() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mx-auto flex max-w-5xl flex-col items-stretch gap-4 md:flex-row md:items-stretch md:gap-3">
           {STEPS.map((step, i) => {
             const Icon = step.icon
             return (
-              <div
-                key={step.title}
-                className="glass-card group relative overflow-hidden rounded-2xl p-8 transition-all duration-300 hover:bg-white/[0.04]"
-              >
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.04] blur-3xl transition-opacity duration-500 group-hover:bg-[#FF6733]/10"
-                />
-                <div className="relative">
-                  <div className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">
-                    0{i + 1}
+              <Fragment key={step.title}>
+                <div className="glass-card group relative flex-1 basis-0 overflow-hidden rounded-2xl p-7 transition-all duration-300 hover:bg-white/[0.04]">
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.04] blur-3xl transition-opacity duration-500 group-hover:bg-[#FF6733]/10"
+                  />
+                  <div className="relative">
+                    <div className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">
+                      0{i + 1}
+                    </div>
+                    <div className="mt-6 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-md transition-all duration-300 group-hover:border-[#FF6733]/40 group-hover:bg-[#FF6733]/10">
+                      <Icon className="h-5 w-5 text-[#FF6733]" strokeWidth={1.75} />
+                    </div>
+                    <h3 className="mt-6 font-headline text-xl font-medium tracking-tight text-white">
+                      {step.title}
+                    </h3>
+                    <p className="mt-3 font-body text-[15px] leading-relaxed text-[#A1A1AA]">
+                      {step.body}
+                    </p>
                   </div>
-                  <div className="mt-6 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-md transition-all duration-300 group-hover:border-[#FF6733]/40 group-hover:bg-[#FF6733]/10">
-                    <Icon className="h-5 w-5 text-[#FF6733]" strokeWidth={1.75} />
-                  </div>
-                  <h3 className="mt-6 font-headline text-xl font-medium tracking-tight text-white">
-                    {step.title}
-                  </h3>
-                  <p className="mt-3 font-body text-[15px] leading-relaxed text-[#A1A1AA]">
-                    {step.body}
-                  </p>
                 </div>
-              </div>
+
+                {i < STEPS.length - 1 ? (
+                  <div
+                    aria-hidden
+                    className="flex shrink-0 items-center justify-center text-[#FF6733]/50"
+                  >
+                    <ArrowRight
+                      className="hidden h-6 w-6 md:block"
+                      strokeWidth={1.5}
+                    />
+                    <ArrowDown
+                      className="h-6 w-6 md:hidden"
+                      strokeWidth={1.5}
+                    />
+                  </div>
+                ) : null}
+              </Fragment>
             )
           })}
         </div>

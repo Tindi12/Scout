@@ -49,7 +49,8 @@ export type ProfileData = {
   major: string | null
   minor: string | null
   gpa: number | null
-  grad_year: number | null
+  education_start_date: string | null
+  education_end_date: string | null
 
   // Job preferences
   target_roles: TargetRole[]
@@ -61,6 +62,7 @@ export type ProfileData = {
   // Application defaults
   heard_about_us: HeardAboutUs | null
   default_cover_letter: string | null
+  generate_cover_letters: boolean
 
   // Diversity
   gender_identity: string | null

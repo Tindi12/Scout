@@ -8,8 +8,9 @@ from services.job_store import store_jobs
 from core.supabase_client import supabase
 from datetime import datetime, timezone
 from services.portal_detector import detect_portal
-from services.latex_generator import generate_resume_pdf
+from services.latex_generator import generate_resume_pdf, generate_cover_letter_pdf
 from services.resume_rewriter import resume_rewriter
+from services.cover_letter_writer import cover_letter_writer
 from core.redis_client import cancel_key, get_redis
 from services.browser_agent import browser_agent, resolve_apply_company
 
@@ -142,6 +143,77 @@ def _load_latest_general_rewrite(user_id: str) -> dict | None:
     except Exception as e:
         logger.warning("analyses fallback lookup failed: %s", e)
     return None
+
+
+def _cover_letters_enabled(user_data: dict) -> bool:
+    """True only for Pro/Scout+ users who turned the cover-letter toggle on."""
+    if not user_data.get("generate_cover_letters"):
+        return False
+    plan = (user_data.get("subscription_plan") or "").lower()
+    return bool(user_data.get("is_pro")) or plan in ("pro", "scout_plus")
+
+
+def _cover_letter_applicant(user_data: dict) -> dict:
+    """Header/signature fields for the cover-letter PDF (never AI-written)."""
+    return {
+        "name": user_data.get("name") or "",
+        "email": user_data.get("email") or "",
+        "phone": user_data.get("phone_number") or "",
+        "city": user_data.get("address_city") or "",
+        "state": user_data.get("address_state") or "",
+        "linkedin": user_data.get("linkedin_url") or "",
+        "company": user_data.get("company") or "",
+        "date": datetime.now(timezone.utc).strftime("%B %d, %Y"),
+    }
+
+
+def _load_existing_cover_letter(user_id: str, job_id: str) -> dict | None:
+    """Return a previously generated per-job cover letter, if any."""
+    try:
+        resp = (
+            supabase.table("cover_letter_variants")
+            .select("cover_letter")
+            .eq("user_id", user_id)
+            .eq("job_id", job_id)
+            .order("updated_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if rows and rows[0].get("cover_letter"):
+            return rows[0]["cover_letter"]
+    except Exception as e:
+        logger.warning("cover_letter_variants lookup failed for job %s: %s", job_id, e)
+    return None
+
+
+def _generate_cover_letter(
+    user_id: str, job_id: str, job_data: dict, resume_json: dict, user_data: dict
+) -> dict | None:
+    """Generate a tailored cover letter on demand and cache it. Returns None on failure."""
+    try:
+        letter = asyncio.run(
+            cover_letter_writer.generate(
+                user_data=user_data, resume=resume_json, job=job_data
+            )
+        )
+    except Exception as e:
+        logger.warning("Cover letter generation failed for job %s: %s", job_id, e)
+        return None
+    if not letter:
+        return None
+
+    try:
+        supabase.table("cover_letter_variants").insert({
+            "user_id": user_id,
+            "job_id": job_id,
+            "cover_letter": letter,
+        }).execute()
+    except Exception as e:
+        logger.warning("Could not cache cover letter for job %s (using it anyway): %s", job_id, e)
+
+    logger.info("Generated cover letter for job %s", job_id)
+    return letter
 
 
 @celery_app.task(name="tasks.refresh_jobs")
@@ -278,6 +350,29 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             "job_title": job_data.get("title") or user_data.get("job_title") or "",
         }
 
+        # 6.5. Cover letter (Pro/Scout+ + toggle on): reuse cache → generate → none.
+        #      Pre-generated here so the PDF is ready when the form has a CL field;
+        #      a failure anywhere just drops the cover letter (apply proceeds with the
+        #      resume only — the agent path is unchanged when cover_letter_pdf is None).
+        cover_letter_pdf = None
+        if _cover_letters_enabled(user_data) and resume_to_use:
+            letter = _load_existing_cover_letter(user_id, job_id)
+            if not letter:
+                letter = _generate_cover_letter(
+                    user_id, job_id, job_data, resume_to_use, user_data
+                )
+            if letter:
+                try:
+                    cover_letter_pdf = generate_cover_letter_pdf(
+                        letter, _cover_letter_applicant(user_data)
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Cover letter PDF generation failed for job %s (skipping CL): %s",
+                        job_id, e,
+                    )
+                    cover_letter_pdf = None
+
         #7. Apply via the AI browser agent (agent-only — the per-ATS Playwright
         #   adapters were removed for full agentic focus).
         #   On deadline, wait_for cancels the pipeline; browser_agent's finally block
@@ -291,6 +386,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                         user_data=user_data,
                         resume_pdf=resume_pdf,
                         application_id=application_id,
+                        cover_letter_pdf=cover_letter_pdf,
                     ),
                     timeout=APPLY_PIPELINE_TIMEOUT,
                 )

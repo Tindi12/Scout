@@ -711,6 +711,35 @@ async def _count_attached_files(browser_session, node) -> int | None:
         return None
 
 
+def _resolve_upload_path(requested: str, available: list[str]) -> str:
+    """
+    Map the model's requested upload path to a real available file.
+
+    Single-file forms keep the old leniency (use the one available file). With two
+    files available (resume + cover letter), the model is told both exact paths, but
+    can still mis-transcribe — so match by basename, then by a 'cover'/'resume' token
+    hint, before falling back to the first available file (the resume).
+    """
+    if not available:
+        return requested
+    if requested in available:
+        return requested
+    if len(available) == 1:
+        return available[0]
+
+    req = (requested or "").lower()
+    req_base = os.path.basename(req)
+    for p in available:
+        if os.path.basename(p).lower() == req_base:
+            return p
+    for token in ("cover", "resume"):
+        if token in req:
+            for p in available:
+                if token in os.path.basename(p).lower():
+                    return p
+    return available[0]
+
+
 def _install_robust_upload(tools: Tools) -> None:
     """
     Replace `upload_file` with a remote-safe, byte-injecting implementation.
@@ -746,12 +775,9 @@ def _install_robust_upload(tools: Tools) -> None:
     ):
         # Resolve the path: don't trust the model's typed path — it frequently
         # mis-transcribes the random temp filename (e.g. tmpXXXXk4w.pdf -> ...k4f.pdf).
-        # If the given path isn't a known available file and there is exactly one
-        # available file (the resume), use that instead.
-        path = params.path
-        available = available_file_paths or []
-        if path not in available and len(available) == 1:
-            path = available[0]
+        # Single file → use it; two files (resume + cover letter) → match by basename
+        # / token hint so each upload lands the intended file.
+        path = _resolve_upload_path(params.path, available_file_paths or [])
 
         # Resolve the ACTUAL <input type=file> node. A model-supplied index usually
         # points at the visible dropzone/button, not the (often hidden) input itself.
@@ -812,6 +838,16 @@ def resume_filename(applicant_name: str | None) -> str:
     """
     stem = re.sub(r"[^A-Za-z0-9]+", "_", applicant_name or "").strip("_")
     return f"{stem}_Resume.pdf" if stem else "Resume.pdf"
+
+
+def cover_letter_filename(applicant_name: str | None) -> str:
+    """
+    ATS-visible cover-letter filename, personalized like resume_filename
+    ("Rabuor Tindi" -> "Rabuor_Tindi_Cover_Letter.pdf"). The distinct '_Cover_Letter'
+    token also lets the upload tool tell the two files apart by basename.
+    """
+    stem = re.sub(r"[^A-Za-z0-9]+", "_", applicant_name or "").strip("_")
+    return f"{stem}_Cover_Letter.pdf" if stem else "Cover_Letter.pdf"
 
 
 # US state name → USPS 2-letter code. Browserbase proxy geolocation wants the
@@ -884,6 +920,47 @@ def _build_geolocation(user_data: dict) -> dict | None:
     if state:
         geo["state"] = state
     return geo
+
+
+_MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
+
+# Profile degree_type enum → human label the agent matches against form options.
+# The raw enum ("bachelors") doesn't match ATS dropdown text ("Bachelor's Degree").
+_DEGREE_LABELS = {
+    "associate": "Associate's Degree",
+    "bachelors": "Bachelor's Degree",
+    "masters": "Master's Degree",
+    "phd": "Doctorate / PhD",
+}
+
+
+def _degree_label(degree_type: str | None) -> str:
+    v = (degree_type or "").strip()
+    if not v:
+        return ""
+    return _DEGREE_LABELS.get(v.lower(), v)
+
+
+def _format_month_year(value: str | None) -> str:
+    """Format a stored DATE ('2022-08-01') as 'August 2022' for form answers.
+
+    Returns "" for empty input; returns the raw trimmed value if it isn't a
+    parseable YYYY-MM(-DD) date (never raises — context building must not fail).
+    """
+    v = (value or "").strip()
+    if not v:
+        return ""
+    m = re.match(r"^(\d{4})-(\d{2})(?:-\d{2})?$", v)
+    if not m:
+        return v
+    year = m.group(1)
+    month_idx = int(m.group(2))
+    if 1 <= month_idx <= 12:
+        return f"{_MONTH_NAMES[month_idx - 1]} {year}"
+    return v
 
 
 def _national_phone(phone: str) -> str:
@@ -1211,7 +1288,9 @@ class BrowserUseAgent:
         self.llm = ScoutBrowserLLM(temperature=0)
         self.fallback_llm = ScoutBrowserFallbackLLM(temperature=0)
 
-    def _build_applicant_context(self, user_data: dict, tmp_path: str) -> str:
+    def _build_applicant_context(
+        self, user_data: dict, tmp_path: str, cover_letter_path: str | None = None
+    ) -> str:
         name_parts = user_data.get("name", "").split(" ", 1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
@@ -1264,13 +1343,34 @@ class BrowserUseAgent:
             f"- LinkedIn: {user_data.get('linkedin_url', '')}",
             f"- GitHub: {user_data.get('github_url', '')}",
             f"- University/School: {user_data.get('school', '')}",
-            f"- Degree: {user_data.get('degree_type', '')}",
+            f"- Degree (the applicant's actual degree level — use THIS for any degree field, "
+            f"not the level implied by the job title): {_degree_label(user_data.get('degree_type'))}",
+            f"- Major: {user_data.get('major', '')}",
             f"- GPA: {user_data.get('gpa', '')}",
+        ]
+        # Education dates: month/year start + expected graduation. These answer the
+        # "dates attended" / "expected graduation" / "graduation year" fields some
+        # forms require.
+        edu_start = _format_month_year(user_data.get("education_start_date"))
+        edu_end = _format_month_year(user_data.get("education_end_date"))
+        if edu_start:
+            trailing.append(f"- Education start date: {edu_start}")
+        if edu_end:
+            trailing.append(f"- Expected graduation date: {edu_end}")
+            # Year-only convenience for forms that ask just the graduation year.
+            year_match = re.search(r"\b(\d{4})\b", edu_end)
+            if year_match:
+                trailing.append(f"- Graduation year: {year_match.group(1)}")
+        trailing.extend([
             f"- Resume file path: {tmp_path}",
+        ])
+        if cover_letter_path:
+            trailing.append(f"- Cover letter file path: {cover_letter_path}")
+        trailing.extend([
             f"- Work authorization question: {auth_answer}",
             f"- Requires visa sponsorship: {sponsorship}",
             f"- Employer for this application: {company}",
-        ]
+        ])
         if job_title:
             trailing.append(f"- Role for this application: {job_title}")
         trailing.extend(_self_identification_lines(user_data))
@@ -1281,7 +1381,28 @@ class BrowserUseAgent:
         details.extend(trailing)
         return "\n".join(details)
 
-    def _build_apply_task(self, job_url: str, context: str, resume_filename: str) -> str:
+    def _build_apply_task(
+        self,
+        job_url: str,
+        context: str,
+        resume_filename: str,
+        cover_letter_filename: str | None = None,
+    ) -> str:
+        if cover_letter_filename:
+            cover_letter_instructions = (
+                f'- If the form has a cover-letter FILE-upload field, upload the COVER LETTER file '
+                f'(the "Cover letter file path" in the data, which appears as "{cover_letter_filename}") '
+                f'into it with a SECOND `upload_file` action, passing the `index` of the cover-letter '
+                f'upload field. Do this for both required AND optional cover-letter upload fields. '
+                f'(A cover-letter TEXT box is not an upload — treat it as an open-ended text question.)'
+            )
+        else:
+            cover_letter_instructions = (
+                "- If the form has a REQUIRED cover-letter FILE-upload field, upload the same resume file "
+                "into it with a SECOND `upload_file` action, passing the `index` of the cover-letter "
+                "upload field. Skip cover-letter uploads that are optional. (A cover-letter TEXT box is "
+                "not an upload — treat it as an open-ended text question in STAGE 1/3.)"
+            )
         return f"""
         Go to this job application URL and complete the ENTIRE application:
         {job_url}
@@ -1296,7 +1417,10 @@ class BrowserUseAgent:
         - Look at the actual form fields first. Only fill fields that are VISIBLE and PRESENT on this specific form.
         - If a field type (address, GPA, school, LinkedIn, etc.) does not appear on the form, skip it entirely. Do not search for it or waste steps on it.
         - For phone fields with an intl-tel-input prefix (flag/country-code shown OUTSIDE the input box): type the Phone value from the data exactly as given — it is already the 10-digit national number with no country code or leading 1. Do not prepend 1 or +1.
-        - Select radio buttons, checkboxes, and dropdown options by CLICKING them. Never type text into a radio, checkbox, or dropdown — only into text inputs and textareas.
+        - Select radio buttons, checkboxes, and SHORT/simple dropdown options by CLICKING them. Never type into a radio or checkbox.
+        - SEARCHABLE dropdowns / comboboxes (a dropdown with a text box that filters as you type, role=combobox — e.g. School/University, Degree, Country, and any dropdown with a long alphabetical option list): do NOT scroll the list and do NOT use page-search (off-screen options are not in the page). Click it, TYPE the value to filter, then click the matching option.
+          • If typing the exact value shows NO match, try common variants of the name before giving up: toggle a leading "The" ("The University of Alabama" <-> "University of Alabama"), reorder words ("University of X" <-> "X University"), or type just the distinctive part ("Alabama"). Pick the option that clearly refers to the same institution. Do not clear-and-reopen the dropdown repeatedly — change what you TYPE instead.
+        - For the Degree / education-level field, select the option matching the applicant's Degree value from the data above (e.g. "Bachelor's Degree"). Choose by the applicant's ACTUAL degree — NOT the level implied by the job title or role (a "PhD Intern" posting does NOT mean select PhD/Doctorate).
         - For autocomplete location fields: if the applicant data includes a State, type "City, State" (e.g. "Rochester, Indiana") ONCE — otherwise the city alone — wait for the suggestion list, then click the suggestion that matches the applicant's state. Do not separately fill state or country fields that the autocomplete already populated.
         - For voluntary self-identification questions (gender, race/ethnicity, Hispanic/Latino, veteran status, disability): use the "Voluntary self-identification answers" from the applicant data, picking the closest matching option the form offers. For any self-ID question the data does NOT cover, select the "Decline to self identify" / "I don't wish to answer" style option. Never guess or invent a demographic answer.
         - Do NOT retype a field that does not retain your value. If a field looks empty after ONE attempt and it is not required (no red asterisk / "required" marker), skip it and move on — do not loop on it. Only an autocomplete-location field should be retried, and only by clicking a suggestion (not by retyping).
@@ -1307,7 +1431,7 @@ class BrowserUseAgent:
         - To upload, call the `upload_file` action with the resume file path. The file input may be hidden — you do NOT need to click anything first; `upload_file` will locate it. You may omit the index.
         - Do NOT type the file path into any field. Do NOT click a button that opens a system file-picker dialog (you cannot interact with OS dialogs).
         - The uploaded file will appear on the form as "{resume_filename}". Verify that filename / an upload confirmation is visible before moving on.
-        - If the form has a REQUIRED cover-letter FILE-upload field, upload the same resume file into it with a SECOND `upload_file` action, passing the `index` of the cover-letter upload field. Skip cover-letter uploads that are optional. (A cover-letter TEXT box is not an upload — treat it as an open-ended text question in STAGE 1/3.)
+        {cover_letter_instructions}
 
         STAGE 3 — Submit:
         - Fill any remaining VISIBLE required fields that are still empty. Skip applicant data that has no corresponding form field.
@@ -1329,11 +1453,15 @@ class BrowserUseAgent:
         task: str,
         browser: Browser,
         tmp_path: str,
+        cover_letter_path: str | None = None,
         max_actions_per_step: int = 5,
         step_timeout: int = _AGENT_STEP_TIMEOUT,
         application_id: str | None = None,
     ) -> AgentHistoryList:
         logger.info("Starting browser agent phase: %s", phase_name)
+        available_files = [tmp_path]
+        if cover_letter_path:
+            available_files.append(cover_letter_path)
         agent = Agent(
             task=task,
             llm=self.llm,
@@ -1341,7 +1469,7 @@ class BrowserUseAgent:
             use_thinking=False,
             browser=browser,
             tools=_build_apply_tools(application_id),
-            available_file_paths=[tmp_path],
+            available_file_paths=available_files,
             max_actions_per_step=max_actions_per_step,
             max_failures=_AGENT_MAX_FAILURES,
             step_timeout=step_timeout,
@@ -1412,6 +1540,7 @@ class BrowserUseAgent:
         browser: Browser,
         session_id: str | None,
         tmp_path: str,
+        cover_letter_path: str | None = None,
         max_actions_per_step: int,
         step_timeout: int,
         retry_stale_click_once: bool = False,
@@ -1439,6 +1568,7 @@ class BrowserUseAgent:
                 task=current_task,
                 browser=current_browser,
                 tmp_path=tmp_path,
+                cover_letter_path=cover_letter_path,
                 max_actions_per_step=max_actions_per_step,
                 step_timeout=step_timeout,
                 application_id=application_id,
@@ -1534,6 +1664,7 @@ class BrowserUseAgent:
         user_data: dict,
         resume_pdf: bytes,
         application_id: str | None = None,
+        cover_letter_pdf: bytes | None = None,
     ) -> dict:
         # Own temp dir so the file's basename is the personalized, ATS-visible
         # filename (e.g. Rabuor_Tindi_Resume.pdf) — the byte-inject upload names the
@@ -1544,12 +1675,25 @@ class BrowserUseAgent:
         with open(tmp_path, "wb") as fh:
             fh.write(resume_pdf)
 
+        # Cover letter is optional: when present, write a second personalized file the
+        # agent can upload into a cover-letter field. When absent, everything below is
+        # byte-for-byte the validated single-file path (available_file_paths=[resume]).
+        cover_letter_path: str | None = None
+        cover_letter_upload_name: str | None = None
+        if cover_letter_pdf:
+            cover_letter_upload_name = cover_letter_filename(user_data.get("name"))
+            cover_letter_path = os.path.join(tmp_dir, cover_letter_upload_name)
+            with open(cover_letter_path, "wb") as fh:
+                fh.write(cover_letter_pdf)
+
         session = None
         active_session_id: str | None = None
         browser = None
 
-        context = self._build_applicant_context(user_data, tmp_path)
-        apply_task = self._build_apply_task(job_url, context, upload_filename)
+        context = self._build_applicant_context(user_data, tmp_path, cover_letter_path)
+        apply_task = self._build_apply_task(
+            job_url, context, upload_filename, cover_letter_upload_name
+        )
 
         # Geo-target the residential proxy to the applicant's address so the exit IP
         # matches the form (Ashby's named "location mismatch" signal). No-op unless
@@ -1570,6 +1714,7 @@ class BrowserUseAgent:
                 browser=browser,
                 session_id=active_session_id,
                 tmp_path=tmp_path,
+                cover_letter_path=cover_letter_path,
                 max_actions_per_step=1,
                 step_timeout=_AGENT_STEP_TIMEOUT,
                 retry_stale_click_once=True,

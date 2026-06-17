@@ -40,6 +40,8 @@ const supabase = createClient(
 
 const PROFILE_COLUMNS = [
   'id',
+  'is_pro',
+  'subscription_plan',
   'name',
   'phone_number',
   'linkedin_url',
@@ -59,7 +61,8 @@ const PROFILE_COLUMNS = [
   'major',
   'minor',
   'gpa',
-  'grad_year',
+  'education_start_date',
+  'education_end_date',
   'target_roles',
   'preferred_locations',
   'remote_preference',
@@ -73,6 +76,7 @@ const PROFILE_COLUMNS = [
   'disability_status',
   'open_ended_preference',
   'answers_library',
+  'generate_cover_letters',
   'profile_complete',
 ] as const
 
@@ -180,6 +184,18 @@ function asDate(value: unknown): string | null | undefined {
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : undefined
 }
 
+// Accepts a month input ("YYYY-MM") or a full date and stores a full DATE
+// (day pinned to 01 for month-only input). The education_*_date columns are DATE.
+function asMonthDate(value: unknown): string | null | undefined {
+  if (value === null) return null
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`
+  return undefined
+}
+
 function buildUpdates(
   patch: Partial<ProfileData>,
 ): Record<string, unknown> {
@@ -232,7 +248,12 @@ function buildUpdates(
     if (v !== undefined) updates.heard_about_us = v
   }
 
-  for (const key of ['cpt_eligible', 'opt_eligible', 'willing_to_relocate'] as const) {
+  for (const key of [
+    'cpt_eligible',
+    'opt_eligible',
+    'willing_to_relocate',
+    'generate_cover_letters',
+  ] as const) {
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
       const v = asBoolean(patch[key])
       if (v !== undefined) updates[key] = v
@@ -244,9 +265,14 @@ function buildUpdates(
     if (v !== undefined) updates.gpa = v
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'grad_year')) {
-    const v = asNumber(patch.grad_year)
-    if (v !== undefined) updates.grad_year = v
+  if (Object.prototype.hasOwnProperty.call(patch, 'education_start_date')) {
+    const v = asMonthDate(patch.education_start_date)
+    if (v !== undefined) updates.education_start_date = v
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'education_end_date')) {
+    const v = asMonthDate(patch.education_end_date)
+    if (v !== undefined) updates.education_end_date = v
   }
 
   if (Object.prototype.hasOwnProperty.call(patch, 'earliest_start_date')) {

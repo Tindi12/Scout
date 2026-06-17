@@ -69,6 +69,7 @@ import {
   type WorkAuthorization,
 } from '@/lib/profile-completion'
 import { scoutLogo } from '@/lib/scout-logo'
+import { hasPaidFeatures, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 import { cn } from '@/lib/utils'
 
 type SectionId =
@@ -198,7 +199,8 @@ const EMPTY_PROFILE: ProfileData = {
   major: null,
   minor: null,
   gpa: null,
-  grad_year: null,
+  education_start_date: null,
+  education_end_date: null,
   target_roles: [],
   preferred_locations: [],
   remote_preference: null,
@@ -206,6 +208,7 @@ const EMPTY_PROFILE: ProfileData = {
   earliest_start_date: null,
   heard_about_us: null,
   default_cover_letter: null,
+  generate_cover_letters: false,
   gender_identity: null,
   race_ethnicity: null,
   veteran_status: null,
@@ -229,8 +232,6 @@ const DEGREE_OPTIONS: ReadonlyArray<{ value: DegreeType; label: string }> = [
   { value: 'masters', label: "Master's" },
   { value: 'phd', label: 'PhD' },
 ]
-
-const GRAD_YEAR_OPTIONS = [2025, 2026, 2027, 2028, 2029] as const
 
 const REMOTE_OPTIONS: ReadonlyArray<{ value: RemotePreference; label: string }> = [
   { value: 'remote', label: 'Remote Only' },
@@ -325,6 +326,7 @@ export default function ProfilePage() {
   const { user } = useUser()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [isPro, setIsPro] = useState(false)
   const [profile, setProfile] = useState<ProfileData>(EMPTY_PROFILE)
   const baselineRef = useRef<ProfileData>(EMPTY_PROFILE)
   const [statusByField, setStatusByField] = useState<FieldStatusMap>({})
@@ -361,6 +363,16 @@ export default function ProfilePage() {
         if (row.open_ended_preference === undefined || row.open_ended_preference === null) {
           merged.open_ended_preference = 'library'
         }
+        const rawRow = result.profile as unknown as {
+          subscription_plan?: string | null
+          is_pro?: boolean | null
+        }
+        setIsPro(
+          hasPaidFeatures(
+            normalizeSubscriptionPlan(rawRow.subscription_plan, rawRow.is_pro),
+            rawRow.is_pro,
+          ),
+        )
         setProfile(merged)
         baselineRef.current = merged
       }
@@ -558,7 +570,7 @@ export default function ProfilePage() {
         trimmed(profile.school) &&
         Boolean(profile.degree_type) &&
         trimmed(profile.major) &&
-        Boolean(profile.grad_year),
+        Boolean(profile.education_end_date),
       preferences:
         profile.preferred_locations.length > 0 &&
         Boolean(profile.remote_preference) &&
@@ -1034,23 +1046,48 @@ export default function ProfilePage() {
           </FieldRow>
 
           <FieldRow
-            label="Graduation year"
-            status={statusByField.grad_year}
-            errorMessage={errorByField.grad_year}
+            htmlFor="profile-edu-start"
+            label="Started"
+            status={statusByField.education_start_date}
+            errorMessage={errorByField.education_start_date}
           >
-            <PillGroup<string>
-              ariaLabel="Graduation year"
-              options={GRAD_YEAR_OPTIONS.map((year) => ({
-                value: String(year),
-                label: String(year),
-              }))}
-              value={profile.grad_year ? String(profile.grad_year) : null}
-              onChange={(value) =>
-                void commitImmediate(
-                  'grad_year',
-                  Number(value),
+            <ProfileInput
+              id="profile-edu-start"
+              type="month"
+              value={profile.education_start_date?.slice(0, 7) ?? ''}
+              onValueChange={(value) =>
+                updateLocal('education_start_date', value || null)
+              }
+              onBlur={() =>
+                void persistField(
+                  'education_start_date',
+                  profile.education_start_date,
                   'education',
-                  'Graduation year',
+                  'Education start',
+                )
+              }
+            />
+          </FieldRow>
+
+          <FieldRow
+            htmlFor="profile-edu-end"
+            label="Expected graduation"
+            status={statusByField.education_end_date}
+            errorMessage={errorByField.education_end_date}
+          >
+            <ProfileInput
+              id="profile-edu-end"
+              type="month"
+              value={profile.education_end_date?.slice(0, 7) ?? ''}
+              onValueChange={(value) =>
+                updateLocal('education_end_date', value || null)
+              }
+              onBlur={() =>
+                void persistField(
+                  'education_end_date',
+                  profile.education_end_date,
+                  'education',
+                  'Expected graduation',
                 )
               }
             />
@@ -1210,6 +1247,28 @@ export default function ProfilePage() {
             }
           />
         </FieldRow>
+
+        <div className="border-t border-white/[0.05] pt-4">
+          <Toggle
+            id="generate-cover-letters"
+            label="Let Scout generate cover letters"
+            description={
+              isPro
+                ? 'Scout writes a tailored cover letter for each job and uploads it when an application has a cover-letter field.'
+                : 'Pro feature — upgrade to let Scout write and attach a tailored cover letter per job.'
+            }
+            checked={profile.generate_cover_letters}
+            disabled={!isPro}
+            onChange={(value) =>
+              void commitImmediate(
+                'generate_cover_letters',
+                value,
+                'application',
+                'Cover letter generation',
+              )
+            }
+          />
+        </div>
       </ProfileSection>
 
       <ProfileSection

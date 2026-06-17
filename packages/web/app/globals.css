@@ -24,6 +24,8 @@
     --input: 0 0% 100% / 0.08;
     --ring: 14 100% 60%;
     --radius: 0.5rem;
+    --landing-line: rgba(255, 255, 255, 0.06);
+    --landing-corner: rgba(255, 255, 255, 0.2);
   }
 
   .dark {
@@ -46,6 +48,8 @@
     --border: 0 0% 100% / 0.08;
     --input: 0 0% 100% / 0.08;
     --ring: 14 100% 60%;
+    --landing-line: rgba(255, 255, 255, 0.06);
+    --landing-corner: rgba(255, 255, 255, 0.2);
   }
 }
 
@@ -98,6 +102,50 @@
       black 85%,
       transparent 100%
     );
+  }
+
+  /* Tsenta-style framing: continuous vertical rails down the centered column. */
+  .landing-rails {
+    border-left: 1px solid var(--landing-line);
+    border-right: 1px solid var(--landing-line);
+  }
+
+  /* Hairline divider drawn at the top of a framed section. */
+  .frame-divider {
+    border-top: 1px solid var(--landing-line);
+  }
+
+  /* Small "+" intersection mark placed where a divider meets a rail. */
+  .frame-corner {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    top: 0;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+  }
+
+  .frame-corner::before,
+  .frame-corner::after {
+    content: '';
+    position: absolute;
+    background-color: var(--landing-corner);
+  }
+
+  .frame-corner::before {
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    transform: translateY(-50%);
+  }
+
+  .frame-corner::after {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
   }
 }
 

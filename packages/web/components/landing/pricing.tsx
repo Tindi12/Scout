@@ -62,7 +62,7 @@ export function Pricing() {
 
       <div className="mx-auto mb-16 max-w-3xl text-center">
         <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
-          Product
+          Pricing
         </p>
         <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
           Three tiers. One goal: get you hired.
@@ -117,8 +117,7 @@ export function Pricing() {
             background: 'rgba(255, 255, 255, 0.04)',
             backdropFilter: 'blur(16px)',
             border: '1px solid rgba(255, 103, 51, 0.4)',
-            boxShadow:
-              '0 0 60px rgba(255, 103, 51, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.06)',
+            boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.06)',
           }}
         >
           <div className="absolute -top-3 right-6">

@@ -2,7 +2,26 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { scoutLogo } from '@/lib/scout-logo'
-import { Github, Linkedin, Twitter } from 'lucide-react'
+import { Instagram, Twitter } from 'lucide-react'
+
+type SocialIconProps = { className?: string; strokeWidth?: number }
+
+function TikTokIcon({ className, strokeWidth = 1.75 }: SocialIconProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
+    </svg>
+  )
+}
 
 const COLUMNS = [
   {
@@ -38,16 +57,6 @@ export function Footer() {
     <footer className="relative px-6 pb-10 pt-24 lg:px-12">
       <div className="mx-auto max-w-7xl">
         <div className="glass-card relative overflow-hidden rounded-3xl p-10 md:p-14">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full"
-            style={{
-              background:
-                'radial-gradient(circle, rgba(255,103,51,0.2) 0%, transparent 70%)',
-              filter: 'blur(60px)',
-            }}
-          />
-
           <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div>
               <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
@@ -131,9 +140,9 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-5">
             {[
-              { Icon: Github, label: 'GitHub', href: '#' },
+              { Icon: TikTokIcon, label: 'TikTok', href: '#' },
               { Icon: Twitter, label: 'Twitter', href: '#' },
-              { Icon: Linkedin, label: 'LinkedIn', href: '#' },
+              { Icon: Instagram, label: 'Instagram', href: '#' },
             ].map(({ Icon, label, href }) => (
               <Link
                 key={label}

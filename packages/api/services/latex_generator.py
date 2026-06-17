@@ -543,6 +543,120 @@ def generate_resume_pdf(resume: dict) -> bytes:
     return compile_pdf(tex_content)
 
 
+# ---------------------------------------------------------------------------
+# Cover letter
+# ---------------------------------------------------------------------------
+
+
+_COVER_LETTER_PREAMBLE = r"""\documentclass[letterpaper,11pt]{article}
+
+\usepackage[empty]{fullpage}
+\usepackage[hidelinks]{hyperref}
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{parskip}
+
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+\raggedright
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{8pt}
+"""
+
+
+def _cover_letter_contact_line(applicant: dict) -> str:
+    """Header contact line built from profile fields (never from the AI)."""
+    parts: list[str] = []
+    email = (applicant.get("email") or "").strip()
+    phone = (applicant.get("phone") or "").strip()
+    location_bits = [
+        (applicant.get("city") or "").strip(),
+        (applicant.get("state") or "").strip(),
+    ]
+    location = ", ".join(bit for bit in location_bits if bit)
+    if email:
+        parts.append(escape_latex(email))
+    if phone:
+        parts.append(escape_latex(phone))
+    if location:
+        parts.append(escape_latex(location))
+
+    linkedin = applicant.get("linkedin")
+    if linkedin:
+        url = _normalize_url(linkedin)
+        if url:
+            parts.append(f"\\href{{{url}}}{{{escape_latex(linkedin)}}}")
+
+    return " $|$ ".join(parts)
+
+
+def generate_cover_letter_tex(letter: dict, applicant: dict) -> str:
+    """Build a business-letter .tex from the AI letter body + profile contact data.
+
+    `letter` is the writer's output: {salutation, body_paragraphs[], closing}.
+    `applicant` supplies the header/signature (name, email, phone, city/state,
+    linkedin) and optionally a 'date' and 'company' — none of which the AI writes.
+    """
+    if not isinstance(letter, dict):
+        raise HTTPException(status_code=422, detail="letter must be a JSON object")
+
+    name = escape_latex((applicant.get("name") or "").strip())
+    contact_line = _cover_letter_contact_line(applicant)
+
+    header = "\\begin{center}\n"
+    if name:
+        header += f"    \\textbf{{\\Large {name}}} \\\\ \\vspace{{2pt}}\n"
+    if contact_line:
+        header += f"    \\small {contact_line}\n"
+    header += "\\end{center}\n"
+
+    blocks: list[str] = [header, "\\vspace{10pt}"]
+
+    date = (applicant.get("date") or "").strip()
+    if date:
+        blocks.append(escape_latex(date) + " \\\\")
+
+    company = (applicant.get("company") or "").strip()
+    if company:
+        blocks.append("\\vspace{4pt}\n" + escape_latex(company) + " \\\\")
+
+    salutation = (letter.get("salutation") or "Dear Hiring Team,").strip()
+    blocks.append("\\vspace{8pt}\n" + escape_latex(salutation))
+
+    paragraphs = letter.get("body_paragraphs") or []
+    for para in paragraphs:
+        text = str(para).strip()
+        if text:
+            blocks.append(escape_latex(text))
+
+    closing = (letter.get("closing") or "Sincerely,").strip()
+    signature = escape_latex(closing) + " \\\\ \\vspace{18pt}\n"
+    if name:
+        signature += name
+    blocks.append("\\vspace{6pt}\n" + signature)
+
+    body = "\n\n".join(block for block in blocks if block).rstrip()
+
+    return (
+        _COVER_LETTER_PREAMBLE
+        + "\n\\begin{document}\n\n"
+        + body
+        + "\n\n\\end{document}\n"
+    )
+
+
+def generate_cover_letter_pdf(letter: dict, applicant: dict) -> bytes:
+    """End-to-end: cover letter JSON + applicant header -> .tex -> compiled PDF bytes."""
+    tex_content = generate_cover_letter_tex(letter, applicant)
+    return compile_pdf(tex_content)
+
+
 class LatexGenerator:
     """Thin async wrapper so callers using ``await`` keep working."""
 
@@ -551,6 +665,9 @@ class LatexGenerator:
 
     async def render_resume(self, resume: dict) -> bytes:
         return generate_resume_pdf(resume)
+
+    async def render_cover_letter(self, letter: dict, applicant: dict) -> bytes:
+        return generate_cover_letter_pdf(letter, applicant)
 
 
 latex_generator = LatexGenerator()

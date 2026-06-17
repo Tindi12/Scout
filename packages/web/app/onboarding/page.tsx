@@ -24,8 +24,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useUser } from '@clerk/nextjs'
-import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
-import 'react-phone-number-input/style.css'
 
 import { scoutLogo } from '@/lib/scout-logo'
 import {
@@ -116,17 +114,14 @@ const ROLES: Role[] = [
   },
 ]
 
-const GRAD_YEARS = [2025, 2026, 2027, 2028, 2029] as const
-
 type Step = 1 | 2 | 'success'
 
 type FormState = {
   name: string
   school: string
-  grad_year: number
+  education_end_date: string
   gpa: string
   target_roles: TargetRole[]
-  phone_number: string
 }
 
 type University = {
@@ -139,10 +134,9 @@ type University = {
 const INITIAL_FORM: FormState = {
   name: '',
   school: '',
-  grad_year: 0,
+  education_end_date: '',
   gpa: '',
   target_roles: [],
-  phone_number: '',
 }
 
 export default function OnboardingPage() {
@@ -168,10 +162,8 @@ export default function OnboardingPage() {
   const step1Valid =
     form.name.trim().length > 0 &&
     form.school.trim().length > 0 &&
-    form.grad_year > 0
-  const phoneHasValue = form.phone_number.trim().length > 0
-  const phoneValid = !phoneHasValue || isValidPhoneNumber(form.phone_number)
-  const step2Valid = form.target_roles.length > 0 && phoneValid
+    form.education_end_date.trim().length > 0
+  const step2Valid = form.target_roles.length > 0
 
   const toggleRole = (id: TargetRole) => {
     setForm((prev) => {
@@ -192,14 +184,10 @@ export default function OnboardingPage() {
     const data: OnboardingData = {
       name: form.name.trim(),
       school: form.school.trim(),
-      grad_year: form.grad_year,
+      education_end_date: form.education_end_date,
       gpa:
         typeof gpaNum === 'number' && Number.isFinite(gpaNum) ? gpaNum : undefined,
       target_roles: form.target_roles,
-      phone_number:
-        form.phone_number.trim() !== '' && isValidPhoneNumber(form.phone_number)
-          ? form.phone_number
-          : undefined,
     }
 
     try {
@@ -266,10 +254,8 @@ export default function OnboardingPage() {
               >
                 <StepTwo
                   form={form}
-                  setForm={setForm}
                   toggleRole={toggleRole}
                   canSubmit={step2Valid}
-                  phoneValid={phoneValid}
                   submitting={submitting}
                   onBack={() => setStep(1)}
                   onSubmit={handleSubmit}
@@ -637,37 +623,18 @@ function StepOne({
         </div>
 
         <div>
-          <FieldLabel htmlFor="grad-year" required>
-            Graduating in
+          <FieldLabel htmlFor="grad-date" required>
+            Expected graduation
           </FieldLabel>
-          <div
-            id="grad-year"
-            role="radiogroup"
-            aria-label="Graduation year"
-            className="mt-3 flex flex-wrap gap-2"
-          >
-            {GRAD_YEARS.map((year) => {
-              const selected = form.grad_year === year
-              return (
-                <button
-                  key={year}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() =>
-                    setForm((p) => ({ ...p, grad_year: year }))
-                  }
-                  className={`font-label rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-200 active:scale-95 ${
-                    selected
-                      ? 'bg-[#FF6733] text-white shadow-[0_0_20px_rgba(255,103,51,0.35)]'
-                      : 'border border-white/10 bg-white/[0.03] text-[#A1A1AA] hover:border-white/20 hover:bg-white/[0.06] hover:text-white'
-                  }`}
-                >
-                  {year}
-                </button>
-              )
-            })}
-          </div>
+          <input
+            id="grad-date"
+            type="month"
+            value={form.education_end_date}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, education_end_date: e.target.value }))
+            }
+            className="font-label mt-3 w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white transition-colors duration-200 [color-scheme:dark] focus:border-[#FF6733]/50 focus:outline-none focus:ring-1 focus:ring-[#FF6733]/30"
+          />
         </div>
 
         <div>
@@ -711,19 +678,15 @@ function StepOne({
 
 function StepTwo({
   form,
-  setForm,
   toggleRole,
   canSubmit,
-  phoneValid,
   submitting,
   onBack,
   onSubmit,
 }: {
   form: FormState
-  setForm: React.Dispatch<React.SetStateAction<FormState>>
   toggleRole: (id: TargetRole) => void
   canSubmit: boolean
-  phoneValid: boolean
   submitting: boolean
   onBack: () => void
   onSubmit: () => void
@@ -782,32 +745,6 @@ function StepTwo({
             </button>
           )
         })}
-      </div>
-
-      <div className="mt-8 border-t border-white/5 pt-6">
-        <FieldLabel htmlFor="phone" optional>
-          Phone number
-        </FieldLabel>
-        <PhoneInput
-          id="phone"
-          defaultCountry="US"
-          international
-          countryCallingCodeEditable={false}
-          value={form.phone_number || undefined}
-          onChange={(value) =>
-            setForm((p) => ({ ...p, phone_number: value ?? '' }))
-          }
-          placeholder="+1 (555) 000-0000"
-          className="mt-2"
-        />
-        {!phoneValid && (
-          <p className="font-label mt-2 text-xs text-[#ef4444]">
-            Please enter a valid phone number (numbers only)
-          </p>
-        )}
-        <p className="font-label mt-2 text-xs text-[#666]">
-          Optional — Scout texts you when applications are done
-        </p>
       </div>
 
       <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row">
