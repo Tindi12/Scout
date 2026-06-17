@@ -96,6 +96,38 @@ def _persist_messages(
     ).eq("id", conversation_id).eq("user_id", user_id).execute()
 
 
+_SNIPPET_MAX = 80
+
+
+def _first_user_snippet(messages: list[dict]) -> str:
+    """Derive a conversation title from the first user message (there is no title
+    column). Truncated and whitespace-collapsed; empty string when none exists."""
+    if not isinstance(messages, list):
+        return ""
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            text = " ".join(m["content"].split()).strip()
+            if not text:
+                continue
+            if len(text) > _SNIPPET_MAX:
+                return text[: _SNIPPET_MAX - 1].rstrip() + "…"
+            return text
+    return ""
+
+
+def _list_conversations(user_id: str) -> list[dict]:
+    result = (
+        supabase.table("conversations")
+        .select("id, messages, updated_at, created_at")
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    return result.data or []
+
+
 def _to_llm_messages(history: list[dict]) -> list[dict]:
     """Keep only well-formed user/assistant turns for the LLM call."""
     out: list[dict] = []
@@ -186,3 +218,61 @@ async def copilot_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/conversations")
+async def list_conversations(
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """List the current user's conversations, newest first. Title is derived from
+    the first user message since there is no title column."""
+    clerk_id = current_user["sub"]
+    user_row = await run_in_threadpool(_fetch_user, clerk_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_id = user_row["id"]
+
+    rows = await run_in_threadpool(_list_conversations, user_id)
+    conversations = []
+    for row in rows:
+        snippet = _first_user_snippet(row.get("messages") or [])
+        if not snippet:
+            # Skip empty conversations that never received a user message.
+            continue
+        conversations.append(
+            {
+                "id": row.get("id"),
+                "snippet": snippet,
+                "updated_at": row.get("updated_at") or row.get("created_at"),
+            }
+        )
+    return {"conversations": conversations}
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(
+    conversation_id: str,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """Fetch all messages for one conversation, verifying ownership."""
+    clerk_id = current_user["sub"]
+    user_row = await run_in_threadpool(_fetch_user, clerk_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_id = user_row["id"]
+
+    convo = await run_in_threadpool(_fetch_conversation, conversation_id, user_id)
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    messages = []
+    for m in convo.get("messages") or []:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        content = m.get("content")
+        if role in ("user", "assistant") and isinstance(content, str) and content:
+            messages.append(
+                {"role": role, "content": content, "timestamp": m.get("timestamp")}
+            )
+    return {"id": convo.get("id"), "messages": messages}

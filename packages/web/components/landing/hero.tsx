@@ -2,6 +2,7 @@
 import { ArrowRight, Globe, Search } from 'lucide-react'
 
 import { LandingDashboardShowcase } from '@/components/landing/dashboard-showcase'
+import { TypingHeadline } from '@/components/landing/typing-headline'
 import { LANDING_HERO_PILL } from '@/lib/landing-stats'
 
 export function Hero() {
@@ -63,11 +64,7 @@ export function Hero() {
           </span>
         </div>
 
-        <h1 className="font-headline text-[clamp(2.75rem,6vw,5.25rem)] font-medium leading-[1.05] tracking-[-0.04em] text-white">
-          Land your dream internship
-          <br className="hidden md:block" />{' '}
-          <span className="text-white/95">while you sleep.</span>
-        </h1>
+        <TypingHeadline />
 
         <p className="mt-7 max-w-2xl text-balance font-body text-[18px] leading-relaxed tracking-[0.005em] text-[#A1A1AA]">
           Scout reads your resume, tailors it to every role it finds, and

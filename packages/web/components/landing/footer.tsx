@@ -2,7 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { scoutLogo } from '@/lib/scout-logo'
-import { Instagram, Twitter } from 'lucide-react'
+import { ArrowUp, Instagram } from 'lucide-react'
 
 type SocialIconProps = { className?: string; strokeWidth?: number }
 
@@ -19,6 +19,14 @@ function TikTokIcon({ className, strokeWidth = 1.75 }: SocialIconProps) {
       aria-hidden
     >
       <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
+    </svg>
+  )
+}
+
+function XIcon({ className }: SocialIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.66l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
     </svg>
   )
 }
@@ -138,10 +146,19 @@ export function Footer() {
           <p className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">
             © {new Date().getFullYear()} Scout. Never Apply Again
           </p>
+
+          <Link
+            href="#top"
+            className="font-label group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] backdrop-blur-md transition-all duration-200 hover:border-[#FF6733]/40 hover:text-white hover:shadow-[0_0_24px_rgba(255,103,51,0.18)]"
+          >
+            Back to top
+            <ArrowUp className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:text-[#FF6733]" />
+          </Link>
+
           <div className="flex items-center gap-5">
             {[
               { Icon: TikTokIcon, label: 'TikTok', href: '#' },
-              { Icon: Twitter, label: 'Twitter', href: '#' },
+              { Icon: XIcon, label: 'X', href: '#' },
               { Icon: Instagram, label: 'Instagram', href: '#' },
             ].map(({ Icon, label, href }) => (
               <Link
