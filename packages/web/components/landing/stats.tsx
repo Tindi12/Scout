@@ -40,7 +40,7 @@ export function Stats() {
             The numbers don&apos;t lie.
           </h2>
           <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
-            We're rapidly growing. Never apply again. Land internships.
+            We&apos;re rapidly growing. Never apply again. Land internships.
           </p>
         </div>
 
