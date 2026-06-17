@@ -17,6 +17,7 @@ dist
 .cursor/
 *.tsbuildinfo
 .cursor/
+.claude/worktrees/
 
 Scout Dev Doc.pdf
 prompt.txt
