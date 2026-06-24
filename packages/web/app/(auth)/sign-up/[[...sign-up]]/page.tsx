@@ -61,7 +61,7 @@ export default function SignUpPage() {
               aria-hidden
               className="absolute inset-[-1000%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#000000_0%,#000000_50%,#FF6733_100%)]"
             />
-            <div className="relative z-10 w-full rounded-2xl bg-[#0a0a0a] p-6 backdrop-blur-xl md:p-8">
+            <div className="relative z-10 w-full rounded-2xl bg-[#0a0a0a] p-4 backdrop-blur-xl sm:p-5">
               <SignUp
                 routing="path"
                 path="/sign-up"
@@ -77,8 +77,9 @@ export default function SignUpPage() {
                     borderRadius: '12px',
                   },
                   elements: {
-                    card: 'shadow-none bg-transparent',
                     rootBox: 'w-full',
+                    cardBox: 'w-full overflow-hidden rounded-xl border border-white/15 shadow-none bg-[#0a0a0a]',
+                    card: 'w-full bg-transparent shadow-none',
                   },
                 }}
               />
