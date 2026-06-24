@@ -1,9 +1,57 @@
 'use client'
 
+import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { cn } from '@/lib/utils'
+
+const LINK_CLASS =
+  'font-medium text-[#FF6733] underline underline-offset-2 hover:text-[#ff8254]'
+
+/** Known in-app routes the copilot is allowed to link to. Bare references like
+ * "tracker" or "/tracker" resolve here so they navigate in-app instead of being
+ * treated as external URLs. */
+const INTERNAL_ROUTES = new Set([
+  '/dashboard',
+  '/explore',
+  '/resume',
+  '/tracker',
+  '/copilot',
+  '/profile',
+  '/settings',
+  '/analytics',
+  '/roles',
+])
+
+type ResolvedHref =
+  | { kind: 'internal'; href: string }
+  | { kind: 'external'; href: string }
+  | { kind: 'plain' }
+
+function resolveHref(raw?: string): ResolvedHref {
+  const href = (raw ?? '').trim()
+  if (!href) return { kind: 'plain' }
+
+  // App-relative paths (always navigate in-app, same tab).
+  if (href.startsWith('/')) {
+    return { kind: 'internal', href }
+  }
+
+  // Real external links and contact protocols open in a new tab.
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(href)) {
+    return { kind: 'external', href }
+  }
+
+  // Bare words like "tracker" — map to a known route, otherwise don't navigate
+  // (prevents the model's hallucinated/relative hrefs from going off to random
+  // domains).
+  const candidate = `/${href.replace(/^\/+/, '').toLowerCase()}`
+  if (INTERNAL_ROUTES.has(candidate)) {
+    return { kind: 'internal', href: candidate }
+  }
+  return { kind: 'plain' }
+}
 
 export function MarkdownMessage({ content }: { content: string }) {
   return (
@@ -20,14 +68,30 @@ export function MarkdownMessage({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          a: ({ ...props }) => (
-            <a
-              {...props}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-[#FF6733] underline underline-offset-2 hover:text-[#ff8254]"
-            />
-          ),
+          a: ({ href, children }) => {
+            const resolved = resolveHref(href)
+            if (resolved.kind === 'internal') {
+              return (
+                <Link href={resolved.href} className={LINK_CLASS}>
+                  {children}
+                </Link>
+              )
+            }
+            if (resolved.kind === 'external') {
+              return (
+                <a
+                  href={resolved.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={LINK_CLASS}
+                >
+                  {children}
+                </a>
+              )
+            }
+            // Unknown / unsafe href — render the label as plain emphasized text.
+            return <span className="font-medium text-white">{children}</span>
+          },
         }}
       >
         {content}

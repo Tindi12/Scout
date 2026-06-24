@@ -7,7 +7,7 @@ const FREE_FEATURES: Feature[] = [
   { label: 'Resume parsing & Scout Score' },
   { label: 'AI weakness diagnosis' },
   { label: 'Browse matched internships' },
-  { label: '5 lifetime AI Copilot messages' },
+  { label: 'Limited AI Copilot messages' },
   { label: 'Manual application links' },
 ]
 

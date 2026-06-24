@@ -6,6 +6,7 @@
     "dev:concurrent": "concurrently -n web,api -c cyan,magenta \"pnpm --filter web dev\" \"pnpm --filter api dev\"",
     "dev:web": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api dev",
+    "dev:workers": "node scripts/dev-workers.mjs",
     "lint": "corepack pnpm --filter web lint",
     "typecheck": "corepack pnpm --filter web typecheck",
     "format": "prettier --write ."
