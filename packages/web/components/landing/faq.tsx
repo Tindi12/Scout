@@ -14,7 +14,7 @@ const FAQS = [
   },
   {
     q: 'Will using an AI agent get me blacklisted or banned?',
-    a: 'Scout submits the same forms a human would — no scraping, no spamming, no spoofing. Applications run one at a time per portal at human pace, with throttling between requests. When a CAPTCHA appears we pause and ping you to solve it via the Browserbase live view, so portals never see suspicious automation patterns.',
+    a: 'No. Scout submits the same forms a human would — no scraping, no spamming, no spoofing. Applications run one at a time per portal at a natural, human pace with throttling between requests, so portals only ever see normal activity. And CAPTCHAs? Fully handled. Scout runs on enterprise-grade Browserbase infrastructure that detects and clears verification challenges automatically in the background — you never have to watch, wait, or solve anything yourself. It\'s all covered, start to finish.',
   },
   {
     q: 'What do I actually get on the free plan?',
