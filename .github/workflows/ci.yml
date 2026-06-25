@@ -89,6 +89,8 @@ jobs:
           # → services.browser_agent → core.browserbase
           export BROWSERBASE_API_KEY=ci-placeholder-browserbase
           export BROWSERBASE_PROJECT_ID=ci-placeholder-project
+          # Required at import time via routes.stripe_router → core.stripe_client
+          export STRIPE_SECRET_KEY=ci-placeholder-stripe
 
           uv run uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!
