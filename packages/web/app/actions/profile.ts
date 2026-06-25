@@ -40,7 +40,6 @@ const supabase = createClient(
 
 const PROFILE_COLUMNS = [
   'id',
-  'is_pro',
   'subscription_plan',
   'name',
   'phone_number',

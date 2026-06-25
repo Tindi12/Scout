@@ -277,16 +277,10 @@ export function Sidebar() {
         }
         const body = (await response.json()) as {
           profile_complete?: boolean
-          is_pro?: boolean | null
           subscription_plan?: SubscriptionPlan | string | null
         }
         if (!cancelled) {
-          setPlan(
-            normalizeSubscriptionPlan(
-              body.subscription_plan,
-              body.is_pro,
-            ),
-          )
+          setPlan(normalizeSubscriptionPlan(body.subscription_plan))
           setProfileComplete(Boolean(body.profile_complete))
         }
       } catch {

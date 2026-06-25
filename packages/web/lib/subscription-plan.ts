@@ -4,16 +4,20 @@ export const FREE_APPLICATION_LIMIT = 25
 export const PRO_APPLICATION_LIMIT = 200
 export const SCOUT_PLUS_APPLICATION_LIMIT = 600
 
+/**
+ * Coerce a raw subscription_plan value to a canonical tier string. Defends
+ * against legacy casing / synonyms; unknown values fall back to 'free' (the
+ * safe, least-privileged tier). subscription_plan is now the single source of
+ * truth — the old is_pro boolean was removed.
+ */
 export function normalizeSubscriptionPlan(
   raw: string | null | undefined,
-  isPro?: boolean | null,
 ): SubscriptionPlan {
   const value = raw?.trim().toLowerCase()
   if (value === 'scout_plus' || value === 'scout+' || value === 'scoutplus') {
     return 'scout_plus'
   }
-  if (value === 'pro' || isPro) return 'pro'
-  if (value === 'free') return 'free'
+  if (value === 'pro') return 'pro'
   return 'free'
 }
 
@@ -39,23 +43,35 @@ export function planBadgeClassName(plan: SubscriptionPlan): string {
   }
 }
 
-export function applicationLimitForPlan(plan: SubscriptionPlan): number {
+export type TierLimits = {
+  applicationLimit: number
+  copilotUnlimited: boolean
+}
+
+/** Per-tier limits in one place. Use for anything that differs BY tier so pro
+ * and scout_plus are never collapsed together. */
+export function tierLimits(plan: SubscriptionPlan): TierLimits {
   switch (plan) {
     case 'scout_plus':
-      return SCOUT_PLUS_APPLICATION_LIMIT
+      return {
+        applicationLimit: SCOUT_PLUS_APPLICATION_LIMIT,
+        copilotUnlimited: true,
+      }
     case 'pro':
-      return PRO_APPLICATION_LIMIT
+      return { applicationLimit: PRO_APPLICATION_LIMIT, copilotUnlimited: true }
     default:
-      return FREE_APPLICATION_LIMIT
+      return { applicationLimit: FREE_APPLICATION_LIMIT, copilotUnlimited: false }
   }
 }
 
-/** Paid tier: Pro features (rewrites, auto-apply, etc.). */
-export function hasPaidFeatures(
-  plan: SubscriptionPlan,
-  isPro?: boolean | null,
-): boolean {
-  return plan !== 'free' || Boolean(isPro)
+export function applicationLimitForPlan(plan: SubscriptionPlan): number {
+  return tierLimits(plan).applicationLimit
+}
+
+/** Binary paid-vs-free gate (Pro features: rewrites, auto-apply, etc.). Use for
+ * paid-vs-free decisions only — never to distinguish pro from scout_plus. */
+export function isPaidUser(plan: SubscriptionPlan): boolean {
+  return plan !== 'free'
 }
 
 export function creditsPeriodLabel(plan: SubscriptionPlan): string {

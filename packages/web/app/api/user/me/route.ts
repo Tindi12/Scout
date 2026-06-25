@@ -8,7 +8,6 @@ import { normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 
 const PROFILE_COLUMNS = [
   'id',
-  'is_pro',
   'subscription_plan',
   'name',
   'phone_number',
@@ -88,7 +87,6 @@ export async function GET() {
     (row.id as string | null) ?? ensured?.id ?? null
   const subscriptionPlan = normalizeSubscriptionPlan(
     row.subscription_plan as string | null | undefined,
-    row.is_pro as boolean | null | undefined,
   )
 
   let applicationUsed = 0
@@ -108,7 +106,6 @@ export async function GET() {
   return NextResponse.json(
     {
       id: supabaseUserId,
-      is_pro: Boolean(row.is_pro),
       subscription_plan: subscriptionPlan,
       application_credits: applicationCredits,
       target_roles: Array.isArray(row.target_roles)

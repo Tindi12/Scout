@@ -67,7 +67,6 @@ export async function uploadResume(formData: FormData): Promise<{
           clerk_id: userId,
           email,
           name: `${clerkUser.firstName ?? ''} ${clerkUser.lastName ?? ''}`.trim(),
-          is_pro: false,
           onboarding_complete: false,
           profile_complete: false,
           copilot_messages_used: 0,

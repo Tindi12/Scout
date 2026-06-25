@@ -9,10 +9,22 @@ export type ChatMessage = {
   content: string
 }
 
+/** Free-tier daily limit hit — rendered inline as an upgrade prompt, not an error. */
+export type LimitInfo = {
+  message: string
+  plan: string
+  price: string
+}
+
 type SseEvent =
   | { type: 'meta'; conversation_id: string }
   | { type: 'token'; content: string }
   | { type: 'error'; detail: string }
+  | {
+      type: 'limit_reached'
+      message: string
+      upsell: { plan: string; price: string }
+    }
   | { type: 'done' }
 
 type UseCopilotChatOptions = {
@@ -28,6 +40,9 @@ export type UseCopilotChat = {
   /** True until the first assistant token of the in-progress response arrives. */
   isAwaitingFirstToken: boolean
   error: string | null
+  /** Set when a free user is over their daily limit; the UI shows an upgrade prompt
+   * and disables input. Null otherwise. */
+  limitInfo: LimitInfo | null
   sendMessage: (text: string) => Promise<void>
   loadConversation: (id: string) => Promise<void>
   reset: () => void
@@ -46,6 +61,7 @@ export function useCopilotChat(
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAwaitingFirstToken, setIsAwaitingFirstToken] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [limitInfo, setLimitInfo] = useState<LimitInfo | null>(null)
 
   // Ref mirror so the streaming closure always reads the latest id without
   // re-binding, and so onConversationCreated fires exactly once.
@@ -58,6 +74,7 @@ export function useCopilotChat(
     setConversationId(null)
     conversationIdRef.current = null
     setError(null)
+    setLimitInfo(null)
     setIsAwaitingFirstToken(false)
   }, [])
 
@@ -65,6 +82,7 @@ export function useCopilotChat(
     async (id: string) => {
       if (streamingRef.current) return
       setError(null)
+      setLimitInfo(null)
       try {
         const res = await fetch(
           `/api/copilot/conversations/${encodeURIComponent(id)}`,
@@ -96,6 +114,7 @@ export function useCopilotChat(
       if (!trimmed || streamingRef.current) return
 
       setError(null)
+      setLimitInfo(null)
       streamingRef.current = true
       setIsStreaming(true)
       setIsAwaitingFirstToken(true)
@@ -124,6 +143,9 @@ export function useCopilotChat(
       }
 
       let sawError = false
+      // A limit_reached event also has no assistant content, so it shares the
+      // empty-bubble cleanup with errors — but it's an upgrade prompt, not an error.
+      let sawLimit = false
 
       try {
         const res = await fetch('/api/copilot/chat', {
@@ -174,6 +196,14 @@ export function useCopilotChat(
             } else if (evt.type === 'token') {
               setIsAwaitingFirstToken(false)
               appendToAssistant(evt.content)
+            } else if (evt.type === 'limit_reached') {
+              setIsAwaitingFirstToken(false)
+              setLimitInfo({
+                message: evt.message,
+                plan: evt.upsell.plan,
+                price: evt.upsell.price,
+              })
+              sawLimit = true
             } else if (evt.type === 'error') {
               setError(evt.detail || GENERIC_ERROR)
               sawError = true
@@ -204,9 +234,10 @@ export function useCopilotChat(
         setIsStreaming(false)
         setIsAwaitingFirstToken(false)
 
-        // If the assistant bubble is still empty (error before any token),
-        // drop it so we don't leave a blank message behind.
-        if (sawError) {
+        // If the assistant bubble is still empty (error, or a limit_reached that
+        // produced no tokens), drop it so we don't leave a blank message behind. The
+        // user's message stays in the thread so the upgrade prompt reads as a reply.
+        if (sawError || sawLimit) {
           setMessages((prev) => {
             const idx = assistantIndexRef.current
             if (idx >= 0 && idx < prev.length && prev[idx].content === '') {
@@ -226,6 +257,7 @@ export function useCopilotChat(
     isStreaming,
     isAwaitingFirstToken,
     error,
+    limitInfo,
     sendMessage,
     loadConversation,
     reset,

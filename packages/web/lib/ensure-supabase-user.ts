@@ -36,7 +36,6 @@ export async function ensureSupabaseUser(
       clerk_id: clerkId,
       email,
       name,
-      is_pro: false,
       onboarding_complete: false,
       profile_complete: false,
       copilot_messages_used: 0,

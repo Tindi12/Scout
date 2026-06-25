@@ -54,7 +54,6 @@ async def clerk_webhook(request: Request) -> dict[str, str]:
                     "clerk_id": clerk_id,
                     "email": email,
                     "name": name,
-                    "is_pro": False,
                     "onboarding_complete": False,
                     "copilot_messages_used": 0,
                 }

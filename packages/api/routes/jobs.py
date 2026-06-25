@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from core.auth import require_pro, verify_clerk_jwt, verify_resume_api_user
+from core.auth import verify_clerk_jwt, verify_resume_api_user
 from core.embedding_service import embed_resume, generate_embedding
+from core.entitlements import require_paid
+from core.subscription import get_tier_limits
 from core.supabase_client import supabase
 from services.job_matcher import match_jobs
 from tasks.job_tasks import apply_to_job_task, refresh_jobs_task
@@ -35,7 +37,7 @@ async def get_job_matches(
     def _fetch_user() -> dict:
         result = (
             supabase.table("users")
-            .select("id, is_pro, requires_sponsorship, target_roles")
+            .select("id, subscription_plan, requires_sponsorship, target_roles")
             .eq("clerk_id", clerk_id)
             .single()
             .execute()
@@ -91,7 +93,7 @@ async def get_job_matches(
     results = await match_jobs(
         parsed_resume=resume["parsed_content"],
         resume_embedding=embedding,
-        is_pro=user_row["is_pro"],
+        plan=user_row["subscription_plan"],
         requires_sponsorship=user_row["requires_sponsorship"],
         limit=request.limit,
         user_id=user_row["id"],
@@ -163,7 +165,7 @@ async def job_refresh_status(task_id: str) -> dict:
 @router.post("/scout/run")
 async def start_scout_run(
     request: ScoutRunRequest,
-    current_user: dict = Depends(require_pro),
+    current_user: dict = Depends(require_paid),
 ) -> dict:
     clerk_id = current_user["sub"]
 
@@ -181,7 +183,12 @@ async def start_scout_run(
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    remaining = user_data["applications_limit"] - user_data["applications_used"]
+    # Cap is derived from the live subscription_plan via the central tier helper — the
+    # single source of truth — so an upgrade takes effect immediately. (The stored
+    # users.applications_limit column is not used for enforcement; it can lag a tier
+    # change since the webhook only updates subscription_plan.)
+    limit = get_tier_limits(user_data.get("subscription_plan"))["application_limit"]
+    remaining = limit - user_data["applications_used"]
     if remaining < len(request.job_ids):
         raise HTTPException(
             status_code=403,

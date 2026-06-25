@@ -259,7 +259,7 @@ def _score_job(
 async def match_jobs(
     parsed_resume: dict,
     resume_embedding: list[float],
-    is_pro: bool = False,
+    plan: str = "free",
     requires_sponsorship: bool = False,
     limit: int = 50,
     *,
@@ -270,7 +270,7 @@ async def match_jobs(
 ) -> list[dict]:
     from starlette.concurrency import run_in_threadpool
 
-    _ = is_pro  # reserved for future pro-only ranking tweaks
+    _ = plan  # reserved for future tier-specific ranking tweaks
     role_ids = target_role_ids or []
 
     candidates = await run_in_threadpool(

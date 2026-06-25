@@ -1,9 +1,11 @@
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -11,8 +13,11 @@ from starlette.concurrency import run_in_threadpool
 
 from core.ai_router import stream_chat
 from core.auth import verify_resume_api_user
+from core.subscription import is_paid_user
 from core.supabase_client import supabase
 from services.copilot_context import build_context_block
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +28,10 @@ _COPILOT_SYSTEM = (_PROMPTS_DIR / "copilot_system.txt").read_text(encoding="utf-
 
 # Bound the history we feed the LLM (5 exchanges). The full thread still persists.
 _HISTORY_LIMIT = 10
+
+# Free-tier Copilot daily message cap (Epic 9.5). Pro / Scout+ are unlimited and never
+# hit this. Single source of truth — change the number here or via the env var.
+COPILOT_DAILY_LIMIT = int(os.getenv("COPILOT_DAILY_LIMIT", "5"))
 
 
 class ChatRequest(BaseModel):
@@ -39,13 +48,52 @@ def _fetch_user(clerk_id: str) -> dict | None:
         supabase.table("users")
         .select(
             "id, name, school, degree_type, major, education_end_date, "
-            "work_authorization, requires_sponsorship"
+            "work_authorization, requires_sponsorship, subscription_plan"
         )
         .eq("clerk_id", clerk_id)
         .maybe_single()
         .execute()
     )
     return result.data
+
+
+def _is_paid(user_row: dict) -> bool:
+    """True for pro / scout_plus (unlimited Copilot). Routed through the central
+    is_paid_user helper so the paid-vs-free gate is identical everywhere."""
+    return is_paid_user(user_row.get("subscription_plan"))
+
+
+def _consume_copilot_quota(user_id: str) -> bool:
+    """Atomically lazy-reset (per day), check, and increment the free-tier Copilot
+    counter in a single UPDATE (see the consume_copilot_message RPC). Returns True if
+    the message is allowed (and was counted), False if today's limit is reached.
+
+    Using one row-locked statement avoids the read-then-write race two near-simultaneous
+    requests would hit — the counter can never exceed the limit."""
+    res = supabase.rpc(
+        "consume_copilot_message",
+        {"p_user_id": user_id, "p_limit": COPILOT_DAILY_LIMIT},
+    ).execute()
+    # The SQL function returns a scalar boolean; supabase-py exposes it on .data.
+    data = res.data
+    if isinstance(data, list):
+        data = data[0] if data else False
+    return bool(data)
+
+
+def _limit_reached_payload() -> dict:
+    """Structured 'limit reached' event the frontend renders as an inline upgrade
+    prompt (distinguished from a normal stream by type == 'limit_reached')."""
+    return {
+        "type": "limit_reached",
+        "limit_reached": True,
+        # Just the factual headline — the upgrade card itself renders the Pro
+        # value props, CTA, and the "resets tomorrow" reassurance.
+        "message": (
+            f"You've reached your {COPILOT_DAILY_LIMIT} free Copilot messages for today."
+        ),
+        "upsell": {"plan": "Pro", "price": "$5.99/mo"},
+    }
 
 
 def _fetch_conversation(conversation_id: str, user_id: str) -> dict | None:
@@ -152,6 +200,28 @@ async def copilot_chat(
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
     user_id = user_row["id"]
+
+    # Free-tier daily gate. Pro / Scout+ skip the counter entirely (unlimited). For free
+    # users we consume one message atomically BEFORE any LLM call; if they're over the
+    # daily limit we stream back a single limit_reached event and never touch the model,
+    # the conversation, or persistence.
+    if not _is_paid(user_row):
+        allowed = await run_in_threadpool(_consume_copilot_quota, user_id)
+        if not allowed:
+            payload = _limit_reached_payload()
+
+            async def limit_stream() -> AsyncIterator[str]:
+                yield _sse(payload)
+
+            return StreamingResponse(
+                limit_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
 
     # Resolve (or create) the conversation up front so the client gets its id.
     if body.conversation_id:

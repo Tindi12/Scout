@@ -7,7 +7,7 @@ import { Bell } from 'lucide-react'
 
 import { SendScoutButton } from '@/components/layout/SendScoutButton'
 import {
-  hasPaidFeatures,
+  isPaidUser,
   normalizeSubscriptionPlan,
 } from '@/lib/subscription-plan'
 
@@ -33,14 +33,10 @@ export function TopBar() {
         const response = await fetch('/api/user/me', { cache: 'no-store' })
         if (!response.ok) return
         const body = (await response.json()) as {
-          is_pro?: boolean | null
           subscription_plan?: string | null
         }
-        const plan = normalizeSubscriptionPlan(
-          body.subscription_plan,
-          body.is_pro,
-        )
-        if (!cancelled) setIsPro(hasPaidFeatures(plan, body.is_pro))
+        const plan = normalizeSubscriptionPlan(body.subscription_plan)
+        if (!cancelled) setIsPro(isPaidUser(plan))
       } catch {
         if (!cancelled) setIsPro(false)
       }

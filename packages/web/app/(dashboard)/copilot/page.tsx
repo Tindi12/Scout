@@ -46,6 +46,7 @@ function CopilotPageContent() {
     isStreaming,
     isAwaitingFirstToken,
     error,
+    limitInfo,
     sendMessage,
     loadConversation,
     reset,
@@ -140,6 +141,7 @@ function CopilotPageContent() {
             <MessageList
               messages={messages}
               isAwaitingFirstToken={isAwaitingFirstToken}
+              limitInfo={limitInfo}
               className="mx-auto max-w-3xl"
             />
           )}
@@ -154,7 +156,7 @@ function CopilotPageContent() {
           ) : null}
           <ChatInput
             onSend={(text) => void sendMessage(text)}
-            disabled={isStreaming}
+            disabled={isStreaming || limitInfo !== null}
           />
         </div>
       </div>

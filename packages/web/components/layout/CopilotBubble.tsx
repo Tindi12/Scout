@@ -24,6 +24,7 @@ export function CopilotBubble() {
     isStreaming,
     isAwaitingFirstToken,
     error,
+    limitInfo,
     sendMessage,
   } = useCopilotChat()
 
@@ -135,6 +136,7 @@ export function CopilotBubble() {
               <MessageList
                 messages={messages}
                 isAwaitingFirstToken={isAwaitingFirstToken}
+                limitInfo={limitInfo}
               />
             )}
           </div>
@@ -149,7 +151,7 @@ export function CopilotBubble() {
             ) : null}
             <ChatInput
               onSend={(text) => void sendMessage(text)}
-              disabled={isStreaming}
+              disabled={isStreaming || limitInfo !== null}
               placeholder="Message Scout…"
               autoFocus
             />

@@ -69,7 +69,7 @@ import {
   type WorkAuthorization,
 } from '@/lib/profile-completion'
 import { scoutLogo } from '@/lib/scout-logo'
-import { hasPaidFeatures, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
+import { isPaidUser, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 import { cn } from '@/lib/utils'
 
 type SectionId =
@@ -365,14 +365,8 @@ export default function ProfilePage() {
         }
         const rawRow = result.profile as unknown as {
           subscription_plan?: string | null
-          is_pro?: boolean | null
         }
-        setIsPro(
-          hasPaidFeatures(
-            normalizeSubscriptionPlan(rawRow.subscription_plan, rawRow.is_pro),
-            rawRow.is_pro,
-          ),
-        )
+        setIsPro(isPaidUser(normalizeSubscriptionPlan(rawRow.subscription_plan)))
         setProfile(merged)
         baselineRef.current = merged
       }

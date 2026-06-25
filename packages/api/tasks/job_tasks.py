@@ -3,6 +3,7 @@ import json
 import logging
 
 from core.celery_app import celery_app
+from core.subscription import is_paid_user
 from services.job_fetcher import fetch_all_jobs
 from services.job_store import store_jobs
 from core.supabase_client import supabase
@@ -149,8 +150,7 @@ def _cover_letters_enabled(user_data: dict) -> bool:
     """True only for Pro/Scout+ users who turned the cover-letter toggle on."""
     if not user_data.get("generate_cover_letters"):
         return False
-    plan = (user_data.get("subscription_plan") or "").lower()
-    return bool(user_data.get("is_pro")) or plan in ("pro", "scout_plus")
+    return is_paid_user(user_data.get("subscription_plan"))
 
 
 def _cover_letter_applicant(user_data: dict) -> dict:

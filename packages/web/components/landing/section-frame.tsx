@@ -8,9 +8,9 @@ export function LandingRails() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 -z-10 px-6 lg:px-12"
+      className="pointer-events-none absolute inset-y-0 left-0 right-0 -z-10 px-6 lg:px-12"
     >
-      <div className="landing-rails mx-auto h-full max-w-7xl" />
+      <div className="landing-rails mx-auto min-h-full max-w-7xl" />
     </div>
   )
 }

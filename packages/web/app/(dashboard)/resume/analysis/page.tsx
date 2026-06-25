@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { BreakdownCard } from '@/components/resume/BreakdownCard'
 import { scoutLogo } from '@/lib/scout-logo'
+import { isPaidUser, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 import { ScoreWheel } from '@/components/resume/ScoreWheel'
 import {
   RewriteResults,
@@ -369,10 +370,10 @@ export default function ResumeAnalysisPage() {
           return
         }
         const body = (await res.json()) as {
-          is_pro?: boolean
+          subscription_plan?: string | null
           target_roles?: unknown
         }
-        setIsPro(Boolean(body?.is_pro))
+        setIsPro(isPaidUser(normalizeSubscriptionPlan(body?.subscription_plan)))
         setTargetRoles(normalizeTargetRoleKeys(body?.target_roles))
       } catch {
         if (!cancelled) {

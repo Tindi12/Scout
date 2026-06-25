@@ -40,7 +40,7 @@ import {
   type ProfileData,
 } from '@/lib/profile-completion'
 import {
-  hasPaidFeatures,
+  isPaidUser,
   normalizeSubscriptionPlan,
 } from '@/lib/subscription-plan'
 
@@ -89,7 +89,7 @@ export default function ExplorePage() {
   const hasPulsedRef = useRef(false)
   const autoSelectedKeyRef = useRef<string | null>(null)
 
-  // 1. Load the Scout user row (need is_pro + supabase id).
+  // 1. Load the Scout user row (need subscription_plan + supabase id).
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -111,19 +111,15 @@ export default function ExplorePage() {
         }
         const body = (await res.json()) as {
           id?: string | null
-          is_pro?: boolean | null
           subscription_plan?: string | null
           profile?: Partial<ProfileData> | null
           profile_complete?: boolean | null
         }
-        const plan = normalizeSubscriptionPlan(
-          body.subscription_plan,
-          body.is_pro,
-        )
+        const plan = normalizeSubscriptionPlan(body.subscription_plan)
         const completion = computeProfileCompletion(body.profile ?? undefined)
         setUser({
           id: body.id ?? null,
-          isPro: hasPaidFeatures(plan, body.is_pro),
+          isPro: isPaidUser(plan),
           profileComplete: Boolean(
             body.profile_complete ?? completion.profileComplete,
           ),

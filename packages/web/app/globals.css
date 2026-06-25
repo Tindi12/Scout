@@ -106,8 +106,27 @@
 
   /* Tsenta-style framing: continuous vertical rails down the centered column. */
   .landing-rails {
-    border-left: 1px solid var(--landing-line);
-    border-right: 1px solid var(--landing-line);
+    position: relative;
+    height: 100%;
+    min-height: 100%;
+  }
+
+  .landing-rails::before,
+  .landing-rails::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--landing-line);
+  }
+
+  .landing-rails::before {
+    left: 0;
+  }
+
+  .landing-rails::after {
+    right: 0;
   }
 
   /* Hairline divider drawn at the top of a framed section. */

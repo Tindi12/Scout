@@ -65,7 +65,6 @@ if (!email) throw new Error("No email found")
       target_roles: data.target_roles,
       phone_number: data.phone_number ?? null,
       onboarding_complete: true,
-      is_pro: false,
       copilot_messages_used: 0,
     },
     { onConflict: 'clerk_id' },

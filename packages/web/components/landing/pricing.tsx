@@ -7,7 +7,7 @@ const FREE_FEATURES: Feature[] = [
   { label: 'Resume parsing & Scout Score' },
   { label: 'AI weakness diagnosis' },
   { label: 'Browse matched internships' },
-  { label: 'Limited AI Copilot messages' },
+  { label: 'Limited Scout AI Copilot messages' },
   { label: 'Manual application links' },
 ]
 
@@ -16,7 +16,7 @@ const PRO_FEATURES: Feature[] = [
   { label: 'Job-specific resume rewrites', emphasis: true },
   { label: 'Autonomous auto-apply via Scout Agent', emphasis: true },
   { label: 'LaTeX Jake-format PDF resumes' },
-  { label: 'Unlimited AI Copilot streaming' },
+  { label: 'Unlimited Scout AI Copilot messages' },
   { label: 'Live Kanban application tracker' },
   { label: '7-day automated follow-up emails' },
   { label: 'Priority pgvector job matching' },
@@ -201,6 +201,18 @@ export function Pricing() {
             ))}
           </ul>
         </div>
+      </div>
+
+      <div className="mt-12 flex justify-center">
+        <Link
+          href="/pricing"
+          className="font-label group inline-flex items-center gap-1.5 text-sm font-medium text-[#A1A1AA] transition-colors duration-200 hover:text-white"
+        >
+          Compare all features
+          <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5">
+            &rarr;
+          </span>
+        </Link>
       </div>
     </section>
   )

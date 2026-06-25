@@ -31,7 +31,6 @@ type Status = 'loading' | 'empty' | 'loaded' | 'error'
 type UserRow = {
   id: string
   name: string | null
-  is_pro: boolean | null
   target_roles: string[] | null
   profile_complete: boolean | null
 }
@@ -135,7 +134,6 @@ export default function DashboardPage() {
         }
         const body = (await res.json()) as {
           id?: string | null
-          is_pro?: boolean | null
           target_roles?: unknown
           profile_complete?: boolean | null
           profile?: { name?: string | null } | null
@@ -145,7 +143,6 @@ export default function DashboardPage() {
           data: {
             id: body?.id ? String(body.id) : '',
             name: body.profile?.name ?? null,
-            is_pro: body.is_pro ?? false,
             target_roles: Array.isArray(body.target_roles)
               ? (body.target_roles as string[])
               : [],

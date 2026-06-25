@@ -8,7 +8,8 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from postgrest.exceptions import APIError
 
-from core.auth import require_pro, verify_resume_api_user
+from core.auth import verify_resume_api_user
+from core.entitlements import require_paid
 from core.supabase_client import supabase
 from services.latex_generator import generate_resume_pdf as compile_resume_pdf
 from services.resume_parser import resume_parser
@@ -790,7 +791,7 @@ async def list_resume_variants(
 @router.post("/generate-variant")
 async def generate_resume_variant(
     request: GenerateVariantRequest,
-    current_user: dict = Depends(require_pro),
+    current_user: dict = Depends(require_paid),
 ) -> dict:
     user_supabase_id = _resolve_supabase_user_id(current_user["sub"])
     resume_row = _load_owned_resume_row(
@@ -881,7 +882,7 @@ async def get_analysis(
 @router.post("/rewrite")
 async def rewrite_resume(
     request: RewriteResumeRequest,
-    current_user: dict = Depends(require_pro),
+    current_user: dict = Depends(require_paid),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
@@ -915,7 +916,7 @@ async def rewrite_resume(
 @router.post("/rewrite-for-job")
 async def rewrite_resume_for_job(
     request: RewriteForJobRequest,
-    current_user: dict = Depends(require_pro),
+    current_user: dict = Depends(require_paid),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
@@ -953,7 +954,7 @@ async def rewrite_resume_for_job(
 @router.post("/pdf")
 async def generate_resume_pdf_endpoint(
     request: PdfResumeRequest,
-    current_user: dict = Depends(require_pro),
+    current_user: dict = Depends(require_paid),
 ) -> Response:
     """Compile parsed (or rewritten) resume JSON into a Jake-format PDF."""
     resume_content = _resolve_resume_content_for_pdf(

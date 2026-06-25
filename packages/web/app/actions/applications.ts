@@ -57,7 +57,7 @@ export async function queueApplication(
 
   const userLookup = await admin
     .from('users')
-    .select('id, profile_complete, is_pro, subscription_plan')
+    .select('id, profile_complete, subscription_plan')
     .eq('clerk_id', userId)
     .maybeSingle()
 
@@ -68,7 +68,6 @@ export async function queueApplication(
   const userRow = userLookup.data as {
     id?: string
     profile_complete?: boolean | null
-    is_pro?: boolean | null
     subscription_plan?: string | null
   } | null
   const supabaseUserId = userRow?.id
@@ -84,10 +83,7 @@ export async function queueApplication(
     }
   }
 
-  const plan = normalizeSubscriptionPlan(
-    userRow.subscription_plan,
-    userRow.is_pro,
-  )
+  const plan = normalizeSubscriptionPlan(userRow.subscription_plan)
   const used = await countApplications(admin, supabaseUserId)
   const credits = buildApplicationCredits(plan, used)
 
