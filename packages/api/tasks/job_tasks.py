@@ -2,17 +2,29 @@ import asyncio
 import json
 import logging
 
+import sentry_sdk
+
+from core.analytics import EVENT_APPLICATION_COMPLETED, capture
 from core.celery_app import celery_app
 from core.subscription import is_paid_user
 from services.job_fetcher import fetch_all_jobs
 from services.job_store import store_jobs
-from core.supabase_client import supabase
+from services.notification_helpers import (
+    notify_application,
+    notify_scout_run_finished,
+)
 from datetime import datetime, timezone
 from services.portal_detector import detect_portal
 from services.latex_generator import generate_resume_pdf, generate_cover_letter_pdf
 from services.resume_rewriter import resume_rewriter
 from services.cover_letter_writer import cover_letter_writer
 from core.redis_client import cancel_key, get_redis
+from core.supabase_client import supabase
+from core.concurrency import (
+    acquire_apply_slots,
+    new_slot_token,
+    release_apply_slots,
+)
 from services.browser_agent import browser_agent, resolve_apply_company
 
 logger = logging.getLogger(__name__)
@@ -256,6 +268,7 @@ def finalize_run_if_complete(scout_run_id: str) -> None:
         scout_run_id,
         "completed" if applied > 0 else "failed",
     )
+    notify_scout_run_finished(scout_run_id)
 
 
 @celery_app.task(name="tasks.apply_to_job", bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=900, time_limit=960)
@@ -271,9 +284,12 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
     # Budget ladder: agent run cap 840 < this 870 < soft 900 < hard 960 < Browserbase
     # session 1260. Sized to allow ~6 min of awaiting_code (verification-code relay).
     APPLY_PIPELINE_TIMEOUT = 870
+    # Short backoff before re-checking for a free concurrency slot (see below).
+    SLOT_THROTTLE_BACKOFF_SECONDS = 20
 
+    # 0. Honor stop-all / cancellation BEFORE taking a concurrency slot, so a
+    #    cancelled application never consumes capacity (or bounces on the throttle).
     try:
-        # 0. Honor stop-all / cancellation
         current = (
             supabase.table("applications")
             .select("status, error_message")
@@ -288,7 +304,39 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                 # A cancelled app is terminal — close the run if everything else is done too.
                 finalize_run_if_complete(scout_run_id)
                 return {"success": False, "cancelled": True, "application_id": application_id}
+    except Exception as e:
+        # A transient read error here shouldn't strand the application — fall through
+        # and let the main pipeline (with its own error handling) run. Capture as a
+        # warning so a chronically failing pre-check is still visible.
+        sentry_sdk.capture_exception(e, level="warning")
+        logger.warning("apply_to_job_task pre-cancel check failed (app %s): %s", application_id, e)
 
+    # Acquire a global + per-user concurrency slot BEFORE creating the Browserbase
+    # session. If the fleet (or this user) is at capacity, re-queue a FRESH task with a
+    # short backoff instead of busy-looping or failing. A fresh apply_async (not
+    # self.retry) is used deliberately: backpressure re-queues must NOT consume the
+    # max_retries budget the session-loss path depends on. The slot is released in the
+    # finally below on every exit path — success, exception, retry, or worker death
+    # (TTL backstop). Per-task isolation (own session, own agent) is untouched.
+    slot_token = new_slot_token()
+    if not acquire_apply_slots(user_id, slot_token):
+        logger.info(
+            "apply_to_job_task throttled — no concurrency slot (app %s, user %s); "
+            "re-queueing in %ss",
+            application_id, user_id, SLOT_THROTTLE_BACKOFF_SECONDS,
+        )
+        apply_to_job_task.apply_async(
+            kwargs={
+                "scout_run_id": scout_run_id,
+                "application_id": application_id,
+                "user_id": user_id,
+                "job_id": job_id,
+            },
+            countdown=SLOT_THROTTLE_BACKOFF_SECONDS,
+        )
+        return {"success": False, "throttled": True, "application_id": application_id}
+
+    try:
         # 0.5. Clear any stale stop-all flag from an earlier cancellation, so a
         # re-queued application (Submit & Retry) isn't instantly killed by it.
         # A CURRENT stop-all is still honored: it flips the row to failed/
@@ -410,6 +458,18 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #9. Update scout_run → increment applied_count
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "applied_count"}).execute()
 
+        notify_application(user_id, application_id, "application_applied", scout_run_id=scout_run_id)
+
+        # Accuracy-critical funnel event: fire ONLY now that the application truly
+        # reached "applied" (never from optimistic UI). Keyed by the user's Clerk id so
+        # it stitches to the browser-side funnel. Portal is a useful non-PII dimension.
+        capture(
+            user_data.get("clerk_id"),
+            EVENT_APPLICATION_COMPLETED,
+            {"portal": portal},
+            flush=True,
+        )
+
         finalize_run_if_complete(scout_run_id)
 
     except NeedsAttentionException as e:
@@ -421,6 +481,13 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             "run_id": scout_run_id,
             "counter_name": "needs_attention_count"
         }).execute()
+        notify_application(
+            user_id,
+            application_id,
+            "application_needs_attention",
+            scout_run_id=scout_run_id,
+            body_override=str(e),
+        )
         finalize_run_if_complete(scout_run_id)
         return {
             "success": False,
@@ -444,23 +511,40 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         # app sticks at 'queued' and the run never closes.
         if err_text.startswith("browser_session_lost:"):
             if self.request.retries < self.max_retries:
+                # Transient infra — don't capture every retry (noise). Leave a
+                # breadcrumb so the eventual terminal event has the retry history.
+                sentry_sdk.add_breadcrumb(
+                    category="apply",
+                    level="warning",
+                    message="browser_session_lost; retrying",
+                    data={"retries": self.request.retries, "application_id": application_id},
+                )
                 supabase.table("applications").update({
                     "status": "queued",
                     "error_message": "Temporary browser session issue. Retrying...",
                 }).eq("id", application_id).execute()
                 supabase.table("scout_runs").update({"status": "running"}).eq("id", scout_run_id).execute()
                 raise self.retry(exc=e, countdown=SESSION_LOSS_BACKOFF_SECONDS)
+            # Retries exhausted — this is now a terminal failure worth seeing in Sentry.
+            sentry_sdk.set_tag("apply_failure", "session_loss_exhausted")
+            sentry_sdk.capture_exception(e)
             supabase.table("applications").update({
                 "status": "failed",
                 "error_message": f"browser_session_lost (gave up after {self.request.retries} retries): {err_text[:300]}",
             }).eq("id", application_id).execute()
             supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "failed_count"}).execute()
+            notify_application(user_id, application_id, "application_failed", scout_run_id=scout_run_id)
             finalize_run_if_complete(scout_run_id)
             return {"success": False, "error": "session_loss_exhausted", "application_id": application_id}
 
         error_str = err_text.lower()
         if any(x in error_str for x in ("402", "payment required", "quota", "billing")):
             logger.error("Billing/quota error — not retrying: %s", err_text)
+            # Not a bug, but we want visibility when provider quotas/billing start
+            # biting in production — capture at warning level (not error-flooding).
+            sentry_sdk.capture_message(
+                f"apply billing/quota limit hit: {err_text[:200]}", level="warning"
+            )
             supabase.table("applications").update({
                 "status": "failed",
                 "error_message": f"Service limit reached: {err_text[:200]}",
@@ -469,6 +553,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                 "run_id": scout_run_id,
                 "counter_name": "failed_count",
             }).execute()
+            notify_application(user_id, application_id, "application_failed", scout_run_id=scout_run_id)
             finalize_run_if_complete(scout_run_id)
             return {"success": False, "error": "billing_limit"}
 
@@ -476,12 +561,24 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         # no resume, etc.). Do NOT retry: a retry just spins again for minutes and flips
         # the run back to 'running', stretching the UI's "running" state and pushing users
         # to Stop-all — which is what masked this very error_message. Record and finalize.
+        # Swallowed by design (graceful DB record + return), so capture it explicitly —
+        # these agent failures are the most important errors to see in production.
+        sentry_sdk.set_tag("apply_failure", "deterministic")
+        sentry_sdk.capture_exception(e)
         supabase.table("applications").update({
             "status": "failed",
             "error_message": err_text[:1000],
         }).eq("id", application_id).execute()
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "failed_count"}).execute()
+        notify_application(user_id, application_id, "application_failed", scout_run_id=scout_run_id)
         finalize_run_if_complete(scout_run_id)
         return {"success": False, "error": err_text[:300], "application_id": application_id}
+
+    finally:
+        # Release the concurrency slot on EVERY exit path: success, the NeedsAttention/
+        # exception returns above, and `raise self.retry(...)` (the slot is freed now;
+        # the retried attempt re-acquires later). The Redis TTL backstops a worker that
+        # dies before reaching here. No leaked slots.
+        release_apply_slots(user_id, slot_token)
 
     return {"success": True, "application_id": application_id, "scout_run_id": scout_run_id}

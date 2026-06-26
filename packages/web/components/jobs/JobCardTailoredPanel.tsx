@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { JakeResumePreview } from '@/components/resume/JakeResumePreview'
 import type { RewrittenResume } from '@/components/resume/RewriteResults'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { scoutLogo } from '@/lib/scout-logo'
 import { normalizeRewrittenResume } from '@/lib/rewritten-resume'
 import { cn } from '@/lib/utils'
@@ -154,6 +155,7 @@ export function JobCardTailoredPanel({
         setErrorMessage('Tailored resume was empty. Try again.')
         return
       }
+      track(ANALYTICS_EVENTS.RESUME_TAILORED_FOR_JOB)
       setResume(parsed)
       setStatus('ready')
       onCached?.()

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useUser } from '@clerk/nextjs'
 
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   completeOnboarding,
@@ -192,6 +193,9 @@ export default function OnboardingPage() {
 
     try {
       await completeOnboarding(data)
+      track(ANALYTICS_EVENTS.ONBOARDING_COMPLETED, {
+        target_role_count: form.target_roles.length,
+      })
       setStep('success')
       window.setTimeout(() => {
         startTransition(() => router.push('/dashboard'))

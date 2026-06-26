@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 
 import {
   Dialog,
@@ -11,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { scoutLogo } from '@/lib/scout-logo'
 
 type ProUpgradeDialogProps = {
@@ -27,6 +29,14 @@ export function ProUpgradeDialog({
   description,
 }: ProUpgradeDialogProps) {
   const router = useRouter()
+
+  // Funnel step: an in-app upgrade CTA was surfaced. `title` distinguishes which
+  // gate triggered it (e.g. "Send Scout is a Pro feature") without any PII.
+  useEffect(() => {
+    if (open) {
+      track(ANALYTICS_EVENTS.UPGRADE_VIEWED, { source: 'gate_dialog', gate: title })
+    }
+  }, [open, title])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

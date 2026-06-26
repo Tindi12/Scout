@@ -21,6 +21,7 @@ import {
 
 import { JobCard, type JobMatch } from '@/components/jobs/JobCard'
 import { ColumnSelectActions, JobColumn } from '@/components/jobs/JobColumn'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { ProfileRequiredDialog } from '@/components/profile/ProfileRequiredDialog'
 import {
@@ -388,6 +389,9 @@ export default function ExplorePage() {
         const data = (await res.json()) as { scout_run_id?: string }
         setShowBatchConfirm(false)
         if (data.scout_run_id) {
+          track(ANALYTICS_EVENTS.SCOUT_RUN_STARTED, {
+            job_count: jobIds.length,
+          })
           router.push(`/tracker?run_id=${encodeURIComponent(data.scout_run_id)}`)
         }
       } finally {
@@ -407,6 +411,14 @@ export default function ExplorePage() {
     })
     return () => setBatch(null)
   }, [selectedCount, isSending, handleSendScoutClick, setBatch])
+
+  // Funnel step: a meaningful Explore view (jobs actually loaded). Fire once per mount.
+  const hasTrackedJobsViewRef = useRef(false)
+  useEffect(() => {
+    if (status !== 'loaded' || hasTrackedJobsViewRef.current) return
+    hasTrackedJobsViewRef.current = true
+    track(ANALYTICS_EVENTS.JOBS_VIEWED, { job_count: jobs.length })
+  }, [status, jobs.length])
 
   // One-time attention pulse on the top-bar Send Scout button after auto-select.
   useEffect(() => {

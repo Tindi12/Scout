@@ -1,3 +1,4 @@
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import type { SubscriptionPlan } from '@/lib/subscription-plan'
 
 export type CheckoutTier = Extract<SubscriptionPlan, 'pro' | 'scout_plus'>
@@ -48,6 +49,9 @@ async function postJson(path: string, body?: unknown): Promise<unknown> {
  * This (via UpgradeButton) is the single place checkout is triggered.
  */
 export async function createCheckoutUrl(tier: CheckoutTier): Promise<string> {
+  // Funnel step: the user committed to paying. The authoritative paid event
+  // (subscription_activated) is fired server-side from the Stripe webhook.
+  track(ANALYTICS_EVENTS.CHECKOUT_STARTED, { tier })
   const data = await postJson('/api/stripe/create-checkout-session', { tier })
   const url = (data as { url?: unknown } | null)?.url
   if (typeof url !== 'string' || !url) {
@@ -66,5 +70,6 @@ export async function createPortalUrl(): Promise<string> {
   if (typeof url !== 'string' || !url) {
     throw new Error('Could not open billing portal. Please try again.')
   }
+  track(ANALYTICS_EVENTS.BILLING_PORTAL_OPENED)
   return url
 }

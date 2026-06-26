@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 import { ProfileTextarea } from '@/components/profile/inputs'
 import { useToast } from '@/hooks/use-toast'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 
 import type { ApplicationRecord } from './tracker-utils'
 
@@ -38,6 +39,9 @@ export function AnswerModal({ app, onClose, onSuccess }: AnswerModalProps) {
         })
         return
       }
+      track(ANALYTICS_EVENTS.APPLICATION_MANUALLY_MANAGED, {
+        action: 'answer_submitted',
+      })
       toast({
         title: 'Answer submitted',
         description: 'Scout will retry this application.',

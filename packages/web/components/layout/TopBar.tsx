@@ -3,8 +3,8 @@
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
-import { Bell } from 'lucide-react'
 
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { SendScoutButton } from '@/components/layout/SendScoutButton'
 import {
   isPaidUser,
@@ -47,8 +47,6 @@ export function TopBar() {
     }
   }, [user?.id])
 
-  const unreadCount = 0
-
   return (
     <div className="sticky top-0 z-20 flex h-14 items-center justify-between gap-4 border-b border-white/[0.06] bg-[#080808]/80 px-5 backdrop-blur-md md:px-8">
       <nav aria-label="Breadcrumb" className="min-w-0">
@@ -69,19 +67,7 @@ export function TopBar() {
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02] text-[#888] transition-colors hover:border-white/[0.12] hover:text-white"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.75} />
-          {unreadCount > 0 ? (
-            <span
-              aria-hidden
-              className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#FF6733] shadow-[0_0_8px_rgba(255,103,51,0.7)]"
-            />
-          ) : null}
-        </button>
+        <NotificationBell />
 
         <SendScoutButton variant="topbar" isPro={isPro} />
       </div>

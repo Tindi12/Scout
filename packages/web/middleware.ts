@@ -11,6 +11,9 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/login(.*)',
+  // Sentry's tunnel endpoint (next.config tunnelRoute) — must stay unauthenticated so
+  // client error reports from logged-out users (landing/sign-in pages) still get through.
+  '/monitoring(.*)',
 ])
 
 const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)'])

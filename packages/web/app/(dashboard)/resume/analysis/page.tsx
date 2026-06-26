@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { BreakdownCard } from '@/components/resume/BreakdownCard'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { scoutLogo } from '@/lib/scout-logo'
 import { isPaidUser, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 import { ScoreWheel } from '@/components/resume/ScoreWheel'
@@ -527,6 +528,10 @@ export default function ResumeAnalysisPage() {
         })
         return
       }
+
+      track(ANALYTICS_EVENTS.RESUME_REWRITE_USED, {
+        target_role: state.analysis.target_role ?? null,
+      })
 
       setRewriteState({
         status: 'done',

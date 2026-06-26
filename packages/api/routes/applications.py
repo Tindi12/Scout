@@ -14,6 +14,7 @@ from core.redis_client import (
 )
 from core.supabase_client import supabase
 from tasks.job_tasks import apply_to_job_task, finalize_run_if_complete
+from services.notification_helpers import notify_application
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +286,14 @@ async def stop_all_applications(
             "status": "failed",
             "error_message": "cancelled_by_user",
         }).in_("id", ids).eq("user_id", user_id).execute()
+
+        for app_id in ids:
+            notify_application(
+                user_id,
+                app_id,
+                "application_failed",
+                body_override="cancelled_by_user",
+            )
 
         # Kill switches for runs already in flight: the agent's in-run watcher
         # polls these and calls agent.stop() within seconds.

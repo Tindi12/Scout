@@ -1,7 +1,10 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+
+import { useNotificationsContext } from '@/contexts/notifications-context'
 
 import {
   Tooltip,
@@ -58,6 +61,12 @@ function clearTimerStart(appId: string) {
   }
 }
 
+const DISMISSIBLE_STATUSES = new Set<AppStatus>([
+  'failed',
+  'needs_attention',
+  'awaiting_code',
+])
+
 type LiveApplicationFeedProps = {
   run: ScoutRun
   applicationRecords: ApplicationRecord[]
@@ -71,10 +80,20 @@ export function LiveApplicationFeed({
   onAnswerClick,
   onCodeClick,
 }: LiveApplicationFeedProps) {
+  const { isApplicationDismissed, dismissForApplication } =
+    useNotificationsContext()
+
   const apps = useMemo(() => {
     const merged = mergeRunApplications(run.applications, applicationRecords)
-    return sortRunApplications(merged)
-  }, [run.applications, applicationRecords])
+    return sortRunApplications(merged).filter((app) => {
+      if (!DISMISSIBLE_STATUSES.has(app.status)) return true
+      return !isApplicationDismissed(app.id)
+    })
+  }, [
+    run.applications,
+    applicationRecords,
+    isApplicationDismissed,
+  ])
 
   if (apps.length === 0) return null
 
@@ -89,7 +108,17 @@ export function LiveApplicationFeed({
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.25, delay: index * 0.05 }}
             >
-              <FeedRow app={app} onAnswerClick={onAnswerClick} onCodeClick={onCodeClick} records={applicationRecords} />
+              <FeedRow
+                app={app}
+                onAnswerClick={onAnswerClick}
+                onCodeClick={onCodeClick}
+                records={applicationRecords}
+                onDismiss={
+                  DISMISSIBLE_STATUSES.has(app.status)
+                    ? () => void dismissForApplication(app.id)
+                    : undefined
+                }
+              />
             </motion.div>
           ))}
         </AnimatePresence>
@@ -103,11 +132,13 @@ function FeedRow({
   onAnswerClick,
   onCodeClick,
   records,
+  onDismiss,
 }: {
   app: EnrichedRunApplication
   onAnswerClick: (app: ApplicationRecord) => void
   onCodeClick: (app: ApplicationRecord) => void
   records: ApplicationRecord[]
+  onDismiss?: () => void
 }) {
   // Defensive fallback: app.status is normalized upstream, but a config miss here
   // (e.g. a hot-reload race between bundle versions) must not crash the tracker.
@@ -191,6 +222,16 @@ function FeedRow({
         ) : (
           <span className="font-label text-xs text-[#333]">View →</span>
         )}
+        {onDismiss ? (
+          <button
+            type="button"
+            aria-label="Dismiss from feed"
+            onClick={onDismiss}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#555] transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        ) : null}
       </div>
     </div>
   )

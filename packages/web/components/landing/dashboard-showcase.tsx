@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import Image from 'next/image'
 import {
   Activity,
@@ -51,7 +51,7 @@ type NavLabel = (typeof NAV)[number]['label']
 const SLIDES: {
   nav: NavLabel
   crumb: string[]
-  render: () => JSX.Element
+  render: () => ReactElement
 }[] = [
   { nav: 'Dashboard', crumb: ['SCOUT', 'DASHBOARD'], render: () => <DashboardSlide /> },
   { nav: 'Jobs', crumb: ['SCOUT', 'EXPLORE'], render: () => <ExploreSlide /> },

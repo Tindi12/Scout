@@ -3,6 +3,7 @@ import { Inter, Manrope } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
 
+import { Providers } from './providers'
 import './globals.css'
 
 const manrope = Manrope({
@@ -55,7 +56,7 @@ export default function RootLayout({
           className="bg-black font-body text-white antialiased selection:bg-[#FF6733]/30 selection:text-white"
           suppressHydrationWarning
         >
-          {children}
+          <Providers>{children}</Providers>
         </body>
       </html>
     </ClerkProvider>

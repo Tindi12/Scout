@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.observability import init_sentry
 from routes.applications import router as applications_router
 from routes.clerk_router import router as clerk_router
 from routes.copilot import router as copilot_router
@@ -17,6 +18,10 @@ from routes.stripe_router import router as stripe_router
 from core.supabase_client import test_connection
 
 load_dotenv()
+
+# Initialize Sentry before the app is created so startup errors are captured too.
+# No-ops cleanly when SENTRY_DSN is unset (local dev).
+init_sentry()
 
 API_VERSION = os.getenv("API_VERSION")
 

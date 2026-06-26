@@ -2,6 +2,8 @@
 
 import { useCallback, useRef, useState } from 'react'
 
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
+
 export type ChatRole = 'user' | 'assistant'
 
 export type ChatMessage = {
@@ -112,6 +114,12 @@ export function useCopilotChat(
     async (text: string) => {
       const trimmed = text.trim()
       if (!trimmed || streamingRef.current) return
+
+      // Feature usage. NEVER include message content — tier rides along as a
+      // registered super property, so no per-call tier wiring is needed.
+      track(ANALYTICS_EVENTS.COPILOT_MESSAGE_SENT, {
+        is_new_conversation: conversationIdRef.current === null,
+      })
 
       setError(null)
       setLimitInfo(null)

@@ -5,7 +5,7 @@ import { getApiBaseUrl } from '@/lib/api'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { userId } = await auth()
   if (!userId) {
@@ -23,7 +23,8 @@ export async function GET(
     )
   }
 
-  const id = params.id?.trim()
+  const { id: rawId } = await params
+  const id = rawId?.trim()
   if (!id) {
     return NextResponse.json({ detail: 'id required' }, { status: 400 })
   }

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import {
   formatRelativeTime,
   getRunTitle,
@@ -151,6 +152,10 @@ export function MissionControlHeader({ run, stats }: MissionControlHeaderProps) 
   const handleStopAll = async () => {
     if (!running || activeCount === 0 || isStopping) return
     setIsStopping(true)
+    track(ANALYTICS_EVENTS.APPLICATION_MANUALLY_MANAGED, {
+      action: 'stop_all',
+      active_count: activeCount,
+    })
     try {
       await fetch('/api/applications/stop-all', {
         method: 'POST',

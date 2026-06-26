@@ -16,6 +16,7 @@ from browser_use import Agent, Browser, BrowserProfile
 from browser_use.agent.views import ActionResult, AgentHistoryList
 from browser_use.tools.service import Tools
 from services.browser_llm import ScoutBrowserFallbackLLM, ScoutBrowserLLM
+from services.notification_helpers import notify_application_by_id
 
 from core.browserbase import (
     create_session as create_browserbase_session,
@@ -541,6 +542,11 @@ def _install_verification_relay(tools: Tools, application_id: str | None) -> Non
             supabase.table("applications").update(
                 {"status": "awaiting_code", "error_message": message}
             ).eq("id", application_id).execute()
+            notify_application_by_id(
+                application_id,
+                "application_awaiting_code",
+                body_override=message,
+            )
 
         await asyncio.to_thread(_mark_awaiting)
         logger.info(
@@ -1285,6 +1291,14 @@ def _interpret_agent_result(result: AgentHistoryList) -> dict:
 
 class BrowserUseAgent:
     def __init__(self):
+        # CONCURRENCY HAZARD (latent): browser_agent is a module singleton, so these
+        # LLM clients are SHARED across every concurrent apply. That is safe ONLY under
+        # process-based Celery pools (prefork in prod, solo in dev), where each worker
+        # process gets its own instance and no two apply tasks share one in-memory client.
+        # If the worker pool is ever switched to threads/gevent/eventlet, these singletons
+        # become shared mutable state across coroutines/threads in ONE process and would
+        # need per-task instances (or locking) to avoid interleaved-request bugs.
+        # Do not switch pool type without addressing this.
         self.llm = ScoutBrowserLLM(temperature=0)
         self.fallback_llm = ScoutBrowserFallbackLLM(temperature=0)
 

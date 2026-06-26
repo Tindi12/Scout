@@ -18,7 +18,9 @@ Scout’s Postgres schema is **not** versioned in this repo. All DDL lives on th
 
 ## Current `public` tables (live)
 
-`users`, `resumes`, `analyses`, `jobs`, `applications`, `conversations`, `scout_runs`, `resume_variants` — all with RLS enabled.
+`users`, `resumes`, `analyses`, `jobs`, `applications`, `conversations`, `scout_runs`, `resume_variants`, `notifications` — all with RLS enabled.
+
+Apply `notifications.sql` in the SQL Editor to create the `notifications` table and backfill from existing applications.
 
 ## MCP for agents
 

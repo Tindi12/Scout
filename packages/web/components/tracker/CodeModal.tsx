@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { useToast } from '@/hooks/use-toast'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 
 import type { ApplicationRecord } from './tracker-utils'
 
@@ -51,6 +52,9 @@ export function CodeModal({ app, onClose, onSuccess }: CodeModalProps) {
         })
         return
       }
+      track(ANALYTICS_EVENTS.APPLICATION_MANUALLY_MANAGED, {
+        action: 'verification_code_submitted',
+      })
       toast({
         title: 'Code sent to Scout',
         description: 'Scout is entering the code and finishing the application.',

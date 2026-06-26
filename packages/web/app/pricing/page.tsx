@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { SecuredByStripe } from '@/components/billing/SecuredByStripe'
 import { DynamicIsland } from '@/components/landing/dynamic-island'
@@ -9,11 +11,17 @@ import { ComparisonChart } from '@/components/pricing/ComparisonChart'
 import { PricingCards } from '@/components/pricing/PricingCards'
 import type { Viewer } from '@/components/pricing/PlanCta'
 import { useTier } from '@/hooks/use-tier'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 
 export default function PricingPage() {
   const { plan, isPaid, isSignedIn, loading } = useTier()
 
   const viewer: Viewer = { isSignedIn, plan, loading }
+
+  // Funnel step: the user saw the pricing/upgrade surface.
+  useEffect(() => {
+    track(ANALYTICS_EVENTS.UPGRADE_VIEWED, { source: 'pricing_page' })
+  }, [])
 
   return (
     <>

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from svix.webhooks import Webhook, WebhookVerificationError
 import os
 from dotenv import load_dotenv
+from core.analytics import EVENT_SIGNED_UP, capture
 from core.supabase_client import supabase
 
 load_dotenv()
@@ -61,6 +62,11 @@ async def clerk_webhook(request: Request) -> dict[str, str]:
         except Exception as e:
             print(e)
             raise HTTPException(status_code=500, detail="Database error")
+
+        # Funnel entry point. Clerk is the source of truth for account creation, so
+        # firing here (keyed by the Clerk id the browser SDK also identifies with) is
+        # more reliable than a client event that a closed tab could drop.
+        capture(clerk_id, EVENT_SIGNED_UP, flush=True)
 
     elif event_type == "user.updated":
         data = payload["data"]

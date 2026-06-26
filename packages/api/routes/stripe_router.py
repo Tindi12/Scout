@@ -11,6 +11,7 @@ import json
 import logging
 import os
 
+import sentry_sdk
 import stripe
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +19,11 @@ from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 from stripe import StripeError
 
+from core.analytics import (
+    EVENT_SUBSCRIPTION_ACTIVATED,
+    capture,
+    set_user_properties,
+)
 from core.auth import verify_resume_api_user
 from core.stripe_client import (
     STRIPE_WEBHOOK_SECRET,
@@ -279,6 +285,21 @@ def _user_id_by_customer(customer_id: str | None) -> str | None:
     return (row.data or {}).get("id") if row.data else None
 
 
+def _clerk_id_for_user(user_id: str | None) -> str | None:
+    """Map a Scout user id back to their Clerk id — the distinct_id PostHog uses so a
+    server-side payment event ties to the same person the browser SDK identified."""
+    if not user_id:
+        return None
+    row = (
+        supabase.table("users")
+        .select("clerk_id")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return (row.data or {}).get("clerk_id") if row.data else None
+
+
 def _resolve_user_id(metadata: dict | None, customer_id: str | None) -> str | None:
     """Resolve the Scout user for an event: prefer the user_id in metadata (set on the
     checkout session / subscription in 10.2), else fall back to stripe_customer_id."""
@@ -385,6 +406,19 @@ def _handle_checkout_completed(session) -> None:
     )
     logger.info("Granted %s to user %s via checkout", tier, user_id)
 
+    # Payment source of truth: fire the activation event server-side (a client event
+    # could be lost if the user closes the tab on Stripe's success page). Keyed by the
+    # Clerk id so it joins the browser-side funnel, and also update the person's tier.
+    clerk_id = _clerk_id_for_user(user_id)
+    if clerk_id:
+        capture(
+            clerk_id,
+            EVENT_SUBSCRIPTION_ACTIVATED,
+            {"tier": tier},
+            flush=True,
+        )
+        set_user_properties(clerk_id, {"subscription_plan": tier})
+
 
 def _handle_subscription_updated(subscription) -> None:
     """customer.subscription.updated — plan change / renewal / status change."""
@@ -410,9 +444,14 @@ def _handle_subscription_updated(subscription) -> None:
             return
         _grant_tier(user_id, tier, subscription_id=subscription_id)
         logger.info("Set user %s to %s (status=%s)", user_id, tier, status)
+        # Keep the PostHog person's tier accurate on upgrades/downgrades (portal plan
+        # changes flow through here, not checkout). Not counted as an activation —
+        # subscription.updated also fires on every renewal, which would inflate it.
+        set_user_properties(_clerk_id_for_user(user_id), {"subscription_plan": tier})
     elif status in _REVOKE_STATUSES:
         _revert_to_free(user_id)
         logger.info("Reverted user %s to free (status=%s)", user_id, status)
+        set_user_properties(_clerk_id_for_user(user_id), {"subscription_plan": FREE})
     else:
         # past_due / incomplete / paused — keep access during the grace window.
         logger.info("Ignoring subscription.updated for user %s (status=%s)", user_id, status)
@@ -431,6 +470,7 @@ def _handle_subscription_deleted(subscription) -> None:
         return
     _revert_to_free(user_id)
     logger.info("Reverted user %s to free (subscription deleted)", user_id)
+    set_user_properties(_clerk_id_for_user(user_id), {"subscription_plan": FREE})
 
 
 _EVENT_HANDLERS = {
@@ -474,7 +514,12 @@ async def stripe_webhook(request: Request) -> dict:
         await run_in_threadpool(handler, obj)
     except Exception as e:
         # Event was authentic; a handler hiccup shouldn't trigger Stripe retries. Log
-        # loudly and still 200 so we can investigate without a retry storm.
+        # loudly and still 200 so we can investigate without a retry storm. We swallow
+        # the exception (return 200) by design, so Sentry won't see it automatically —
+        # capture it explicitly so a silently-failing webhook is still visible. The
+        # raw event object is NOT attached (it carries customer PII); only the type.
+        sentry_sdk.set_tag("stripe_event_type", event_type)
+        sentry_sdk.capture_exception(e)
         logger.error("Error handling Stripe event %s: %s", event_type, e, exc_info=True)
         return {"received": True, "handled": False}
 

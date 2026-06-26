@@ -19,6 +19,7 @@ import {
 } from 'react'
 
 import { uploadResume } from '@/app/actions/resume'
+import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -279,6 +280,10 @@ export function ResumeUpload({
         return
       }
 
+      track(ANALYTICS_EVENTS.RESUME_UPLOADED, {
+        file_type: file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx',
+      })
+
       patchUpload(file, 30, 'reading_resume')
 
       const { data: userRow, error: rolesError } = await supabase
@@ -335,6 +340,8 @@ export function ResumeUpload({
         })
         return
       }
+
+      track(ANALYTICS_EVENTS.RESUME_SCORED, { target_role: targetRoleLabel })
 
       patchUpload(file, 100, 'wrapping_up')
       setState({ status: 'success', file })
