@@ -1,0 +1,86 @@
+'use client'
+
+import { useState, type FormEvent } from 'react'
+
+type Status = 'idle' | 'loading' | 'success' | 'already' | 'error'
+
+export function NewsletterForm() {
+  const [status, setStatus] = useState<Status>('idle')
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    const email = (new FormData(form).get('email') as string | null)?.trim()
+    if (!email) return
+
+    setStatus('loading')
+    setMessage(null)
+
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = (await res.json().catch(() => null)) as {
+        status?: string
+        detail?: string
+      } | null
+
+      if (!res.ok) {
+        setStatus('error')
+        setMessage(data?.detail || 'Something went wrong. Please try again.')
+        return
+      }
+
+      if (data?.status === 'already_subscribed') {
+        setStatus('already')
+        setMessage("You're already on the list.")
+      } else {
+        setStatus('success')
+        setMessage("You're in. Check your inbox for a confirmation.")
+        form.reset()
+      }
+    } catch {
+      setStatus('error')
+      setMessage('Something went wrong. Please try again.')
+    }
+  }
+
+  const isBusy = status === 'loading'
+  const isDone = status === 'success' || status === 'already'
+
+  return (
+    <div className="relative w-full">
+      <form className="relative flex w-full items-center" onSubmit={handleSubmit}>
+        <input
+          type="email"
+          name="email"
+          required
+          placeholder="you@university.edu"
+          aria-label="Email address"
+          disabled={isBusy || isDone}
+          className="font-body w-full rounded-full border border-white/10 bg-white/[0.03] px-6 py-4 pr-36 text-[14.5px] text-white placeholder:text-[#888888] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:shadow-[0_0_24px_rgba(255,103,51,0.2)] focus:outline-none disabled:opacity-60"
+        />
+        <button
+          type="submit"
+          disabled={isBusy || isDone}
+          className="font-label absolute right-1.5 inline-flex items-center justify-center rounded-full bg-[#FF6733] px-5 py-2.5 text-[13px] font-semibold text-white shadow-[0_0_20px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_30px_rgba(255,103,51,0.55)] active:scale-95 disabled:opacity-70"
+        >
+          {isBusy ? 'Subscribing…' : isDone ? 'Subscribed' : 'Subscribe'}
+        </button>
+      </form>
+      {message ? (
+        <p
+          role="status"
+          className={`mt-3 font-body text-[13px] ${
+            status === 'error' ? 'text-[#f87171]' : 'text-[#A1A1AA]'
+          }`}
+        >
+          {message}
+        </p>
+      ) : null}
+    </div>
+  )
+}

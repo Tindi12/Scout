@@ -1,3 +1,17 @@
 packages:
   - 'packages/web'
   - 'packages/api'
+  - 'packages/emails'
+
+# Next's bundled styled-jsx has a peer range on @types/react capped at ^18 (not yet
+# updated for React 19), so pnpm nests a private 18.x copy just to satisfy it. That
+# second copy's ambient JSX/ReactNode declarations get merged into the SAME tsc
+# program as packages/web's real @types/react@19, producing bogus "Property
+# 'children' is missing... required in type 'ReactPortal'" errors on components that
+# have nothing to do with styled-jsx. Force a single resolution everywhere. Does not
+# affect packages/emails, which intentionally stays on React 18 for react-email's
+# SSR-to-static-HTML pipeline — pnpm overrides only collapse duplicate copies of the
+# SAME requested version range, they don't change what a package's own
+# dependencies/devDependencies declare.
+overrides:
+  '@types/react': ^19.2.17

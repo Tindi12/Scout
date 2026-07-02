@@ -1,6 +1,9 @@
 import asyncio
 import json
 import logging
+import secrets
+import time
+from datetime import datetime, timezone
 
 import sentry_sdk
 
@@ -13,19 +16,29 @@ from services.notification_helpers import (
     notify_application,
     notify_scout_run_finished,
 )
-from datetime import datetime, timezone
 from services.portal_detector import detect_portal
 from services.latex_generator import generate_resume_pdf, generate_cover_letter_pdf
 from services.resume_rewriter import resume_rewriter
 from services.cover_letter_writer import cover_letter_writer
-from core.redis_client import cancel_key, get_redis
+from core import composio_mail
+from core.redis_client import (
+    CONTROL_TOKEN_TTL,
+    acquire_gh_verify_mutex,
+    cancel_key,
+    cancelled_token_key,
+    control_token_key,
+    gate_key,
+    get_redis,
+    release_gh_verify_mutex,
+    verification_code_key,
+)
 from core.supabase_client import supabase
 from core.concurrency import (
     acquire_apply_slots,
     new_slot_token,
     release_apply_slots,
 )
-from services.browser_agent import browser_agent, resolve_apply_company
+from services.browserbase_agent import browserbase_agent, resolve_apply_company
 
 logger = logging.getLogger(__name__)
 
@@ -274,15 +287,18 @@ def finalize_run_if_complete(scout_run_id: str) -> None:
 @celery_app.task(name="tasks.apply_to_job", bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=900, time_limit=960)
 def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str, job_id: str) -> dict:
     SESSION_LOSS_BACKOFF_SECONDS = 180
-    # Hard wall-clock budget for one apply attempt (the full agent pipeline),
-    # enforced inside asyncio because Celery's enforcement is dead on the Windows dev
-    # worker: soft_time_limit needs signals and time_limit needs pool kill support —
-    # --pool=solo has neither (a hung pipeline once ran 12 min and only died via
-    # cold-shutdown's "TaskPool does not implement kill_job"). Kept below
-    # soft_time_limit=900 so on Linux prefork this still fires first and takes the
-    # clean browser_session_lost retry path instead of SoftTimeLimitExceeded.
-    # Budget ladder: agent run cap 840 < this 870 < soft 900 < hard 960 < Browserbase
-    # session 1260. Sized to allow ~6 min of awaiting_code (verification-code relay).
+    # Hard wall-clock budget for one apply attempt, passed to the Browserbase engine and
+    # enforced INSIDE its poll loop (it stops the run and returns browser_session_lost on
+    # deadline). We enforce it there rather than relying on Celery because Celery's limits
+    # are dead on the Windows --pool=solo dev worker (soft_time_limit needs signals,
+    # time_limit needs pool kill support; solo has neither — a hung run once took 12 min).
+    # Kept below soft_time_limit=900 so on Linux prefork Celery's soft limit is only a
+    # backstop and the clean browser_session_lost retry path fires first.
+    # Budget ladder: engine poll deadline 870 < Celery soft 900 < hard 960. (Browserbase
+    # enforces its own server-side run timeout independently.) The verification-code
+    # gate wait (APPLY_VERIFY_TIMEOUT, default 300s) spends from the SAME 870s budget;
+    # if the deadline lands mid-gate the poll loop returns needs_attention instead of
+    # retrying (a retry would re-submit the form and trigger a fresh code).
     APPLY_PIPELINE_TIMEOUT = 870
     # Short backoff before re-checking for a free concurrency slot (see below).
     SLOT_THROTTLE_BACKOFF_SECONDS = 20
@@ -319,6 +335,12 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
     # finally below on every exit path — success, exception, retry, or worker death
     # (TTL backstop). Per-task isolation (own session, own agent) is untouched.
     slot_token = new_slot_token()
+    # Set inside the try (portal-dependent) but released in the finally.
+    gh_mutex_held = False
+    # Per-ATTEMPT control token for the agent's mid-run channel (/apply-control and
+    # /apply-code). Minted fresh each attempt so an abandoned attempt can be cancelled
+    # without touching its retry.
+    control_token = secrets.token_urlsafe(24)
     if not acquire_apply_slots(user_id, slot_token):
         logger.info(
             "apply_to_job_task throttled — no concurrency slot (app %s, user %s); "
@@ -357,6 +379,19 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         if not user_data:
             raise Exception("User not found")
 
+        # 3.5. Strip the encrypted USAJobs password out of the dict that flows into
+        #      the browser agent. select("*") pulls it in, but nothing in the generic
+        #      apply path consumes it, so popping it guarantees the ciphertext never
+        #      reaches _build_applicant_context, the LLM prompt, or any dict-level log.
+        #      POINT-OF-USE SEAM: when the USAJobs login flow is built (Epic 7), this
+        #      is where to decrypt it — ONLY for portal == "usajobs" — and hand the
+        #      plaintext to the agent as browser-use sensitive_data (the `input` tool
+        #      override already honors has_sensitive_data). Decrypt in-memory at that
+        #      moment only; never store it decrypted and never log it. Example:
+        #          from core.crypto import decrypt_usajobs_password
+        #          usajobs_password = decrypt_usajobs_password(encrypted_usajobs_password)
+        encrypted_usajobs_password = user_data.pop("usajobs_password", None)  # noqa: F841
+
         # 4. Fetch job from Supabase
         job = supabase.table("jobs").select("title, company, url, portal, description").eq("id", job_id).single().execute()
 
@@ -388,6 +423,36 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
 
         #6. Detect portal from job.portal field
         portal = detect_portal(url=job_url, portal=job_data.get("portal", "unknown"))
+
+        # 6.1. GREENHOUSE VERIFICATION MUTEX — at most one Greenhouse apply in flight
+        #      per user. Greenhouse's code gate emails an 8-char code with nothing
+        #      binding it to a specific application; two parked applies would receive
+        #      two indistinguishable codes in the same window and the fetcher could
+        #      inject the wrong one. Serialize the whole run (any Greenhouse apply may
+        #      hit the gate at submit). Contention re-queues a FRESH task, mirroring
+        #      the slot-throttle above (never self.retry — that budget belongs to
+        #      session-loss). Released in the finally.
+        if portal == "greenhouse":
+            if acquire_gh_verify_mutex(user_id, slot_token):
+                gh_mutex_held = True
+            else:
+                logger.info(
+                    "Greenhouse verify mutex busy (user %s) — re-queueing app %s in %ss",
+                    user_id, application_id, SLOT_THROTTLE_BACKOFF_SECONDS,
+                )
+                supabase.table("applications").update({"status": "queued"}).eq(
+                    "id", application_id
+                ).execute()
+                apply_to_job_task.apply_async(
+                    kwargs={
+                        "scout_run_id": scout_run_id,
+                        "application_id": application_id,
+                        "user_id": user_id,
+                        "job_id": job_id,
+                    },
+                    countdown=SLOT_THROTTLE_BACKOFF_SECONDS,
+                )
+                return {"success": False, "throttled": True, "application_id": application_id}
 
         user_data = {
             **user_data,
@@ -421,28 +486,84 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                     )
                     cover_letter_pdf = None
 
-        #7. Apply via the AI browser agent (agent-only — the per-ATS Playwright
-        #   adapters were removed for full agentic focus).
-        #   On deadline, wait_for cancels the pipeline; browser_agent's finally block
-        #   still REST-releases the Browserbase session (sync call, uncancellable).
-        logger.info("Applying via AI agent (portal=%s): %s", portal, job_url)
+        #7. Apply via the Browserbase Agent (hosted agent-only — browser-use was removed
+        #   for the full platform migration). The engine runs synchronously: it stages
+        #   the resume/cover-letter to signed URLs, starts a run, and polls it to a
+        #   terminal state. The hard wall-clock budget is enforced INSIDE the poll loop,
+        #   so no asyncio.wait_for wrapper is needed. Stop-all is honored two ways: the
+        #   poll loop watches the Redis cancel flag (Scout-side), and the same flag
+        #   drives the agent's /apply-control URL to CANCEL so the live run aborts at
+        #   the submit boundary (the platform offers no server-side stop).
+        #
+        #   Verification codes (Greenhouse email gate): the agent polls /apply-code
+        #   mid-run; the first hit flips this application to awaiting_code via _on_gate,
+        #   then _fetch_code (Composio, deterministic, read-only) fills the Redis
+        #   mailbox the endpoint serves — the run finishes submitted without ever
+        #   ending at the gate. The manual CodeModal writes the same mailbox.
         try:
-            result = asyncio.run(
-                asyncio.wait_for(
-                    browser_agent.apply(
-                        job_url=job_url,
-                        user_data=user_data,
-                        resume_pdf=resume_pdf,
-                        application_id=application_id,
-                        cover_letter_pdf=cover_letter_pdf,
-                    ),
-                    timeout=APPLY_PIPELINE_TIMEOUT,
-                )
+            get_redis().setex(
+                control_token_key(control_token), CONTROL_TOKEN_TTL, application_id
             )
-        except TimeoutError as deadline_exc:  # asyncio.TimeoutError is this builtin on 3.11+
-            raise Exception(
-                f"browser_session_lost: apply pipeline exceeded {APPLY_PIPELINE_TIMEOUT}s hard deadline"
-            ) from deadline_exc
+        except Exception:
+            # Without the mapping the control/code URLs 404 -> the prompt degrades
+            # (no pre-submit check, codes go manual). Don't fail the apply over it.
+            logger.warning("Could not register control token for app %s", application_id)
+
+        clerk_id = user_data.get("clerk_id") or ""
+        mail_provider = (user_data.get("mail_provider") or "").strip()
+
+        def _on_gate(gate_ts: float) -> None:
+            """First code poll from the agent: park the app on awaiting_code so the
+            tracker shows the CODE NEEDED card (manual fallback stays live)."""
+            supabase.table("applications").update({
+                "status": "awaiting_code",
+                "gate_hit_at": datetime.fromtimestamp(gate_ts, timezone.utc).isoformat(),
+                "error_message": (
+                    "The job site emailed a verification code to "
+                    f"{user_data.get('email') or 'your email'}. "
+                    + (
+                        "Scout is retrieving it automatically — you can also paste it "
+                        "here to finish faster."
+                        if mail_provider
+                        else "Paste it here so Scout can finish submitting."
+                    )
+                ),
+            }).eq("id", application_id).execute()
+            notify_application(
+                user_id,
+                application_id,
+                "application_awaiting_code",
+                scout_run_id=scout_run_id,
+            )
+
+        def _fetch_code(gate_ts: float) -> str | None:
+            """One deterministic Composio fetch attempt (poll loop provides the ~15s
+            cadence). None when auto-fetch isn't available — manual path still works."""
+            if not (composio_mail.is_configured() and clerk_id and mail_provider):
+                return None
+            return composio_mail.fetch_verification_code(clerk_id, mail_provider, gate_ts)
+
+        def _on_code(_code: str) -> None:
+            """Auto-fetch delivered the code — agent resumes; reflect it in the tracker
+            (the manual endpoint does this same flip itself)."""
+            supabase.table("applications").update({
+                "status": "in_progress",
+                "error_message": None,
+            }).eq("id", application_id).execute()
+
+        logger.info("Applying via Browserbase Agent (portal=%s): %s", portal, job_url)
+        result = browserbase_agent.apply(
+            job_url=job_url,
+            user_data=user_data,
+            resume_pdf=resume_pdf,
+            application_id=application_id,
+            cover_letter_pdf=cover_letter_pdf,
+            deadline_seconds=APPLY_PIPELINE_TIMEOUT,
+            control_token=control_token,
+            on_gate=_on_gate,
+            fetch_code=_fetch_code,
+            on_code=_on_code,
+        )
         if result.get("needs_attention"):
             raise NeedsAttentionException(result.get("attention_question"))
         if not result.get("success"):
@@ -580,5 +701,18 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         # the retried attempt re-acquires later). The Redis TTL backstops a worker that
         # dies before reaching here. No leaked slots.
         release_apply_slots(user_id, slot_token)
+        if gh_mutex_held:
+            release_gh_verify_mutex(user_id, slot_token)
+        # Retire this attempt's mid-run channel: token mapping (the public routes 404
+        # from here on), gate flag, and any undelivered code. TTLs backstop all three.
+        try:
+            get_redis().delete(
+                control_token_key(control_token),
+                cancelled_token_key(control_token),
+                gate_key(application_id),
+                verification_code_key(application_id),
+            )
+        except Exception:
+            pass
 
     return {"success": True, "application_id": application_id, "scout_run_id": scout_run_id}

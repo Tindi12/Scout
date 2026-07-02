@@ -78,6 +78,13 @@ export async function uploadResume(formData: FormData): Promise<{
         return { success: false, error: 'Failed to resolve user profile' }
       }
 
+      const { triggerWelcomeEmail } = await import('@/lib/welcome-email')
+      triggerWelcomeEmail({
+        userId: String(newUser.id),
+        email,
+        firstName: clerkUser.firstName,
+      })
+
       resolvedSupabaseUserId = newUser.id
     }
   }

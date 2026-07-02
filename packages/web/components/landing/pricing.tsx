@@ -131,7 +131,7 @@ export function Pricing() {
           </div>
           <div className="mt-5 flex items-baseline gap-2">
             <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
-              $5.99
+              $14.99
             </span>
             <span className="font-body text-lg text-[#A1A1AA]">/month</span>
           </div>
@@ -173,7 +173,7 @@ export function Pricing() {
           </div>
           <div className="mt-5 flex items-baseline gap-2">
             <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
-              $14.99
+              $29.99
             </span>
             <span className="font-body text-lg text-[#A1A1AA]">/month</span>
           </div>

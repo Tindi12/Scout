@@ -1,0 +1,18 @@
+Hey {{first_name}},
+
+I'm Tindi. I built Scout because applying to internships was eating my life, and I figured it shouldn't have to eat yours too.
+
+The best first move: upload your resume. Scout scores it, rewrites it properly, and then starts applying to matched internships for you, while you do literally anything else.
+
+Upload your resume → {{cta_url}}
+
+If anything's confusing or broken, just hit reply. This isn't a no-reply address. It lands in my actual inbox, and I read everything.
+
+Tindi
+
+Founder and CEO of Scout
+
+----------------------------------------
+
+Scout: built by a student, for students.
+You're receiving this because you have a Scout account.

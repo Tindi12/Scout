@@ -1,4 +1,4 @@
-import { fetchUniversityLogos, type University } from '@/lib/ncaa-logos'
+import { getUniversityLogos, type University } from '@/lib/ncaa-logos'
 
 function UniversityItem({ uni }: { uni: University }) {
   return (
@@ -20,8 +20,8 @@ function UniversityItem({ uni }: { uni: University }) {
   )
 }
 
-export async function UniversityBelt() {
-  const universities = await fetchUniversityLogos()
+export function UniversityBelt() {
+  const universities = getUniversityLogos()
   const doubled = [...universities, ...universities]
 
   return (

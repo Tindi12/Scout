@@ -20,6 +20,8 @@ import time
 # Read at import in core.stripe_client; set before importing the app so the signature
 # we generate matches what the route verifies against.
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_regression_test")
+# Handler failure paths call sentry_sdk.capture_exception on purpose — keep tests quiet.
+os.environ["SENTRY_DSN"] = ""
 
 from fastapi.testclient import TestClient
 
@@ -27,6 +29,7 @@ import main
 import routes.stripe_router as sr
 
 _SECRET = os.environ["STRIPE_WEBHOOK_SECRET"]
+_TEST_USER_ID = "aaaaaaaa-0000-0000-0000-000000000001"
 _client = TestClient(main.app)
 
 
@@ -39,10 +42,14 @@ def _sign(body: bytes) -> str:
     return f"t={ts},v1={sig}"
 
 
-def _post_signed(event: dict, captured: list):
+def _post_signed(event: dict, captured: list, monkeypatch=None):
     body = json.dumps(event).encode()
     # Capture DB writes instead of performing them (no Supabase/network in unit tests).
     sr._apply_user_update = lambda uid, fields: captured.append((uid, fields))
+    if monkeypatch is not None:
+        monkeypatch.setattr(sr, "_user_was_paid_before_grant", lambda _uid: False)
+        monkeypatch.setattr(sr, "_clerk_id_for_user", lambda _uid: None)
+        monkeypatch.setattr(sr, "_send_upgrade_thanks", lambda *_a, **_k: None)
     return _client.post(
         "/stripe/webhook",
         content=body,
@@ -50,7 +57,7 @@ def _post_signed(event: dict, captured: list):
     )
 
 
-def test_checkout_completed_grants_tier_from_real_signed_event():
+def test_checkout_completed_grants_tier_from_real_signed_event(monkeypatch):
     captured: list = []
     event = {
         "id": "evt_test_checkout",
@@ -59,25 +66,25 @@ def test_checkout_completed_grants_tier_from_real_signed_event():
         "data": {
             "object": {
                 "id": "cs_test",
-                "metadata": {"scout_user_id": "user-uuid-1", "tier": "pro"},
+                "metadata": {"scout_user_id": _TEST_USER_ID, "tier": "pro"},
                 "customer": "cus_test",
                 "subscription": "sub_test",
             }
         },
     }
-    resp = _post_signed(event, captured)
+    resp = _post_signed(event, captured, monkeypatch)
     assert resp.status_code == 200
     assert resp.json()["handled"] is True
     # The regression: a StripeObject would crash here and capture nothing.
     assert captured, "handler must update the user"
     uid, fields = captured[0]
-    assert uid == "user-uuid-1"
+    assert uid == _TEST_USER_ID
     assert fields["subscription_plan"] == "pro"
     assert fields["stripe_customer_id"] == "cus_test"
     assert fields["stripe_subscription_id"] == "sub_test"
 
 
-def test_subscription_deleted_reverts_to_free():
+def test_subscription_deleted_reverts_to_free(monkeypatch):
     captured: list = []
     event = {
         "id": "evt_test_deleted",
@@ -87,11 +94,11 @@ def test_subscription_deleted_reverts_to_free():
             "object": {
                 "id": "sub_test",
                 "customer": "cus_test",
-                "metadata": {"scout_user_id": "user-uuid-1"},
+                "metadata": {"scout_user_id": _TEST_USER_ID},
             }
         },
     }
-    resp = _post_signed(event, captured)
+    resp = _post_signed(event, captured, monkeypatch)
     assert resp.status_code == 200
     assert resp.json()["handled"] is True
     assert captured, "handler must update the user"

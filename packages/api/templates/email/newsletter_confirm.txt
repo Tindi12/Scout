@@ -1,0 +1,18 @@
+Hey there,
+
+Thanks for signing up. I'm Tindi, founder and CEO of Scout.
+
+You'll hear from me a couple times a month: internship tactics that actually work, plus Scout product updates. Nothing more, no daily noise.
+
+Try Scout → {{cta_url}}
+
+Got a question or a tip worth sharing? Just reply. It lands in my actual inbox.
+
+Tindi
+
+Founder and CEO of Scout
+
+----------------------------------------
+
+Scout: built by a student, for students.
+You're receiving this because you subscribed to the Scout newsletter. Unsubscribe {{{RESEND_UNSUBSCRIBE_URL}}}

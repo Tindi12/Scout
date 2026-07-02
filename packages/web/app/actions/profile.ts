@@ -79,6 +79,16 @@ const PROFILE_COLUMNS = [
   'profile_complete',
 ] as const
 
+// Secrets/credentials that must never be read into a profile payload. PROFILE_COLUMNS
+// is an allowlist so these are already excluded; this guard trips at module load if
+// one is ever added by mistake.
+const NEVER_EXPOSE = ['usajobs_password', 'usajobs_email'] as const
+for (const col of NEVER_EXPOSE) {
+  if ((PROFILE_COLUMNS as readonly string[]).includes(col)) {
+    throw new Error(`Security: ${col} must never be selected into a profile payload`)
+  }
+}
+
 type ProfileRow = ProfileData & { id: string; profile_complete: boolean }
 
 const ALLOWED_WORK_AUTH: ReadonlySet<WorkAuthorization> = new Set<WorkAuthorization>([

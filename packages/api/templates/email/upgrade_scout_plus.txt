@@ -1,0 +1,18 @@
+Hey {{first_name}},
+
+Thank you for upgrading, seriously. Scout is a student-built project, and your subscription is what keeps it running.
+
+You're on Scout+ now: 600 applications every 30 days and priority on everything: runs, rewrites, support.
+
+Start a Scout run → {{cta_url}}
+
+One ask: reply and tell me the one thing you wish Scout did that it doesn't yet. The roadmap is built from these replies more than anything else.
+
+Tindi
+
+Founder and CEO of Scout
+
+----------------------------------------
+
+Scout: built by a student, for students.
+You're receiving this because you have a Scout account.

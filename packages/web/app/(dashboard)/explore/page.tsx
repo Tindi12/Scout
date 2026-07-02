@@ -169,7 +169,8 @@ export default function ExplorePage() {
         }
         if (
           res.status === 404 &&
-          detail.toLowerCase().includes('resume')
+          (detail.toLowerCase().includes('resume') ||
+            detail.toLowerCase().includes('analysis'))
         ) {
           setStatus('no_resume')
           return

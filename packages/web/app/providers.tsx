@@ -4,31 +4,31 @@ import { useAuth } from '@clerk/nextjs'
 import { useEffect } from 'react'
 
 import {
+  CookieConsentProvider,
+  useCookieConsent,
+} from '@/components/consent/CookieConsentProvider'
+import {
   identifyUser,
-  initAnalytics,
   isAnalyticsEnabled,
   registerSuperProperties,
   resetUser,
 } from '@/lib/analytics'
 
 /**
- * App-wide client providers. Currently this is where PostHog product analytics is
- * initialized and where users are identified by their Clerk id so events tie to a
- * person across sessions. Rendered inside <ClerkProvider> (needs useAuth) but high
+ * App-wide client providers. This wraps the app in the cookie-consent provider, which
+ * owns PostHog initialization (init only happens after the user accepts cookies — see
+ * CookieConsentProvider). Users are then identified by their Clerk id so events tie to
+ * a person across sessions. Rendered inside <ClerkProvider> (needs useAuth) but high
  * enough to wrap the whole app.
  *
- * No-ops cleanly when NEXT_PUBLIC_POSTHOG_KEY is unset (local dev).
+ * No-ops cleanly when NEXT_PUBLIC_POSTHOG_KEY is unset (local dev) or before consent.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    initAnalytics()
-  }, [])
-
   return (
-    <>
+    <CookieConsentProvider>
       <AnalyticsIdentity />
       {children}
-    </>
+    </CookieConsentProvider>
   )
 }
 
@@ -41,8 +41,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
  */
 function AnalyticsIdentity() {
   const { isLoaded, isSignedIn, userId } = useAuth()
+  const { consent } = useCookieConsent()
 
   useEffect(() => {
+    // `consent` is in the deps so that when a signed-in user accepts cookies mid-
+    // session (PostHog just initialized), we (re)identify them. isAnalyticsEnabled()
+    // already returns false until consent === 'accepted'.
     if (!isAnalyticsEnabled() || !isLoaded) return
 
     if (!isSignedIn || !userId) {
@@ -88,7 +92,7 @@ function AnalyticsIdentity() {
     return () => {
       cancelled = true
     }
-  }, [isLoaded, isSignedIn, userId])
+  }, [isLoaded, isSignedIn, userId, consent])
 
   return null
 }

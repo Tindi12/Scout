@@ -25,6 +25,13 @@ from core.analytics import (
     set_user_properties,
 )
 from core.auth import verify_resume_api_user
+from core.email import (
+    EMAIL_UPGRADE_PRO,
+    EMAIL_UPGRADE_SCOUT_PLUS,
+    claim_email_send,
+    first_name_from,
+    send_email,
+)
 from core.stripe_client import (
     STRIPE_WEBHOOK_SECRET,
     price_id_for_tier,
@@ -56,6 +63,10 @@ _GRANT_STATUSES = {"active", "trialing"}
 
 class CheckoutRequest(BaseModel):
     tier: str
+
+
+class ConfirmCheckoutRequest(BaseModel):
+    session_id: str
 
 
 def _fetch_user_billing(clerk_id: str) -> dict | None:
@@ -196,6 +207,80 @@ async def create_checkout_session(
         raise HTTPException(status_code=502, detail="Could not start checkout. Please try again.")
 
     return {"url": session.url, "id": session.id}
+
+
+@router.post("/confirm-checkout-session")
+async def confirm_checkout_session(
+    body: ConfirmCheckoutRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """Fallback activation when the user lands on /welcome before the webhook fires.
+
+    Retrieves the Checkout session from Stripe, verifies it belongs to the caller and
+    is paid, then grants the tier using the same path as checkout.session.completed.
+    Safe to call repeatedly — idempotent when the plan is already active."""
+    session_id = body.session_id.strip()
+    if not session_id.startswith("cs_"):
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    user_row = await run_in_threadpool(_fetch_user_billing, current_user["sub"])
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    current_plan = user_row.get("subscription_plan")
+    if is_paid_user(current_plan):
+        return {
+            "subscription_plan": current_plan,
+            "activated": False,
+            "already_active": True,
+        }
+
+    try:
+        session_obj = await run_in_threadpool(
+            lambda: stripe_client.v1.checkout.sessions.retrieve(session_id)
+        )
+    except StripeError as e:
+        logger.error(
+            "Could not retrieve checkout session %s for user %s: %s",
+            session_id,
+            user_row["id"],
+            e,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Could not verify checkout. Please try again.",
+        ) from e
+
+    session = _as_dict(session_obj)
+
+    if session.get("mode") != "subscription":
+        raise HTTPException(status_code=400, detail="Invalid checkout session")
+
+    if not _session_belongs_to_user(session, user_row):
+        raise HTTPException(
+            status_code=403,
+            detail="Checkout session does not belong to this account",
+        )
+
+    if not _is_checkout_paid(session):
+        raise HTTPException(status_code=409, detail="Checkout not complete yet")
+
+    tier = await run_in_threadpool(
+        _activate_from_completed_checkout,
+        session,
+        source="confirm-checkout-session",
+    )
+    if tier is None:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not activate plan from checkout session",
+        )
+
+    return {
+        "subscription_plan": tier,
+        "activated": True,
+        "already_active": False,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +426,42 @@ def _grant_tier(
     _apply_user_update(user_id, fields)
 
 
+_UPGRADE_EMAIL_TYPES = {
+    PRO: EMAIL_UPGRADE_PRO,
+    SCOUT_PLUS: EMAIL_UPGRADE_SCOUT_PLUS,
+}
+
+
+def _send_upgrade_thanks(user_id: str, tier: str) -> None:
+    """Founder thank-you for a paid activation. Webhook-truth only: called right
+    after _grant_tier, never from the frontend redirect. Once per (user, tier) for
+    life — renewals re-hit the claim and no-op; a Pro→Scout+ switch is a new tier
+    and gets its own thanks; portal flapping can never re-email. Failures are
+    swallowed by core/email.py: granting paid access NEVER depends on this."""
+    try:
+        email_type = _UPGRADE_EMAIL_TYPES.get(tier)
+        if not email_type:
+            return
+        if not claim_email_send(user_id, email_type):
+            return
+        row = (
+            supabase.table("users")
+            .select("email, name")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        data = (row.data if row else None) or {}
+        send_email(
+            to=data.get("email"),
+            email_type=email_type,
+            first_name=first_name_from(data.get("name")),
+            user_id=user_id,
+        )
+    except Exception as e:  # noqa: BLE001 — thanks mail must never touch the grant path
+        logger.error("Upgrade thank-you failed for user %s: %s", user_id, e)
+
+
 def _revert_to_free(user_id: str) -> None:
     """Revert to free and clear the (now-dead) subscription id. The stripe_customer_id
     is kept on purpose so a resubscribe reuses the same customer."""
@@ -371,8 +492,58 @@ def _subscription_price_id(subscription) -> str | None:
         return None
 
 
-def _handle_checkout_completed(session) -> None:
-    """checkout.session.completed — the user finished paying. Grant the purchased tier."""
+def _as_dict(obj) -> dict:
+    """Normalize a Stripe SDK object (or webhook dict) to a plain dict for handlers."""
+    if isinstance(obj, dict):
+        return obj
+    to_dict = getattr(obj, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    return dict(obj)
+
+
+def _tier_from_checkout_session(session: dict) -> str | None:
+    metadata = session.get("metadata") or {}
+    tier = (metadata.get("tier") or "").strip().lower()
+    if tier in _PAID_TIERS:
+        return tier
+    return _tier_from_subscription(session.get("subscription"))
+
+
+def _is_checkout_paid(session: dict) -> bool:
+    """True when Stripe considers the Checkout session successfully paid."""
+    if session.get("payment_status") == "paid":
+        return True
+    return session.get("status") == "complete"
+
+
+def _session_belongs_to_user(session: dict, user_row: dict) -> bool:
+    """Ensure the authenticated user owns this Checkout session."""
+    metadata = session.get("metadata") or {}
+    if metadata.get("scout_user_id") == user_row["id"]:
+        return True
+    customer_id = session.get("customer")
+    stored_customer = user_row.get("stripe_customer_id")
+    return bool(customer_id and stored_customer and customer_id == stored_customer)
+
+
+def _user_was_paid_before_grant(user_id: str) -> bool:
+    row = (
+        supabase.table("users")
+        .select("subscription_plan")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return is_paid_user((row.data or {}).get("subscription_plan"))
+
+
+def _activate_from_completed_checkout(session: dict, *, source: str) -> str | None:
+    """Grant a paid tier from a completed Checkout session.
+
+    Shared by the webhook and the /welcome fallback (confirm-checkout-session).
+    Side effects (analytics, thank-you email) run only on the first free→paid
+    transition so duplicate webhook + confirm calls stay idempotent."""
     metadata = session.get("metadata") or {}
     customer_id = session.get("customer")
     subscription_id = session.get("subscription")
@@ -380,23 +551,24 @@ def _handle_checkout_completed(session) -> None:
     user_id = _resolve_user_id(metadata, customer_id)
     if not user_id:
         logger.warning(
-            "checkout.session.completed: no matching user (customer=%s)", customer_id
+            "%s: no matching user for checkout session (customer=%s)",
+            source,
+            customer_id,
         )
-        return
+        return None
 
-    tier = (metadata.get("tier") or "").strip().lower()
-    if tier not in _PAID_TIERS:
-        # Metadata missing/invalid — recover the tier from the subscription's price.
-        tier = _tier_from_subscription(subscription_id)
+    tier = _tier_from_checkout_session(session)
     if tier not in _PAID_TIERS:
         logger.error(
-            "checkout.session.completed: could not determine tier for user %s "
-            "(metadata=%s, subscription=%s)",
+            "%s: could not determine tier for user %s (metadata=%s, subscription=%s)",
+            source,
             user_id,
             metadata.get("tier"),
             subscription_id,
         )
-        return
+        return None
+
+    was_paid = _user_was_paid_before_grant(user_id)
 
     _grant_tier(
         user_id,
@@ -404,20 +576,26 @@ def _handle_checkout_completed(session) -> None:
         customer_id=customer_id,
         subscription_id=subscription_id,
     )
-    logger.info("Granted %s to user %s via checkout", tier, user_id)
+    logger.info("Granted %s to user %s via %s", tier, user_id, source)
 
-    # Payment source of truth: fire the activation event server-side (a client event
-    # could be lost if the user closes the tab on Stripe's success page). Keyed by the
-    # Clerk id so it joins the browser-side funnel, and also update the person's tier.
-    clerk_id = _clerk_id_for_user(user_id)
-    if clerk_id:
-        capture(
-            clerk_id,
-            EVENT_SUBSCRIPTION_ACTIVATED,
-            {"tier": tier},
-            flush=True,
-        )
-        set_user_properties(clerk_id, {"subscription_plan": tier})
+    if not was_paid:
+        clerk_id = _clerk_id_for_user(user_id)
+        if clerk_id:
+            capture(
+                clerk_id,
+                EVENT_SUBSCRIPTION_ACTIVATED,
+                {"tier": tier},
+                flush=True,
+            )
+            set_user_properties(clerk_id, {"subscription_plan": tier})
+        _send_upgrade_thanks(user_id, tier)
+
+    return tier
+
+
+def _handle_checkout_completed(session) -> None:
+    """checkout.session.completed — the user finished paying. Grant the purchased tier."""
+    _activate_from_completed_checkout(session, source="checkout.session.completed webhook")
 
 
 def _handle_subscription_updated(subscription) -> None:
@@ -448,6 +626,9 @@ def _handle_subscription_updated(subscription) -> None:
         # changes flow through here, not checkout). Not counted as an activation —
         # subscription.updated also fires on every renewal, which would inflate it.
         set_user_properties(_clerk_id_for_user(user_id), {"subscription_plan": tier})
+        # Thank-you rides the same webhook truth. The per-(user, tier) claim inside
+        # makes renewals a no-op and gives portal switches (Pro→Scout+) one thanks.
+        _send_upgrade_thanks(user_id, tier)
     elif status in _REVOKE_STATUSES:
         _revert_to_free(user_id)
         logger.info("Reverted user %s to free (status=%s)", user_id, status)

@@ -3,7 +3,7 @@
 import { useAuth } from '@clerk/nextjs'
 import { ArrowRight, Check, Loader2 } from 'lucide-react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { SecuredByStripe } from '@/components/billing/SecuredByStripe'
@@ -22,6 +22,8 @@ type Status = 'activating' | 'confirmed' | 'timeout'
 
 function WelcomeContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const sessionId = searchParams.get('session_id')
   const { isLoaded, isSignedIn } = useAuth()
   const [status, setStatus] = useState<Status>('activating')
   const [plan, setPlan] = useState<SubscriptionPlan>('free')
@@ -36,9 +38,26 @@ function WelcomeContent() {
     }
   }, [])
 
+  const confirmCheckoutSession = useCallback(async (): Promise<void> => {
+    if (!sessionId) return
+    try {
+      await fetch('/api/stripe/confirm-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+        cache: 'no-store',
+      })
+    } catch {
+      // Transient — polling /api/user/me will keep trying.
+    }
+  }, [sessionId])
+
   const poll = useCallback(async () => {
     if (stoppedRef.current) return
     try {
+      // Fallback when the webhook is slow or missing (e.g. local dev without stripe listen).
+      await confirmCheckoutSession()
+
       const res = await fetch('/api/user/me', { cache: 'no-store' })
       if (res.ok) {
         const body = (await res.json()) as { subscription_plan?: string | null }
@@ -61,7 +80,7 @@ function WelcomeContent() {
       return
     }
     timerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS)
-  }, [clearTimer])
+  }, [clearTimer, confirmCheckoutSession])
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
@@ -75,13 +94,10 @@ function WelcomeContent() {
     }
   }, [isLoaded, isSignedIn, poll, clearTimer])
 
-  // Once the plan is confirmed, gently send them to the feature they paid for.
-  useEffect(() => {
-    if (status !== 'confirmed') return
-    const t = setTimeout(() => router.push('/explore'), 5000)
-    return () => clearTimeout(t)
-  }, [status, router])
-
+  // Intentionally NO auto-redirect: the user may have upgraded from any page and
+  // could arrive here without expecting it. We keep them on the thank-you screen
+  // until they acknowledge it with the button below, which then lands them on the
+  // dashboard (a safe home for brand-new users — /explore 500s without a resume).
   const retry = useCallback(() => {
     stoppedRef.current = false
     attemptsRef.current = 0
@@ -134,18 +150,15 @@ function WelcomeContent() {
             </p>
             <button
               type="button"
-              onClick={() => router.push('/explore')}
+              onClick={() => router.push('/dashboard')}
               className="group mt-7 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]"
             >
-              Start scouting
+              Go to your dashboard
               <ArrowRight
                 className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
                 strokeWidth={2.5}
               />
             </button>
-            <p className="mt-3 font-body text-[12px] text-[#71717A]">
-              Redirecting you automatically…
-            </p>
           </>
         ) : status === 'timeout' ? (
           <>

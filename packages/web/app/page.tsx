@@ -1,3 +1,6 @@
+import { Suspense } from 'react'
+
+import { AccountDeletedNotice } from '@/components/landing/account-deleted-notice'
 import { AtsCoverage } from '@/components/landing/ats-coverage'
 import { DynamicIsland } from '@/components/landing/dynamic-island'
 import { FAQ } from '@/components/landing/faq'
@@ -12,6 +15,9 @@ import { UniversityBelt } from '@/components/landing/university-belt'
 export default function Page() {
   return (
     <>
+      <Suspense fallback={null}>
+        <AccountDeletedNotice />
+      </Suspense>
       <DynamicIsland />
       <main className="relative">
         <LandingRails />

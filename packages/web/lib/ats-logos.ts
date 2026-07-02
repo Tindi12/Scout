@@ -6,9 +6,17 @@ export type AtsProvider = {
 
 /**
  * Brandfetch Logo API client ID. This is a public identifier meant to be
- * embedded directly in <img> src attributes (not a secret).
+ * embedded directly in <img> src attributes (not a secret). Shared by every
+ * Brandfetch-sourced logo in the app (ATS wordmarks, mail-provider icons).
  */
-const BRANDFETCH_CLIENT_ID = '1iduV7w0HjFvDmytVMh'
+export const BRANDFETCH_CLIENT_ID = '1iduV7w0HjFvDmytVMh'
+
+/** Gmail/Outlook connect buttons (onboarding + settings). */
+export const MAIL_PROVIDER_LOGOS = {
+  google: `https://cdn.brandfetch.io/domain/gmail.com/w/48/h/48/symbol?c=${BRANDFETCH_CLIENT_ID}`,
+  // Brandfetch's outlook.com/symbol falls back to a faint lettermark on dark UI.
+  microsoft: '/icons/outlook.svg',
+} as const
 
 /**
  * ATS platforms Scout submits applications through. Logos come straight from

@@ -2,6 +2,15 @@
 export function getApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL
   if (raw == null || String(raw).trim() === '') {
+    // localhost is a DEV convenience only. In production this env var must be set to
+    // the Railway URL; falling back to localhost there means every proxy call fails, so
+    // make the misconfiguration loud instead of silent. (Non-fatal so a missing var
+    // can't hard-crash route modules at import.)
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        'NEXT_PUBLIC_API_URL is not set in production — falling back to http://localhost:8000; API requests will fail.',
+      )
+    }
     return 'http://localhost:8000'
   }
   return String(raw).trim().replace(/\/$/, '')

@@ -51,7 +51,7 @@ export default function PricingPage() {
               <br className="hidden sm:block" /> Let Scout apply.
             </h1>
             <p className="mx-auto mt-5 max-w-xl font-body text-[17px] text-[#A1A1AA]">
-              Start free. Upgrade to Pro for $5.99/month to unleash the agent —
+              Start free. Upgrade to Pro for $14.99/month to unleash the agent —
               tailored resumes and autonomous applications while you sleep.
             </p>
 

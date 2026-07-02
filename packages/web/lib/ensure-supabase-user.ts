@@ -4,6 +4,7 @@ import {
   getSupabaseUserByClerkId,
   type SupabaseUserSnapshot,
 } from '@/lib/supabase-user-status'
+import { triggerWelcomeEmail } from '@/lib/welcome-email'
 import { createClient } from '@supabase/supabase-js'
 
 export type { SupabaseUserSnapshot }
@@ -44,6 +45,12 @@ export async function ensureSupabaseUser(
     .single()
 
   if (insertError || !created?.id) return null
+
+  triggerWelcomeEmail({
+    userId: String(created.id),
+    email,
+    firstName: clerkUser.firstName,
+  })
 
   return {
     id: String(created.id),

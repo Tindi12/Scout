@@ -69,3 +69,17 @@ async def verify_resume_api_user(
         )
     return _user_from_supabase_jwt(credentials.credentials)
 
+
+async def verify_internal_service(request: Request) -> None:
+    """Trust only the shared-secret Next.js proxy header — no user identity attached.
+
+    For endpoints a logged-out visitor can hit (e.g. the landing-page newsletter form)
+    where there's no Clerk session to verify, but the request must still prove it came
+    from our own proxy and not an arbitrary caller."""
+    internal = (request.headers.get("X-Scout-Internal") or "").strip()
+    if not INTERNAL_SECRET or internal != INTERNAL_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+

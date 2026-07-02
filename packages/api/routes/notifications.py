@@ -132,5 +132,7 @@ async def dismiss_notification_for_application(
 
 
 @router.post("/followup-template")
-async def followup_template_notification() -> dict[str, str]:
+async def followup_template_notification(
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict[str, str]:
     raise HTTPException(status_code=501, detail="Not implemented")

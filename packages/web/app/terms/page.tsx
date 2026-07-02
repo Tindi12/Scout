@@ -7,6 +7,7 @@ import {
   LegalSection,
   LegalUl,
 } from '@/components/legal/legal-page-shell'
+import { BUSINESS_CONTACT_EMAIL } from '@/lib/contact'
 
 export const metadata: Metadata = {
   title: 'Terms of Service — Scout',
@@ -212,10 +213,10 @@ export default function TermsOfServicePage() {
         <LegalP>
           Questions about these Terms:{' '}
           <a
-            href="mailto:legal@scout.ai"
+            href={`mailto:${BUSINESS_CONTACT_EMAIL}`}
             className="text-[#FF6733] underline-offset-2 hover:underline"
           >
-            legal@scout.ai
+            {BUSINESS_CONTACT_EMAIL}
           </a>
           .
         </LegalP>

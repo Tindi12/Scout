@@ -11,7 +11,6 @@ GROQ_MODEL_LIMITS: dict[str, int] = {
     "groq/compound-mini": 70_000,
     "groq/compound": 70_000,
     "meta-llama/llama-4-scout-17b-16e-instruct": 30_000,
-    "llama-3.3-70b-versatile": 12_000,
     "openai/gpt-oss-120b": 8_000,
     "openai/gpt-oss-20b": 8_000,
     "qwen/qwen3-32b": 6_000,
@@ -33,7 +32,6 @@ _GROQ_FAST_TAIL = (
 )
 
 _GROQ_QUALITY_TAIL = (
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
 )
@@ -57,7 +55,7 @@ GROQ_CHAIN_FAST: tuple[str, ...] = _dedupe_preserve_order(
     _GROQ_QUALITY_TAIL,
 )
 
-# task="quality" → prefer 70b / oss after high-TPM tier
+# task="quality" → prefer OSS models after high-TPM tier
 GROQ_CHAIN_QUALITY: tuple[str, ...] = _dedupe_preserve_order(
     _GROQ_HIGH_TPM,
     _GROQ_QUALITY_TAIL,

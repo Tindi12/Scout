@@ -10,6 +10,7 @@ from postgrest.exceptions import APIError
 
 from core.auth import verify_resume_api_user
 from core.entitlements import require_paid
+from core.rate_limit import resume_llm_rate_limit
 from core.supabase_client import supabase
 from services.latex_generator import generate_resume_pdf as compile_resume_pdf
 from services.resume_parser import resume_parser
@@ -519,6 +520,7 @@ def _resolve_resume_content_for_pdf(
 async def parse_resume(
     request: ParseResumeRequest,
     current_user: dict = Depends(verify_resume_api_user),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     resume = _execute_pg(
         "load resume for parse",
@@ -558,6 +560,7 @@ async def parse_resume(
 async def score_resume(
     request: ScoreResumeRequest,
     current_user: dict = Depends(verify_resume_api_user),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
@@ -589,6 +592,7 @@ async def score_resume(
 async def analyze_resume(
     request: AnalyzeResumeRequest,
     current_user: dict = Depends(verify_resume_api_user),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     resume = _execute_pg(
         "load resume for analyze",
@@ -792,6 +796,7 @@ async def list_resume_variants(
 async def generate_resume_variant(
     request: GenerateVariantRequest,
     current_user: dict = Depends(require_paid),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     user_supabase_id = _resolve_supabase_user_id(current_user["sub"])
     resume_row = _load_owned_resume_row(
@@ -883,6 +888,7 @@ async def get_analysis(
 async def rewrite_resume(
     request: RewriteResumeRequest,
     current_user: dict = Depends(require_paid),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,
@@ -917,6 +923,7 @@ async def rewrite_resume(
 async def rewrite_resume_for_job(
     request: RewriteForJobRequest,
     current_user: dict = Depends(require_paid),
+    _rl: dict = Depends(resume_llm_rate_limit),
 ) -> dict:
     row = _load_owned_resume_row(
         request.resume_id,

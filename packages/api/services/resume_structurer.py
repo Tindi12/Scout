@@ -6,9 +6,11 @@ import logging
 from pathlib import Path
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from core.ai_json import parse_ai_json_object
 from core.ai_router import call_ai
+from core.resume_schemas import ParsedResume
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +65,16 @@ async def structure_resume_text(raw_text: str) -> dict:
 
         raw = str(ai_response)
         try:
-            return parse_ai_json_object(raw, context="Parse AI")
-        except HTTPException as exc:
-            last_detail = str(exc.detail)
+            obj = parse_ai_json_object(raw, context="Parse AI")
+            return ParsedResume.model_validate(obj).model_dump()
+        except (HTTPException, ValidationError) as exc:
+            last_detail = (
+                str(exc.detail)
+                if isinstance(exc, HTTPException)
+                else "Parse AI failed schema validation"
+            )
             logger.warning(
-                "Parse AI JSON parse failed attempt=%s task=%s preview=%r",
+                "Parse AI parse/validate failed attempt=%s task=%s preview=%r",
                 attempt,
                 task,
                 raw[:500],

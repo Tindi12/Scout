@@ -53,6 +53,7 @@ _SENSITIVE_KEY_HINTS = (
     "cover_letter",
     "answers",
     "password",
+    "usajobs",  # usajobs_password (also matches "password") + usajobs_email
     "secret",
     "token",
     "api_key",

@@ -1,9 +1,12 @@
 'use client'
 
+import { Suspense } from 'react'
+
 import { CopilotBubble } from '@/components/layout/CopilotBubble'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { MailOAuthReturnSync } from '@/components/settings/MailOAuthReturnSync'
 import { Toaster } from '@/components/ui/toaster'
 import { ExploreBatchProvider } from '@/contexts/explore-batch-context'
 import { NotificationsProvider } from '@/contexts/notifications-context'
@@ -18,6 +21,9 @@ export function DashboardLayoutClient({
     <ExploreBatchProvider>
       <UpgradeGateProvider>
         <NotificationsProvider>
+          <Suspense fallback={null}>
+            <MailOAuthReturnSync />
+          </Suspense>
           <div className="min-h-screen bg-[#080808] text-white">
             <Sidebar />
             <div className="md:pl-[220px]">

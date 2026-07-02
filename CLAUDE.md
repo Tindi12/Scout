@@ -43,10 +43,23 @@ All AI calls go through packages/api/core/ai_router.py
 - User ownership verified on every query
 - Never trust user-supplied IDs without ownership check
 
+## Secrets at Rest
+- users.usajobs_password is symmetric-encrypted (Fernet) via core/crypto.py — it's a
+  reusable login the agent must replay, so it's encrypted, not hashed.
+- USAJOBS_ENC_KEY must be set in Railway (prod) and locally. Generate with
+  `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+- Encrypt-on-write is the FastAPI PUT /user/usajobs-credentials path (key stays
+  Railway-only, so this write does NOT go through a Next.js server action).
+- Decrypt only in the worker, in-memory, at point of use — see the seam in
+  tasks/job_tasks.py. Never log the plaintext or ciphertext; never return it in any
+  API response (it's excluded from /api/user/me and profile reads).
+- Rotating USAJOBS_ENC_KEY requires re-encrypting existing values (not yet built):
+  scripts/migrate_usajobs_password_encrypt.py is the encrypt-in-place migration.
+
 ## Pricing Tiers
 - Free: 25 lifetime applications, resume parse + score only
-- Pro ($5.99/mo): 200 apps/30 days, full Scout Agent, rewrites
-- Scout+ ($14.99/mo): 600 apps/30 days, priority everything
+- Pro ($14.99/mo): 200 apps/30 days, full Scout Agent, rewrites
+- Scout+ ($29.99/mo): 600 apps/30 days, priority everything
 
 ## Current Build Status
 - Epic 1-5: Complete

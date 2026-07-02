@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -47,6 +47,8 @@ def _fetch_user_row(clerk_id: str) -> dict:
 @router.get("/")
 async def list_applications(
     current_user: dict = Depends(verify_resume_api_user),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ) -> list[dict]:
     clerk_id = current_user["sub"]
 
@@ -62,6 +64,9 @@ async def list_applications(
             return []
 
         user_id = user_row.data["id"]
+        # Bounded read: never return an unbounded application history in one response.
+        # Newest-first with limit/offset so a future UI can page; the default cap keeps
+        # the worst case at 200 rows even when the proxy passes no params.
         result = (
             supabase.table("applications")
             .select(
@@ -71,6 +76,7 @@ async def list_applications(
             )
             .eq("user_id", user_id)
             .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
             .execute()
         )
 

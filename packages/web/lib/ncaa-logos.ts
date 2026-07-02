@@ -1,12 +1,17 @@
-import { unstable_cache } from 'next/cache'
-
 export type University = {
   slug: string | null
   name: string
   logoUrl: string | null
 }
 
-/** NCAA school slugs — see https://ncaa-api.henrygd.me/schools-index */
+/**
+ * University logos are VENDORED into /public/universities so the landing belt
+ * renders 100% of the time — no third-party host in the request path. The SVGs
+ * are the dark variants downloaded from the NCAA API (ncaa-api.henrygd.me /
+ * github.com/henrygd/ncaa-api, slugs per its /schools-index). To add a school:
+ * curl "https://ncaa-api.henrygd.me/logo/<slug>.svg?dark=true" into
+ * packages/web/public/universities/<slug>.svg and list it here.
+ */
 const UNIVERSITIES: { slug: string | null; name: string }[] = [
   { slug: 'alabama', name: 'University of Alabama' },
   { slug: 'indiana', name: 'Indiana University' },
@@ -21,28 +26,10 @@ const UNIVERSITIES: { slug: string | null; name: string }[] = [
   { slug: 'michigan', name: 'University of Michigan' },
 ]
 
-const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7
-const DEFAULT_NCAA_API_URL = 'https://ncaa-api.henrygd.me'
-
-function getApiBaseUrl(): string {
-  const raw = process.env.NCAA_API_URL?.trim()
-  return (raw || DEFAULT_NCAA_API_URL).replace(/\/$/, '')
+export function getUniversityLogos(): University[] {
+  return UNIVERSITIES.map((u) => ({
+    slug: u.slug,
+    name: u.name,
+    logoUrl: u.slug ? `/universities/${u.slug}.svg` : null,
+  }))
 }
-
-function buildLogoUrl(slug: string, baseUrl: string): string {
-  return `${baseUrl}/logo/${encodeURIComponent(slug)}.svg?dark=true`
-}
-
-export const fetchUniversityLogos = unstable_cache(
-  async (): Promise<University[]> => {
-    const baseUrl = getApiBaseUrl()
-
-    return UNIVERSITIES.map((u) => ({
-      slug: u.slug,
-      name: u.name,
-      logoUrl: u.slug ? buildLogoUrl(u.slug, baseUrl) : null,
-    }))
-  },
-  ['scout-university-logos-ncaa-v2'],
-  { revalidate: SEVEN_DAYS_SECONDS, tags: ['university-logos'] },
-)

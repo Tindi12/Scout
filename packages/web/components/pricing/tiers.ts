@@ -34,7 +34,7 @@ export const PRICING_TIERS: PricingTier[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: '$5.99',
+    price: '$14.99',
     period: '/month',
     limitLine: '200 applications / 30 days',
     blurb:
@@ -53,7 +53,7 @@ export const PRICING_TIERS: PricingTier[] = [
   {
     id: 'scout_plus',
     name: 'Scout+',
-    price: '$14.99',
+    price: '$29.99',
     period: '/month',
     limitLine: '600 applications / 30 days',
     blurb:

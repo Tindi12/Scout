@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from core.auth import verify_clerk_jwt, verify_resume_api_user
 from core.embedding_service import embed_resume, generate_embedding
 from core.entitlements import require_paid
+from core.rate_limit import job_match_rate_limit
 from core.subscription import get_tier_limits
 from core.supabase_client import supabase
 from services.job_matcher import match_jobs
@@ -31,30 +32,35 @@ class ScoutRunRequest(BaseModel):
 async def get_job_matches(
     request: MatchJobsRequest,
     current_user: dict = Depends(verify_resume_api_user),
+    _rl: dict = Depends(job_match_rate_limit),
 ) -> list[dict]:
     clerk_id = current_user["sub"]
 
-    def _fetch_user() -> dict:
+    def _fetch_user() -> dict | None:
+        # supabase-py returns None (not a result object) from .maybe_single().execute()
+        # when there are zero rows, so guard the whole result, not just .data.
         result = (
             supabase.table("users")
             .select("id, subscription_plan, requires_sponsorship, target_roles")
             .eq("clerk_id", clerk_id)
-            .single()
+            .maybe_single()
             .execute()
         )
-        return result.data
+        data = getattr(result, "data", None)
+        return data if isinstance(data, dict) else None
 
-    def _fetch_analysis(user_id: str) -> dict:
+    def _fetch_analysis(user_id: str) -> dict | None:
         result = (
             supabase.table("analyses")
             .select("id, resume_id, score, target_role")
             .eq("user_id", user_id)
             .order("created_at", desc=True)
             .limit(1)
-            .single()
+            .maybe_single()
             .execute()
         )
-        return result.data
+        data = getattr(result, "data", None)
+        return data if isinstance(data, dict) else None
 
     def _fetch_resume(resume_id: str) -> dict:
         result = (
@@ -117,6 +123,7 @@ async def list_jobs(
     source: str | None = None,
     visa_sponsorship: str | None = None,
     remote: bool | None = None,
+    current_user: dict = Depends(verify_resume_api_user),
 ) -> dict:
     offset = (page - 1) * limit
 
@@ -153,7 +160,10 @@ async def refresh_jobs(
 
 
 @router.get("/status/{task_id}")
-async def job_refresh_status(task_id: str) -> dict:
+async def job_refresh_status(
+    task_id: str,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
     result = AsyncResult(task_id)
     return {
         "task_id": task_id,

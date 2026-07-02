@@ -25,7 +25,7 @@ def test_groq_chains_include_high_tpm_models():
     assert GROQ_CHAIN_FAST[0] == "groq/compound-mini"
     assert "meta-llama/llama-4-scout-17b-16e-instruct" in GROQ_CHAIN_FAST
     assert GROQ_CHAIN_QUALITY[0] == "groq/compound-mini"
-    assert "llama-3.3-70b-versatile" in GROQ_CHAIN_QUALITY
+    assert "openai/gpt-oss-120b" in GROQ_CHAIN_QUALITY
 
 
 def test_gemini_chat_chain_power_then_volume():

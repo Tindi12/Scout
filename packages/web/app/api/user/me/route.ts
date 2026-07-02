@@ -45,6 +45,16 @@ const PROFILE_COLUMNS = [
   'profile_complete',
 ] as const
 
+// Columns that must NEVER be returned to the browser (secrets / credentials).
+// PROFILE_COLUMNS is an allowlist, so these are already excluded — this guard fails
+// loudly at module load if one is ever added to the allowlist by mistake.
+const NEVER_EXPOSE = ['usajobs_password', 'usajobs_email'] as const
+for (const col of NEVER_EXPOSE) {
+  if ((PROFILE_COLUMNS as readonly string[]).includes(col)) {
+    throw new Error(`Security: ${col} must never be selected into the /me response`)
+  }
+}
+
 export async function GET() {
   const { userId } = await auth()
   if (!userId) {

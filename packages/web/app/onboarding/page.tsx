@@ -26,6 +26,7 @@ import {
 import { useUser } from '@clerk/nextjs'
 
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
+import { ConnectMailCard } from '@/components/settings/ConnectMailSection'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   completeOnboarding,
@@ -115,7 +116,7 @@ const ROLES: Role[] = [
   },
 ]
 
-type Step = 1 | 2 | 'success'
+type Step = 1 | 2 | 'connect_mail' | 'success'
 
 type FormState = {
   name: string
@@ -196,13 +197,19 @@ export default function OnboardingPage() {
       track(ANALYTICS_EVENTS.ONBOARDING_COMPLETED, {
         target_role_count: form.target_roles.length,
       })
-      setStep('success')
-      window.setTimeout(() => {
-        startTransition(() => router.push('/dashboard'))
-      }, 1500)
+      // Optional post-completion step: connect email for verification codes.
+      // Skippable; connecting navigates to Composio and returns to /dashboard.
+      setStep('connect_mail')
     } catch {
       setSubmitting(false)
     }
+  }
+
+  const finishOnboarding = () => {
+    setStep('success')
+    window.setTimeout(() => {
+      startTransition(() => router.push('/dashboard'))
+    }, 1500)
   }
 
   return (
@@ -264,6 +271,19 @@ export default function OnboardingPage() {
                   onBack={() => setStep(1)}
                   onSubmit={handleSubmit}
                 />
+              </motion.div>
+            )}
+
+            {step === 'connect_mail' && (
+              <motion.div
+                key="connect_mail"
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+                className="mx-auto mt-4 w-full max-w-xl"
+              >
+                <ConnectMailCard onSkip={finishOnboarding} />
               </motion.div>
             )}
 

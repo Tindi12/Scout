@@ -14,6 +14,14 @@ const isPublicRoute = createRouteMatcher([
   // Sentry's tunnel endpoint (next.config tunnelRoute) — must stay unauthenticated so
   // client error reports from logged-out users (landing/sign-in pages) still get through.
   '/monitoring(.*)',
+  // Cookie-consent record-keeping fires from the landing page, almost always while
+  // logged out. Without this, Clerk's auth.protect() 404s the fetch. The handler
+  // tolerates a null userId by design.
+  '/api/consent(.*)',
+  // Newsletter signup: same reasoning. The "Stay in the loop" form is on the landing
+  // page and has no Clerk session to check; auth is the shared internal secret instead
+  // (core/auth.py verify_internal_service).
+  '/api/newsletter(.*)',
 ])
 
 const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)'])

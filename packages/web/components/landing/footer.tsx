@@ -1,6 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { CookiePreferencesLink } from '@/components/consent/CookiePreferencesLink'
+import { NewsletterForm } from '@/components/landing/newsletter-form'
 import { scoutLogo } from '@/lib/scout-logo'
 import { ArrowUp, Instagram } from 'lucide-react'
 
@@ -79,24 +81,7 @@ export function Footer() {
               </p>
             </div>
 
-            <form
-              className="relative flex w-full items-center"
-              action="#"
-              method="post"
-            >
-              <input
-                type="email"
-                placeholder="you@university.edu"
-                aria-label="Email address"
-                className="font-body w-full rounded-full border border-white/10 bg-white/[0.03] px-6 py-4 pr-36 text-[14.5px] text-white placeholder:text-[#888888] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:shadow-[0_0_24px_rgba(255,103,51,0.2)] focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="font-label absolute right-1.5 inline-flex items-center justify-center rounded-full bg-[#FF6733] px-5 py-2.5 text-[13px] font-semibold text-white shadow-[0_0_20px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_30px_rgba(255,103,51,0.55)] active:scale-95"
-              >
-                Subscribe
-              </button>
-            </form>
+            <NewsletterForm />
           </div>
         </div>
 
@@ -137,6 +122,11 @@ export function Footer() {
                     </Link>
                   </li>
                 ))}
+                {col.heading === 'Support' ? (
+                  <li>
+                    <CookiePreferencesLink />
+                  </li>
+                ) : null}
               </ul>
             </div>
           ))}

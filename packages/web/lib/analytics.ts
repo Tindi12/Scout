@@ -15,6 +15,8 @@
  */
 import posthog from 'posthog-js'
 
+import { readConsent } from '@/lib/cookie-consent'
+
 export const ANALYTICS_EVENTS = {
   // ---- Funnel (signup → activation → paid) ----
   // signed_up fires SERVER-SIDE from the Clerk webhook (source of truth for account
@@ -57,17 +59,38 @@ const POSTHOG_HOST =
   process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com'
 
 let initialized = false
+// Set once the user revokes consent in-session: PostHog may already be initialized
+// (can't be un-init'd), so we hard-stop every helper as well as opting out.
+let consentRevoked = false
 
-/** True only when a PostHog key is configured. Used to gate every call so local dev
- * (no key) never touches the SDK. */
+/** True only when a PostHog key is configured AND the user has accepted cookies.
+ * Used to gate every call: local dev (no key) and pre-/post-consent never touch the
+ * SDK. Consent is read from the first-party cookie on each call. */
 export function isAnalyticsEnabled(): boolean {
-  return Boolean(POSTHOG_KEY)
+  return Boolean(POSTHOG_KEY) && !consentRevoked && readConsent() === 'accepted'
 }
 
 /** Initialize the PostHog browser SDK exactly once. Safe to call repeatedly and on
- * the server (it no-ops unless a key is set and `window` exists). */
+ * the server (it no-ops unless a key is set and `window` exists). Does NOTHING until
+ * the user has accepted cookies — this deferral is the real consent gate, since
+ * posthog.init() is what captures the first pageview and sets PostHog cookies. */
 export function initAnalytics(): void {
-  if (initialized || !POSTHOG_KEY || typeof window === 'undefined') return
+  if (!POSTHOG_KEY || typeof window === 'undefined') return
+  if (readConsent() !== 'accepted') return
+  if (initialized) {
+    // Already initialized this session. If the user had revoked and is now re-
+    // accepting, opt back into capturing — init() won't run a second time.
+    if (consentRevoked) {
+      consentRevoked = false
+      try {
+        posthog.opt_in_capturing()
+      } catch {
+        /* no-op */
+      }
+    }
+    return
+  }
+  consentRevoked = false
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST,
     // Only create person profiles for users we explicitly identify (logged-in) —
@@ -110,6 +133,22 @@ export function registerSuperProperties(props: AnalyticsProps): void {
 export function resetUser(): void {
   if (!isAnalyticsEnabled()) return
   try {
+    posthog.reset()
+  } catch {
+    /* no-op */
+  }
+}
+
+/** Stop analytics when the user revokes consent. If PostHog was already initialized
+ * earlier in the session it can't be un-init'd, so we opt out of capturing (stops all
+ * network + clears stored data) and reset identity. The consentRevoked flag then makes
+ * every helper a no-op for the rest of the session; a fresh page load won't re-init
+ * because initAnalytics() re-checks the (now 'rejected') consent cookie. */
+export function disableAnalytics(): void {
+  consentRevoked = true
+  if (!initialized) return
+  try {
+    posthog.opt_out_capturing()
     posthog.reset()
   } catch {
     /* no-op */

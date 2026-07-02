@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -92,7 +92,7 @@ def _limit_reached_payload() -> dict:
         "message": (
             f"You've reached your {COPILOT_DAILY_LIMIT} free Copilot messages for today."
         ),
-        "upsell": {"plan": "Pro", "price": "$5.99/mo"},
+        "upsell": {"plan": "Pro", "price": "$14.99/mo"},
     }
 
 
@@ -165,12 +165,13 @@ def _first_user_snippet(messages: list[dict]) -> str:
     return ""
 
 
-def _list_conversations(user_id: str) -> list[dict]:
+def _list_conversations(user_id: str, limit: int = 50) -> list[dict]:
     result = (
         supabase.table("conversations")
         .select("id, messages, updated_at, created_at")
         .eq("user_id", user_id)
         .order("updated_at", desc=True)
+        .limit(limit)
         .execute()
     )
     return result.data or []
@@ -293,6 +294,7 @@ async def copilot_chat(
 @router.get("/conversations")
 async def list_conversations(
     current_user: dict = Depends(verify_resume_api_user),
+    limit: int = Query(50, ge=1, le=100),
 ) -> dict:
     """List the current user's conversations, newest first. Title is derived from
     the first user message since there is no title column."""
@@ -302,7 +304,7 @@ async def list_conversations(
         raise HTTPException(status_code=404, detail="User not found")
     user_id = user_row["id"]
 
-    rows = await run_in_threadpool(_list_conversations, user_id)
+    rows = await run_in_threadpool(_list_conversations, user_id, limit)
     conversations = []
     for row in rows:
         snippet = _first_user_snippet(row.get("messages") or [])
