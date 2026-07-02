@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import secrets
 import time
 from datetime import datetime, timezone
@@ -38,9 +39,17 @@ from core.concurrency import (
     new_slot_token,
     release_apply_slots,
 )
+from services.browser_agent import browser_agent
 from services.browserbase_agent import browserbase_agent, resolve_apply_company
 
 logger = logging.getLogger(__name__)
+
+# Apply-engine selection. "browser_use" (default) = browser-use on Browserbase
+# SESSIONS (services/browser_agent.py — uncapped, billed in browser-minutes).
+# "hosted" = the Browserbase hosted-Agents platform (services/browserbase_agent.py —
+# capped at 15 runs/period on the Developer plan; emergency fallback only).
+# Both engines expose the same apply() signature and result contract.
+_APPLY_ENGINE = os.getenv("SCOUT_APPLY_ENGINE", "browser_use").strip().lower()
 
 
 class NeedsAttentionException(Exception):
@@ -486,20 +495,21 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                     )
                     cover_letter_pdf = None
 
-        #7. Apply via the Browserbase Agent (hosted agent-only — browser-use was removed
-        #   for the full platform migration). The engine runs synchronously: it stages
-        #   the resume/cover-letter to signed URLs, starts a run, and polls it to a
-        #   terminal state. The hard wall-clock budget is enforced INSIDE the poll loop,
-        #   so no asyncio.wait_for wrapper is needed. Stop-all is honored two ways: the
-        #   poll loop watches the Redis cancel flag (Scout-side), and the same flag
-        #   drives the agent's /apply-control URL to CANCEL so the live run aborts at
-        #   the submit boundary (the platform offers no server-side stop).
+        #7. Apply via the selected engine (SCOUT_APPLY_ENGINE). Both engines run
+        #   synchronously with the same signature/result contract and enforce the hard
+        #   wall-clock budget internally — no asyncio.wait_for wrapper here.
+        #   - browser_use (default): browser-use on a Browserbase SESSION. Stop-all is
+        #     a real in-process agent.stop() within seconds, plus the pre_submit_check
+        #     tool at the submit boundary (same Redis keys as /apply-control).
+        #   - hosted: Browserbase hosted Agents (15-run quota). Stop-all rides the
+        #     /apply-control URL only (the platform has no server-side stop).
         #
-        #   Verification codes (Greenhouse email gate): the agent polls /apply-code
-        #   mid-run; the first hit flips this application to awaiting_code via _on_gate,
-        #   then _fetch_code (Composio, deterministic, read-only) fills the Redis
-        #   mailbox the endpoint serves — the run finishes submitted without ever
-        #   ending at the gate. The manual CodeModal writes the same mailbox.
+        #   Verification codes (Greenhouse email gate): the first gate signal flips
+        #   this application to awaiting_code via _on_gate, then _fetch_code (Composio,
+        #   deterministic, read-only) delivers the code — in-process through the
+        #   request_verification_code tool (browser_use) or via the /apply-code Redis
+        #   mailbox the hosted agent polls. The manual CodeModal writes the same
+        #   mailbox either way.
         try:
             get_redis().setex(
                 control_token_key(control_token), CONTROL_TOKEN_TTL, application_id
@@ -551,8 +561,11 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                 "error_message": None,
             }).eq("id", application_id).execute()
 
-        logger.info("Applying via Browserbase Agent (portal=%s): %s", portal, job_url)
-        result = browserbase_agent.apply(
+        engine = browserbase_agent if _APPLY_ENGINE == "hosted" else browser_agent
+        logger.info(
+            "Applying via %s engine (portal=%s): %s", _APPLY_ENGINE, portal, job_url
+        )
+        result = engine.apply(
             job_url=job_url,
             user_data=user_data,
             resume_pdf=resume_pdf,

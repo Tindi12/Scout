@@ -16,7 +16,16 @@ supabase/       → README only; schema on Supabase (scout-dev), not repo SQL fi
 - Backend: FastAPI, Python 3.11, Supabase Python, Groq, Gemini
 - Database: Supabase (PostgreSQL + pgvector + RLS)
 - Queue: Celery + Redis
-- Browser automation: Browserbase + browser-use AI agent (services/browser_agent.py — agent-only; per-ATS Playwright adapters were removed)
+- Browser automation: browser-use on Browserbase SESSIONS (services/browser_agent.py,
+  default engine — uncapped, billed in browser-minutes). The hosted Browserbase Agents
+  engine (services/browserbase_agent.py) is quota-capped (15 runs/period on the
+  Developer plan) and kept only as the SCOUT_APPLY_ENGINE=hosted fallback.
+  Browser-agent LLM: ChatBrowserUse gateway (BROWSER_USE_API_KEY) primary, OpenAI
+  fallback — see services/browser_llm.py. Per-ATS Playwright adapters were removed.
+  Engine env knobs: SCOUT_APPLY_ENGINE (browser_use|hosted), SCOUT_BROWSER_LLM
+  (browser_use|openai), BROWSER_USE_API_KEY, SCOUT_BROWSER_FLASH_MODE,
+  SCOUT_AGENT_MAX_STEPS, BROWSERBASE_REGION (match the Railway worker region —
+  every CDP round-trip pays worker↔browser latency).
 - Payments: Stripe (not yet implemented — Epic 10)
 - Deployment: Vercel (web) + Railway (api)
 
