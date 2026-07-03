@@ -71,6 +71,19 @@ def _redis_healthy() -> bool:
         return False
 
 
+@app.get("/health/live")
+async def health_live():
+    """Pure liveness: the process is up and the app imported — no dependency probes,
+    always 200. This is what CI's boot check hits (its Supabase/Redis are placeholder
+    values, so the readiness probe below would 503 even though the app is fine).
+    Railway and uptime checks should keep using /health."""
+    return {
+        "status": "alive",
+        "version": API_VERSION,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/health")
 async def health():
     """Liveness + dependency readiness. Probes Supabase and Redis independently so the

@@ -95,8 +95,11 @@ jobs:
           uv run uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info > uvicorn.log 2>&1 &
           UVICORN_PID=$!
 
+          # /health/live is the dependency-free liveness endpoint: this step verifies
+          # the app imports and boots. /health (readiness) probes Supabase/Redis and
+          # would 503 against this job's placeholder credentials.
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+            if curl -fsS http://127.0.0.1:8000/health/live >/dev/null; then
               echo "Health check passed"
               kill "$UVICORN_PID"
               exit 0
