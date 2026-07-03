@@ -618,10 +618,7 @@ function StepOne({
                   narrow down
                 </div>
               )}
-              <div
-                className="uni-dropdown max-h-48 overflow-y-auto"
-                style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}
-              >
+              <div className="uni-dropdown max-h-48 overflow-y-auto">
                 {schoolResults.map((result, index) => (
                   <button
                     key={`${result.name}-${result.country}`}

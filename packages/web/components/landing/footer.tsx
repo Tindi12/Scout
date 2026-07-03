@@ -37,9 +37,9 @@ const COLUMNS = [
   {
     heading: 'Navigation',
     links: [
-      { label: 'About', href: '#about' },
-      { label: 'Pricing', href: '#pricing' },
-      { label: 'FAQ', href: '#faq' },
+      { label: 'About', href: '/#about' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'FAQ', href: '/#faq' },
     ],
   },
   {
@@ -87,7 +87,7 @@ export function Footer() {
 
         <div className="mt-20 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div className="origin-left">
-            <Link href="#top" className="inline-flex items-center gap-3">
+            <Link href="/" className="inline-flex items-center gap-3">
               <Image
                 src={scoutLogo}
                 alt="Scout AI Logo"
@@ -101,8 +101,8 @@ export function Footer() {
               </span>
             </Link>
             <p className="mt-5 max-w-xs font-body text-sm leading-relaxed text-[#A1A1AA]">
-              Built for the alchemist. Automating the internship hunt for the
-              next generation of engineers.
+              Built for students by students. Automating the internship hunt for
+              the next generation of engineers.
             </p>
           </div>
 
@@ -138,7 +138,7 @@ export function Footer() {
           </p>
 
           <Link
-            href="#top"
+            href="/#top"
             className="font-label group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] backdrop-blur-md transition-all duration-200 hover:border-[#FF6733]/40 hover:text-white hover:shadow-[0_0_24px_rgba(255,103,51,0.18)]"
           >
             Back to top

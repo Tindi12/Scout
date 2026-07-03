@@ -118,6 +118,49 @@ export const STATUS_CONFIG: Record<
 
 export type PortalType = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'unknown'
 
+export const PORTAL_META: Record<
+  Exclude<PortalType, 'unknown'>,
+  { label: string; classes: string }
+> = {
+  greenhouse: {
+    label: 'Greenhouse',
+    classes: 'bg-[#22c55e]/10 text-[#22c55e]',
+  },
+  lever: {
+    label: 'Lever',
+    classes: 'bg-[#3b82f6]/10 text-[#3b82f6]',
+  },
+  ashby: {
+    label: 'Ashby',
+    classes: 'bg-purple-500/10 text-purple-400',
+  },
+  workday: {
+    label: 'Workday',
+    classes: 'bg-white/[0.06] text-[#888]',
+  },
+}
+
+export function isCancelledByUser(
+  errorMessage: string | null | undefined,
+): boolean {
+  const value = (errorMessage ?? '').trim()
+  return value === 'cancelled_by_user' || value.startsWith('cancelled_by_user')
+}
+
+export function failureShortLabel(errorMessage: string): string {
+  if (isCancelledByUser(errorMessage)) return 'Cancelled'
+  const lower = errorMessage.toLowerCase()
+  if (lower.includes('pdflatex')) return 'Resume issue'
+  if (lower.includes('service limit') || lower.includes('browserbase')) {
+    return 'Scout limit reached'
+  }
+  if (lower.includes('browser_session')) return 'Session dropped'
+  if (lower.includes('verification') || lower.includes('captcha')) {
+    return 'Verification needed'
+  }
+  return 'See details'
+}
+
 export function isRunComplete(run: ScoutRun): boolean {
   if (run.status === 'completed') return true
   return (

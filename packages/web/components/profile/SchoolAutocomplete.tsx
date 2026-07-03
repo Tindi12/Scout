@@ -146,10 +146,7 @@ export function SchoolAutocomplete({
               Showing 20 of {totalMatches} matches — type more to narrow down
             </div>
           )}
-          <div
-            className="max-h-48 overflow-y-auto"
-            style={{ scrollbarWidth: 'thin' }}
-          >
+          <div className="max-h-48 overflow-y-auto">
             {results.map((result, index) => (
               <button
                 key={`${result.name}-${result.country}`}

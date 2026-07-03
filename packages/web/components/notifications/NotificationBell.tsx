@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { Bell, X } from 'lucide-react'
+import { useEffect, useState, type ComponentProps } from 'react'
 
 import {
   DropdownMenu,
@@ -19,7 +20,33 @@ import {
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/components/tracker/tracker-utils'
 
+const bellButtonClass =
+  'relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02] text-[#888] transition-colors hover:border-white/[0.12] hover:text-white data-[state=open]:border-white/[0.12] data-[state=open]:text-white'
+
+function NotificationBellButton({
+  unreadCount,
+  ...props
+}: ComponentProps<'button'> & { unreadCount: number }) {
+  return (
+    <button
+      type="button"
+      aria-label="Notifications"
+      className={bellButtonClass}
+      {...props}
+    >
+      <Bell className="h-4 w-4" strokeWidth={1.75} />
+      {unreadCount > 0 ? (
+        <span
+          aria-hidden
+          className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.7)]"
+        />
+      ) : null}
+    </button>
+  )
+}
+
 export function NotificationBell() {
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const {
     notifications,
@@ -29,6 +56,10 @@ export function NotificationBell() {
     markAllRead,
     dismiss,
   } = useNotificationsContext()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleOpenRow = async (notification: NotificationRecord) => {
     track(ANALYTICS_EVENTS.NOTIFICATION_CLICKED, {
@@ -40,22 +71,14 @@ export function NotificationBell() {
     router.push(notificationHref(notification))
   }
 
+  if (!mounted) {
+    return <NotificationBellButton unreadCount={unreadCount} />
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02] text-[#888] transition-colors hover:border-white/[0.12] hover:text-white data-[state=open]:border-white/[0.12] data-[state=open]:text-white"
-        >
-          <Bell className="h-4 w-4" strokeWidth={1.75} />
-          {unreadCount > 0 ? (
-            <span
-              aria-hidden
-              className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.7)]"
-            />
-          ) : null}
-        </button>
+        <NotificationBellButton unreadCount={unreadCount} />
       </DropdownMenuTrigger>
 
       <DropdownMenuContent

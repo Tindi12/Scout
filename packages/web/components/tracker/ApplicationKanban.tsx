@@ -12,6 +12,10 @@ import {
 } from 'react'
 
 import { PortalBadge } from '@/components/tracker/PortalBadge'
+import { ApplicationOutcomeChip } from '@/components/tracker/ApplicationOutcomeChip'
+import {
+  TooltipProvider,
+} from '@/components/ui/tooltip'
 import {
   detectPortalFromUrl,
   formatRelativeTime,
@@ -93,7 +97,8 @@ export function ApplicationKanban({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <TooltipProvider delayDuration={200}>
+      <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#444]">
           APPLICATION HISTORY
@@ -167,11 +172,12 @@ export function ApplicationKanban({
           </Accordion.Item>
         ))}
       </Accordion.Root>
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
-// Scroll affordance mirroring the jobs page columns (JobColumn.tsx): hidden
+// Scroll affordance mirroring the jobs page columns
 // scrollbar plus a gradient fade + chevron button while there is more content
 // below. Unlike the jobs page (which caps by viewport height), kanban cards are
 // short, so we cap the visible area to the first three cards and let the fade
@@ -263,7 +269,7 @@ function ScrollFadeArea({
         ref={scrollRef}
         onScroll={handleScroll}
         style={maxHeight != null ? { maxHeight } : undefined}
-        className="overflow-y-auto pb-16 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="overflow-y-auto pb-16 pr-1 scrollbar-none"
       >
         <div ref={contentRef}>{children}</div>
       </div>
@@ -360,11 +366,7 @@ function KanbanCard({
       </p>
       <p className="mt-0.5 truncate text-xs text-[#666]">{app.role || 'Role'}</p>
 
-      {app.status === 'failed' && app.error_message ? (
-        <p className="mt-1.5 truncate text-[10px] text-[#ef4444]">
-          {app.error_message}
-        </p>
-      ) : null}
+      <ApplicationOutcomeChip app={app} />
 
       {app.status === 'needs_attention' ? (
         <button

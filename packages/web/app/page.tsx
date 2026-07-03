@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { AccountDeletedNotice } from '@/components/landing/account-deleted-notice'
 import { AtsCoverage } from '@/components/landing/ats-coverage'
 import { DynamicIsland } from '@/components/landing/dynamic-island'
+import { LandingHashScroll } from '@/components/landing/landing-hash-scroll'
 import { FAQ } from '@/components/landing/faq'
 import { Footer } from '@/components/landing/footer'
 import { Hero } from '@/components/landing/hero'
@@ -19,6 +20,7 @@ export default function Page() {
         <AccountDeletedNotice />
       </Suspense>
       <DynamicIsland />
+      <LandingHashScroll />
       <main className="relative">
         <LandingRails />
         <Hero />

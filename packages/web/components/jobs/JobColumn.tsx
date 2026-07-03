@@ -171,7 +171,7 @@ export function JobColumn({
         <div
           ref={scrollRef}
           onScroll={handleScroll}
-          className="absolute inset-0 overflow-y-auto pb-20 pr-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="absolute inset-0 overflow-y-auto pb-20 pr-1 scrollbar-none"
         >
           {loading ? (
             <div className="space-y-3">

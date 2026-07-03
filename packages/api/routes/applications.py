@@ -15,6 +15,7 @@ from core.redis_client import (
 from core.supabase_client import supabase
 from tasks.job_tasks import apply_to_job_task, finalize_run_if_complete
 from services.notification_helpers import notify_application
+from services.application_failure_explainer import explain_application_failure
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,12 @@ class VerificationCodeRequest(BaseModel):
 
 class StopAllResponse(BaseModel):
     stopped: int
+
+
+class FailureSummaryResponse(BaseModel):
+    kind: str
+    summary: str
+    technical: str
 
 
 def _fetch_user_row(clerk_id: str) -> dict:
@@ -233,6 +240,63 @@ async def submit_verification_code(
                 detail="This application is no longer awaiting a verification code",
             ) from exc
         raise
+
+
+@router.get("/{application_id}/failure-summary", response_model=FailureSummaryResponse)
+async def get_failure_summary(
+    application_id: str,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> FailureSummaryResponse:
+    clerk_id = current_user["sub"]
+
+    def _fetch() -> dict:
+        user_row = (
+            supabase.table("users")
+            .select("id")
+            .eq("clerk_id", clerk_id)
+            .single()
+            .execute()
+        )
+        if not user_row.data:
+            raise ValueError("user_not_found")
+
+        user_id = user_row.data["id"]
+        app_result = (
+            supabase.table("applications")
+            .select("id, user_id, status, company, role, error_message")
+            .eq("id", application_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        app_data = app_result.data
+        if not app_data:
+            raise ValueError("not_found")
+        if app_data.get("status") != "failed":
+            raise ValueError("not_failed")
+        return app_data
+
+    try:
+        app_data = await run_in_threadpool(_fetch)
+    except ValueError as exc:
+        error_code = str(exc)
+        if error_code == "user_not_found":
+            raise HTTPException(status_code=404, detail="User not found") from exc
+        if error_code == "not_found":
+            raise HTTPException(status_code=404, detail="Application not found") from exc
+        if error_code == "not_failed":
+            raise HTTPException(
+                status_code=422,
+                detail="Failure summary is only available for failed applications",
+            ) from exc
+        raise
+
+    result = await explain_application_failure(
+        company=app_data.get("company") or "",
+        role=app_data.get("role") or "",
+        error_message=app_data.get("error_message") or "",
+    )
+    return FailureSummaryResponse(**result)
 
 
 @router.post("/stop-all", response_model=StopAllResponse)

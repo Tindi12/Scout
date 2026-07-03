@@ -1,5 +1,6 @@
 'use client'
 
+import { CheckCircle2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -7,13 +8,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNotificationsContext } from '@/contexts/notifications-context'
 
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from '@/components/ui/tooltip'
 
 import { PortalBadge } from './PortalBadge'
+import { ApplicationOutcomeChip } from './ApplicationOutcomeChip'
 import {
   detectPortalFromUrl,
   formatElapsed,
@@ -22,7 +21,6 @@ import {
   sortRunApplications,
   STATUS_CONFIG,
   TERMINAL_STATUSES,
-  truncateError,
   type ApplicationRecord,
   type AppStatus,
   type EnrichedRunApplication,
@@ -260,7 +258,8 @@ function StatusDot({ status, color }: { status: AppStatus; color: string }) {
 function TimingColumn({ app }: { app: EnrichedRunApplication }) {
   if (app.status === 'applied' && app.applied_at) {
     return (
-      <span className="font-mono text-xs text-[#22c55e]">
+      <span className="inline-flex items-center justify-end gap-1.5 font-label text-xs text-[#22c55e]">
+        <CheckCircle2 className="h-3 w-3 shrink-0" strokeWidth={2} />
         Applied {formatRelativeTime(app.applied_at)}
       </span>
     )
@@ -268,22 +267,20 @@ function TimingColumn({ app }: { app: EnrichedRunApplication }) {
   if (app.status === 'in_progress') {
     return <InProgressTimer appId={app.id} />
   }
-  if (app.status === 'failed' && app.error_message) {
-    const short = truncateError(app.error_message, 40)
+  if (app.status === 'failed') {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-default font-mono text-xs text-[#ef4444]">
-            Failed · {short}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent
-          side="top"
-          className="max-w-sm border border-white/[0.08] bg-[#0a0a0a] text-xs text-white"
-        >
-          {app.error_message}
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex justify-end">
+        <ApplicationOutcomeChip
+          app={{
+            id: app.id,
+            status: app.status,
+            error_message: app.error_message,
+            company: app.company,
+            role: app.role,
+          }}
+          className="mt-0"
+        />
+      </div>
     )
   }
   if (app.status === 'queued') {
