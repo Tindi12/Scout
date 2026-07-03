@@ -24,7 +24,10 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, Optional
 
+from dotenv import load_dotenv
 from fastapi import HTTPException
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 

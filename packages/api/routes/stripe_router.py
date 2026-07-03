@@ -352,6 +352,136 @@ async def create_portal_session(
 
 
 # ---------------------------------------------------------------------------
+# 10.9 — In-app plan change (upgrade/downgrade between paid tiers)
+# ---------------------------------------------------------------------------
+
+
+class ChangePlanRequest(BaseModel):
+    tier: str
+
+
+@router.post("/change-plan")
+async def change_plan(
+    body: ChangePlanRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+) -> dict:
+    """Switch an EXISTING subscriber between paid tiers by modifying their live
+    subscription in place (price swap with proration) — never by creating a second
+    subscription. Upgrades charge the prorated difference immediately against the
+    card on file (proration_behavior=always_invoice + error_if_incomplete);
+    downgrades leave a prorated credit on the customer balance. A pending
+    cancel-at-period-end is cleared: changing plans means staying.
+
+    The Stripe billing portal is NOT configured for plan switching (it only offers
+    cancel), so this endpoint is the one plan-change mechanism. The
+    customer.subscription.updated webhook remains the source of truth; the direct
+    _grant_tier here is the same idempotent instant-UX fallback confirm-checkout
+    uses. Users with no live subscription get a 409 telling the frontend to route
+    through Checkout instead."""
+    tier = body.tier.strip().lower()
+    if tier not in _PAID_TIERS:
+        raise HTTPException(
+            status_code=400, detail="tier must be one of: pro, scout_plus"
+        )
+
+    try:
+        new_price_id = price_id_for_tier(tier)
+    except (ValueError, RuntimeError) as e:
+        logger.error("No Stripe price configured for tier %s: %s", tier, e)
+        raise HTTPException(status_code=500, detail="Billing is not configured")
+
+    user_row = await run_in_threadpool(_fetch_user_billing, current_user["sub"])
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_id = user_row["id"]
+    subscription_id = user_row.get("stripe_subscription_id")
+
+    _use_checkout = HTTPException(
+        status_code=409,
+        detail={
+            "error": "no_subscription",
+            "action": "use_checkout",
+            "message": "No active subscription to change — subscribe via checkout.",
+        },
+    )
+    if not subscription_id:
+        raise _use_checkout
+
+    try:
+        subscription = _as_dict(
+            await run_in_threadpool(
+                lambda: stripe_client.v1.subscriptions.retrieve(subscription_id)
+            )
+        )
+    except StripeError as e:
+        logger.error(
+            "Could not retrieve subscription %s for user %s: %s",
+            subscription_id, user_id, e,
+        )
+        raise HTTPException(
+            status_code=502, detail="Could not load your subscription. Please try again."
+        )
+
+    # A dead subscription can't be modified — clear the stale id path via checkout.
+    if subscription.get("status") not in _GRANT_STATUSES:
+        raise _use_checkout
+
+    items = (subscription.get("items") or {}).get("data") or []
+    if not items:
+        logger.error("Subscription %s has no items (user %s)", subscription_id, user_id)
+        raise HTTPException(
+            status_code=502, detail="Could not load your subscription. Please try again."
+        )
+    current_item = items[0]
+    current_tier = tier_for_price_id((current_item.get("price") or {}).get("id"))
+
+    if current_tier == tier and not subscription.get("cancel_at_period_end"):
+        return {"subscription_plan": tier, "changed": False, "already_on_plan": True}
+
+    try:
+        await run_in_threadpool(
+            lambda: stripe_client.v1.subscriptions.update(
+                subscription_id,
+                params={
+                    "items": [{"id": current_item["id"], "price": new_price_id}],
+                    # Upgrades: invoice + charge the prorated difference NOW, and
+                    # fail loudly (rather than silently going past_due) if the card
+                    # declines. Downgrades: the negative proration lands as a
+                    # customer credit on the same immediate invoice.
+                    "proration_behavior": "always_invoice",
+                    "payment_behavior": "error_if_incomplete",
+                    # Changing plans means staying — clear any pending cancellation.
+                    "cancel_at_period_end": False,
+                    "metadata": {"scout_user_id": user_id, "tier": tier},
+                },
+            )
+        )
+    except StripeError as e:
+        logger.error(
+            "Plan change to %s failed for user %s (subscription %s): %s",
+            tier, user_id, subscription_id, e,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "Your card could not be charged for the plan change. Update your "
+                "payment method in the billing portal and try again."
+            ),
+        )
+
+    # Instant UX: reflect the new tier now. The subscription.updated webhook
+    # re-applies the same values (idempotent) and owns analytics + thank-you email.
+    await run_in_threadpool(
+        _grant_tier, user_id, tier, subscription_id=subscription_id
+    )
+    logger.info(
+        "Changed plan for user %s: %s -> %s (subscription %s)",
+        user_id, current_tier or "unknown", tier, subscription_id,
+    )
+    return {"subscription_plan": tier, "changed": True, "already_on_plan": False}
+
+
+# ---------------------------------------------------------------------------
 # 10.3 — Webhook (source of truth for subscription_plan)
 # ---------------------------------------------------------------------------
 

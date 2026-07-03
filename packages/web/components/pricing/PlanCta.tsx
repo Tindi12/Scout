@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 
+import { ChangePlanButton } from '@/components/billing/ChangePlanButton'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { UpgradeButton } from '@/components/billing/UpgradeButton'
 import {
@@ -13,6 +14,8 @@ export type Viewer = {
   isSignedIn: boolean
   plan: SubscriptionPlan | null
   loading: boolean
+  /** Re-reads the plan after an in-place plan change (optional). */
+  refetch?: () => Promise<unknown>
 }
 
 type PlanCtaProps = {
@@ -92,19 +95,30 @@ export function PlanCta({ tierId, viewer, placement = 'card' }: PlanCtaProps) {
     )
   }
 
-  // ---- Existing paid subscriber changing tiers (up, down, or to Free) -> Stripe ----
-  // portal, which MODIFIES the existing subscription (swaps the price with proration)
-  // instead of creating a new one. The customer.subscription.updated webhook then syncs
-  // subscription_plan to the new tier.
-  const switchLabel =
-    tierId === 'free'
-      ? 'Downgrade to Free'
-      : `Switch to ${planDisplayLabel(tierId)}`
+  // ---- Existing paid subscriber moving to Free -> Stripe portal (cancel) ----
+  if (tierId === 'free') {
+    return (
+      <ManageBillingButton
+        variant="secondary"
+        label="Downgrade to Free"
+        className={isCard ? 'w-full' : 'w-full !h-9 !px-4 !text-[13px]'}
+      />
+    )
+  }
+
+  // ---- Existing paid subscriber switching paid tiers -> in-place plan change ----
+  // ChangePlanButton MODIFIES the live subscription (price swap with proration;
+  // upgrades charge the card on file immediately) instead of creating a second one.
+  // The billing portal is not configured for plan switching, so it must not be the
+  // switch path.
   return (
-    <ManageBillingButton
-      variant="secondary"
-      label={switchLabel}
+    <ChangePlanButton
+      tier={tierId}
+      direction={tierId === 'scout_plus' ? 'upgrade' : 'downgrade'}
+      variant={tierId === 'scout_plus' ? 'primary' : 'secondary'}
+      label={`Switch to ${planDisplayLabel(tierId)}`}
       className={isCard ? 'w-full' : 'w-full !h-9 !px-4 !text-[13px]'}
+      onChanged={() => void viewer.refetch?.()}
     />
   )
 }

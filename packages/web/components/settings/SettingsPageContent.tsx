@@ -5,7 +5,6 @@ import { AccountSection } from '@/components/settings/AccountSection'
 import { BillingSection } from '@/components/settings/BillingSection'
 import { ConnectMailSection } from '@/components/settings/ConnectMailSection'
 import { NotificationsSection } from '@/components/settings/NotificationsSection'
-import { UsajobsCredentialsSection } from '@/components/settings/UsajobsCredentialsSection'
 
 export function SettingsPageContent() {
   return (
@@ -21,7 +20,6 @@ export function SettingsPageContent() {
 
       <AccountSection />
       <ConnectMailSection />
-      <UsajobsCredentialsSection />
       <BillingSection />
       <NotificationsSection />
       <AccountActionsSection />

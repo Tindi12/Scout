@@ -31,6 +31,7 @@ export const ANALYTICS_EVENTS = {
   APPLICATION_COMPLETED: 'application_completed',
   UPGRADE_VIEWED: 'upgrade_viewed',
   CHECKOUT_STARTED: 'checkout_started',
+  PLAN_CHANGE_STARTED: 'plan_change_started',
   // subscription_activated fires SERVER-SIDE from the Stripe webhook (payment source
   // of truth); listed here only for catalog completeness.
   SUBSCRIPTION_ACTIVATED: 'subscription_activated',

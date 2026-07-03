@@ -4,6 +4,7 @@ import { CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
+import { ChangePlanButton } from '@/components/billing/ChangePlanButton'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { SecuredByStripe } from '@/components/billing/SecuredByStripe'
 import {
@@ -19,7 +20,7 @@ const UPGRADE_LINK_CLASS =
   'inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white active:scale-[0.97]'
 
 export function BillingSection() {
-  const { plan, isPaid, loading } = useTier()
+  const { plan, isPaid, loading, refetch } = useTier()
   const [credits, setCredits] = useState<ApplicationCreditsSnapshot | null>(
     null,
   )
@@ -73,7 +74,27 @@ export function BillingSection() {
           <div className="border-t border-white/[0.06] pt-4">
             <div className="flex flex-col items-start gap-3">
               {isPaid ? (
-                <ManageBillingButton variant="secondary" />
+                <div className="flex flex-wrap items-center gap-3">
+                  {plan === 'pro' ? (
+                    <ChangePlanButton
+                      tier="scout_plus"
+                      direction="upgrade"
+                      variant="primary"
+                      label="Upgrade to Scout+"
+                      onChanged={() => void refetch()}
+                    />
+                  ) : null}
+                  {plan === 'scout_plus' ? (
+                    <ChangePlanButton
+                      tier="pro"
+                      direction="downgrade"
+                      variant="secondary"
+                      label="Switch to Pro"
+                      onChanged={() => void refetch()}
+                    />
+                  ) : null}
+                  <ManageBillingButton variant="secondary" />
+                </div>
               ) : (
                 <Link href="/pricing" className={UPGRADE_LINK_CLASS}>
                   Upgrade

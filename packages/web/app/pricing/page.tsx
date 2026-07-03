@@ -14,9 +14,9 @@ import { useTier } from '@/hooks/use-tier'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 
 export default function PricingPage() {
-  const { plan, isPaid, isSignedIn, loading } = useTier()
+  const { plan, isPaid, isSignedIn, loading, refetch } = useTier()
 
-  const viewer: Viewer = { isSignedIn, plan, loading }
+  const viewer: Viewer = { isSignedIn, plan, loading, refetch }
 
   // Funnel step: the user saw the pricing/upgrade surface.
   useEffect(() => {
