@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleSlash,
   Compass,
   FileText,
   Info,
@@ -97,7 +98,7 @@ export function LandingDashboardShowcase() {
       >
         <div
           aria-hidden
-          className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0a0a] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+          className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0a0a]"
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
@@ -157,7 +158,7 @@ export function LandingDashboardShowcase() {
               className={cn(
                 'h-1.5 rounded-full transition-all duration-500',
                 i === index
-                  ? 'w-5 bg-[#FF6733]'
+                  ? 'w-5 bg-primary'
                   : 'w-1.5 bg-white/15 group-hover:bg-white/40',
               )}
             />
@@ -188,10 +189,13 @@ function Sidebar({ active }: { active: NavLabel }) {
       </div>
 
       <div className="mx-2.5 mb-3 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
-        <span className="h-6 w-6 shrink-0 rounded-full bg-gradient-to-br from-[#FF6733] to-[#a21caf]" />
+        {/* Generic default avatar — user's initial in a muted circle. */}
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.09] font-label text-[10px] font-semibold text-white/70">
+          A
+        </span>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate font-label text-[11px] font-medium text-white">
-            Rabuor
+            Austin
           </div>
           <span className="font-label text-[8px] font-semibold uppercase tracking-wider text-[#FF6733]">
             Scout+
@@ -245,7 +249,7 @@ function Sidebar({ active }: { active: NavLabel }) {
             remaining this billing period
           </p>
           <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full rounded-full bg-[#FF6733]" style={{ width: '98%' }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: '98%' }} />
           </div>
         </div>
 
@@ -280,14 +284,14 @@ function Topbar({ crumb }: { crumb: string[] }) {
       </ol>
       <div className="flex items-center gap-2.5">
         <Bell className="h-3.5 w-3.5 text-[#666]" strokeWidth={1.75} />
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF6733] px-3 py-1.5 font-label text-[10px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)]">
+        <span className="inline-flex items-center gap-1 rounded-md border border-primary/70 bg-primary px-2 py-1 font-label text-[9px] font-semibold text-white">
           <Image
             src={scoutLogo}
             alt=""
-            width={12}
-            height={12}
+            width={10}
+            height={10}
             draggable={false}
-            className="h-3 w-auto object-contain"
+            className="h-2.5 w-auto object-contain"
           />
           Send Scout
         </span>
@@ -313,7 +317,7 @@ function DashboardSlide() {
           Welcome back
         </p>
         <h2 className="font-headline text-[20px] font-medium tracking-[-0.02em] text-white">
-          Rabuor, your dashboard is ready.
+          Austin, your dashboard is ready.
         </h2>
       </header>
 
@@ -337,7 +341,7 @@ function DashboardSlide() {
             </p>
           </div>
         </div>
-        <span className="inline-flex h-8 items-center gap-1 rounded-full bg-[#FF6733] px-3 font-label text-[10px] font-semibold text-white">
+        <span className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/70 bg-primary px-3 font-label text-[10px] font-semibold text-primary-foreground">
           View analysis
           <ArrowRight className="h-3 w-3" strokeWidth={2} />
         </span>
@@ -536,8 +540,8 @@ function ExploreSlide() {
                 className={cn(
                   'rounded-full px-2.5 py-1 font-label text-[10px] font-medium',
                   i === 0
-                    ? 'bg-[#FF6733] text-white'
-                    : 'border border-white/[0.08] text-[#888]',
+                    ? 'rounded-md border border-primary/70 bg-primary text-primary-foreground'
+                    : 'rounded-md border border-white/[0.08] text-[#888]',
                 )}
               >
                 {f}
@@ -631,7 +635,7 @@ function ExploreCard({ job, tone }: { job: JobCard; tone: FitTone }) {
             className={cn(
               'flex h-3.5 w-3.5 items-center justify-center rounded-full',
               strong
-                ? 'bg-[#FF6733] text-white'
+                ? 'bg-primary text-primary-foreground'
                 : 'border border-white/15 text-transparent',
             )}
           >
@@ -707,6 +711,8 @@ type TrackerCard = {
   noteTone?: 'muted' | 'red'
   inProgress?: boolean
   attention?: boolean
+  /** Mini version of the tracker's "Cancelled by you" outcome chip. */
+  cancelled?: boolean
 }
 
 const TRACKER_COLUMNS: {
@@ -755,8 +761,7 @@ const TRACKER_COLUMNS: {
         role: 'Hardware Engineering Intern',
         tag: 'GH',
         time: '2d ago',
-        note: 'console_by_user',
-        noteTone: 'red',
+        cancelled: true,
       },
     ],
   },
@@ -892,6 +897,12 @@ function TrackerCardView({ card }: { card: TrackerCard }) {
             {card.note}
           </span>
         )
+      ) : null}
+      {card.cancelled ? (
+        <span className="inline-flex w-fit items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-label text-[7px] font-medium text-[#999]">
+          <CircleSlash className="h-2 w-2 shrink-0" strokeWidth={2} />
+          Cancelled by you
+        </span>
       ) : null}
       {card.attention ? (
         <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-center font-label text-[8px] font-semibold text-amber-400">

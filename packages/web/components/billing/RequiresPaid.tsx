@@ -88,7 +88,7 @@ export function LockedFeature({
     <div
       className={`glass-card flex flex-col items-center gap-4 rounded-2xl border border-white/[0.06] p-8 text-center ${className}`}
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FF6733]/10 ring-1 ring-inset ring-[#FF6733]/25">
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 ring-1 ring-inset ring-[#FF6733]/25">
         <Lock className="h-5 w-5 text-[#FF6733]" strokeWidth={2} />
       </span>
       <div>

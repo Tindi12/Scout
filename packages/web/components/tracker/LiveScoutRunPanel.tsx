@@ -160,7 +160,7 @@ export function LiveScoutRunPanel({ runId, onRunUpdated }: LiveScoutRunPanelProp
 
             <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
               <motion.div
-                className="h-full rounded-full bg-[#FF6733]"
+                className="h-full rounded-full bg-primary"
                 initial={{ width: 0 }}
                 animate={{ width: `${progressPct}%` }}
                 transition={{ duration: 0.6, ease: 'easeOut' }}

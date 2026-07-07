@@ -6,6 +6,7 @@ import { ArrowLeft, Menu, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 
 const NAV_SECTIONS = [
@@ -110,13 +111,11 @@ export function DynamicIsland() {
           <Link href="/login" prefetch className={`hidden md:inline-flex ${navLinkClass}`}>
             Log In
           </Link>
-          <Link
-            href="/sign-up"
-            prefetch
-            className="font-label inline-flex items-center justify-center rounded-full bg-[#FF6733] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-95 sm:px-6"
-          >
-            Try Scout Now
-          </Link>
+          <Button asChild>
+            <Link href="/sign-up" prefetch>
+              Try Scout Now
+            </Link>
+          </Button>
           <button
             type="button"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"

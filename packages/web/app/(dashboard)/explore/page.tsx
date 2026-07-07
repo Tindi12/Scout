@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { useExploreBatch } from '@/contexts/explore-batch-context'
@@ -514,7 +515,7 @@ export default function ExplorePage() {
           <div className="flex flex-col gap-2.5">
             {/* Row 1 — volume */}
             <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <Briefcase className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
               </div>
               <div>
@@ -530,7 +531,7 @@ export default function ExplorePage() {
 
             {/* Row 2 — resume */}
             <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <FileText className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
               </div>
               <div>
@@ -546,7 +547,7 @@ export default function ExplorePage() {
             {/* Row 3 — credits + bar */}
             <div className="flex flex-col gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FF6733]/10">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <CreditCard className="h-4 w-4 text-[#FF6733]" strokeWidth={1.75} />
                 </div>
                 <p className="font-label text-sm font-medium text-white">
@@ -560,7 +561,7 @@ export default function ExplorePage() {
                 <>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                     <div
-                      className="h-full rounded-full bg-[#FF6733] transition-all duration-300"
+                      className="h-full rounded-full bg-primary transition-all duration-300"
                       style={{
                         width: `${Math.min((selectedCount / creditsRemaining) * 100, 100)}%`,
                       }}
@@ -588,15 +589,15 @@ export default function ExplorePage() {
           )}
 
           <DialogFooter className="sm:justify-end">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setShowBatchConfirm(false)}
               disabled={isSending}
-              className="inline-flex h-10 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#999] transition-colors hover:text-white disabled:opacity-60"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleConfirmBatch}
               disabled={
@@ -604,17 +605,10 @@ export default function ExplorePage() {
                 selectedCount === 0 ||
                 (creditsRemaining != null && selectedCount > creditsRemaining)
               }
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
+              loading={isSending}
             >
-              {isSending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                  Sending Scout…
-                </>
-              ) : (
-                <>Send Scout →</>
-              )}
-            </button>
+              {isSending ? 'Sending Scout…' : 'Send Scout →'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -645,36 +639,36 @@ function Header({
       </div>
 
       <div className="flex flex-col gap-3 md:items-end">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-full border border-white/[0.08] bg-white/[0.03] px-4 font-label text-xs font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white disabled:opacity-70 md:self-auto"
+          className="self-start md:self-auto"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
             strokeWidth={2}
           />
           Refresh
-        </button>
+        </Button>
 
         <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1">
           {FILTERS.map((f) => {
             const active = f.key === filter
             return (
-              <button
+              <Button
                 key={f.key}
                 type="button"
+                variant="chip"
+                size="sm"
+                data-state={active ? 'selected' : undefined}
                 onClick={() => onFilterChange(f.key)}
-                className={cn(
-                  'shrink-0 rounded-full px-3 py-1.5 font-label text-xs font-semibold transition-colors',
-                  active
-                    ? 'bg-[#FF6733] text-white shadow-[0_0_18px_rgba(255,103,51,0.35)]'
-                    : 'glass-pill text-[#bbb] hover:text-white',
-                )}
+                className="shrink-0"
               >
                 {f.label}
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -1002,7 +996,7 @@ function MobileSection({
 function NoResumeState() {
   return (
     <section className="glass-card flex flex-col items-center gap-4 rounded-2xl border border-white/[0.06] p-10 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FF6733]/10">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
         <FileText className="h-6 w-6 text-[#FF6733]" strokeWidth={1.75} />
       </div>
       <div className="space-y-1">
@@ -1013,12 +1007,9 @@ function NoResumeState() {
           Scout needs to understand your background before finding your matches.
         </p>
       </div>
-      <Link
-        href={`/dashboard#${RESUME_UPLOAD_SECTION_ID}`}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-      >
-        Upload Resume →
-      </Link>
+      <Button asChild size="lg">
+        <Link href={`/dashboard#${RESUME_UPLOAD_SECTION_ID}`}>Upload Resume →</Link>
+      </Button>
     </section>
   )
 }
@@ -1043,14 +1034,10 @@ function ErrorState({
           {message || 'We could not load your matches. Please try again.'}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-6 font-label text-sm font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white"
-      >
+      <Button type="button" size="lg" variant="outline" onClick={onRetry}>
         <RefreshCw className="h-4 w-4" strokeWidth={2} />
         Try again
-      </button>
+      </Button>
     </section>
   )
 }

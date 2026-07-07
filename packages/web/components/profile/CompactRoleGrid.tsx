@@ -59,9 +59,9 @@ export function CompactRoleGrid({ selected, onToggle }: CompactRoleGridProps) {
             aria-checked={isSelected}
             onClick={() => onToggle(role.id)}
             className={cn(
-              'group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 active:scale-[0.99]',
+              'group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200',
               isSelected
-                ? 'border-[#FF6733]/60 bg-[#FF6733]/[0.06] shadow-[0_0_20px_rgba(255,103,51,0.12)]'
+                ? 'border-primary/60 bg-primary/[0.06]'
                 : 'border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]',
             )}
           >

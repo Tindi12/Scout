@@ -46,7 +46,7 @@ export function LocationChips({ id, values, onChange }: LocationChipsProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 transition-all focus-within:border-[#FF6733]/60 focus-within:bg-white/[0.05] focus-within:shadow-[0_0_24px_rgba(255,103,51,0.18)]">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 transition-all focus-within:border-primary/60 focus-within:bg-white/[0.05]">
         {values.map((value) => (
           <span
             key={value}

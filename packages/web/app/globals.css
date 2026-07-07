@@ -23,6 +23,8 @@
     --border: 0 0% 100% / 0.08;
     --input: 0 0% 100% / 0.08;
     --ring: 14 100% 60%;
+    --brand: 14 100% 60%;
+    --brand-hover: 14 85% 52%;
     --radius: 0.5rem;
     --landing-line: rgba(255, 255, 255, 0.16);
     --landing-corner: rgba(255, 255, 255, 0.32);
@@ -51,6 +53,8 @@
     --border: 0 0% 100% / 0.08;
     --input: 0 0% 100% / 0.08;
     --ring: 14 100% 60%;
+    --brand: 14 100% 60%;
+    --brand-hover: 14 85% 52%;
     --landing-line: rgba(255, 255, 255, 0.16);
     --landing-corner: rgba(255, 255, 255, 0.32);
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
@@ -246,7 +250,6 @@
 
 .PhoneInputInput:focus {
   border-color: rgba(255, 103, 51, 0.6);
-  box-shadow: 0 0 24px rgba(255, 103, 51, 0.18);
 }
 
 .PhoneInputInput::placeholder {

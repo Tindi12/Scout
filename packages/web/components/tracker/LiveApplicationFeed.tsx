@@ -194,7 +194,7 @@ function FeedRow({
           <button
             type="button"
             onClick={() => onCodeClick(recordForModal)}
-            className="inline-flex h-7 items-center rounded-full border border-[#22d3ee]/30 bg-[#22d3ee]/10 px-3 font-label text-[11px] font-semibold text-[#22d3ee] transition-colors hover:bg-[#22d3ee]/20"
+            className="font-label inline-flex h-7 items-center rounded-md border border-[#22d3ee]/30 bg-[#22d3ee]/10 px-3 text-[11px] font-semibold text-[#22d3ee] transition-colors duration-150 hover:bg-[#22d3ee]/20"
           >
             Enter Code
           </button>
@@ -203,7 +203,7 @@ function FeedRow({
           <button
             type="button"
             onClick={() => onAnswerClick(record)}
-            className="inline-flex h-7 items-center rounded-full border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 font-label text-[11px] font-semibold text-[#f59e0b] transition-colors hover:bg-[#f59e0b]/20"
+            className="font-label inline-flex h-7 items-center rounded-md border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 text-[11px] font-semibold text-[#f59e0b] transition-colors duration-150 hover:bg-[#f59e0b]/20"
           >
             Answer
           </button>

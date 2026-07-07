@@ -55,16 +55,6 @@ const STATUS_ROWS = [
 export function InternationalStudents() {
   return (
     <section id="international" className="relative px-6 py-32 lg:px-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-1/2 -z-10 mx-auto h-[400px] max-w-3xl -translate-y-1/2 rounded-full"
-        style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(255,103,51,0.08) 0%, transparent 70%)',
-          filter: 'blur(120px)',
-        }}
-      />
-
       <div className="mx-auto max-w-6xl">
         <div className="grid grid-cols-1 items-start gap-16 lg:grid-cols-2 lg:gap-20">
           <div>
@@ -85,7 +75,7 @@ export function InternationalStudents() {
                 <li key={item.title} className="flex gap-4">
                   <span
                     aria-hidden
-                    className="mt-1 h-px w-8 shrink-0 bg-gradient-to-r from-[#FF6733] to-transparent"
+                    className="mt-1 h-px w-8 shrink-0 bg-white/10"
                   />
                   <div>
                     <h3 className="font-headline text-lg font-medium tracking-tight text-white">
@@ -100,11 +90,7 @@ export function InternationalStudents() {
             </ul>
           </div>
 
-          <div className="glass-card group relative overflow-hidden rounded-2xl p-8">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.06] blur-3xl transition-opacity duration-500 group-hover:bg-[#FF6733]/10"
-            />
+          <div className="glass-card relative overflow-hidden rounded-2xl p-8">
             <div className="relative">
               <p className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888888]">
                 What Scout covers

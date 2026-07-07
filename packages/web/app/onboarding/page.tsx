@@ -26,6 +26,7 @@ import {
 import { useUser } from '@clerk/nextjs'
 
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
+import { Button } from '@/components/ui/button'
 import { ConnectMailCard } from '@/components/settings/ConnectMailSection'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
@@ -311,15 +312,6 @@ function BackgroundFx() {
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 -z-10 h-[700px] w-[900px] -translate-x-1/2 rounded-full"
-        style={{
-          background:
-            'radial-gradient(circle at center, rgba(255,103,51,0.10) 0%, rgba(255,103,51,0.04) 35%, transparent 70%)',
-          filter: 'blur(120px)',
-        }}
-      />
-      <div
-        aria-hidden
         className="pointer-events-none absolute -left-40 top-40 -z-10 h-[500px] w-[500px] rounded-full"
         style={{
           background: 'radial-gradient(circle, #1a1a1a 0%, transparent 70%)',
@@ -361,9 +353,7 @@ function ProgressBar({ step }: { step: Step }) {
           <span
             key={i}
             className={`h-1 w-12 rounded-full transition-all duration-300 ${
-              isActive
-                ? 'bg-[#FF6733] shadow-[0_0_12px_rgba(255,103,51,0.5)]'
-                : 'bg-white/10'
+              isActive ? 'bg-primary' : 'bg-white/10'
             }`}
           />
         )
@@ -439,7 +429,7 @@ function TextField({
       min={min}
       max={max}
       autoComplete={autoComplete}
-      className={`font-body mt-2 w-full rounded-xl bg-white/[0.03] px-4 py-3.5 text-[15px] text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:bg-white/[0.05] focus:shadow-[0_0_24px_rgba(255,103,51,0.18)] focus:outline-none ${
+      className={`font-body mt-2 w-full rounded-xl bg-white/[0.03] px-4 py-3.5 text-[15px] text-white placeholder:text-[#555] transition-colors duration-150 focus:bg-white/[0.05] focus:outline-none ${
         ghost
           ? 'border border-white/[0.05] focus:border-[#FF6733]/40'
           : 'border border-white/10 focus:border-[#FF6733]/60'
@@ -608,7 +598,7 @@ function StepOne({
             onKeyDown={handleSchoolKeyDown}
             placeholder="University of Alabama"
             autoComplete="organization"
-            className="font-body mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[15px] text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:bg-white/[0.05] focus:shadow-[0_0_24px_rgba(255,103,51,0.18)] focus:outline-none"
+            className="font-body mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[15px] text-white placeholder:text-[#555] transition-colors duration-150 focus:border-[#FF6733]/60 focus:bg-white/[0.05] focus:outline-none"
           />
           {showSchoolDropdown && (
             <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
@@ -680,19 +670,16 @@ function StepOne({
         </div>
       </div>
 
-      <button
+      <Button
         type="button"
+        size="lg"
         onClick={onContinue}
         disabled={!canContinue}
-        className={`font-label mt-9 inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98] ${
-          canContinue
-            ? 'bg-[#FF6733] text-white shadow-[0_0_40px_rgba(255,103,51,0.35)] hover:shadow-[0_0_56px_rgba(255,103,51,0.55)]'
-            : 'cursor-not-allowed bg-white/[0.04] text-[#555]'
-        }`}
+        className="mt-9 w-full"
       >
         Continue
-        <ArrowRight className="h-4 w-4" />
-      </button>
+        <ArrowRight />
+      </Button>
     </div>
   )
 }
@@ -734,21 +721,21 @@ function StepTwo({
               role="checkbox"
               aria-checked={selected}
               onClick={() => toggleRole(role.id)}
-              className={`group relative flex flex-col rounded-2xl p-5 text-left transition-all duration-200 active:scale-[0.99] ${
+              className={`group relative flex flex-col rounded-2xl p-5 text-left transition-colors duration-150 ${
                 selected
-                  ? 'border border-[#FF6733]/60 bg-[#FF6733]/[0.06] shadow-[0_0_28px_rgba(255,103,51,0.18)]'
-                  : 'glass-card border border-white/[0.06] hover:border-white/15 hover:bg-white/[0.04] hover:shadow-[0_0_20px_rgba(255,103,51,0.06)]'
+                  ? 'border border-primary/60 bg-primary/[0.06]'
+                  : 'glass-card border border-white/[0.06] hover:border-white/15 hover:bg-white/[0.04]'
               }`}
             >
               {selected && (
-                <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#FF6733] text-white shadow-[0_0_12px_rgba(255,103,51,0.6)]">
+                <span className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 </span>
               )}
               <span
                 className={`flex h-10 w-10 items-center justify-center rounded-xl border transition-colors duration-200 ${
                   selected
-                    ? 'border-[#FF6733]/40 bg-[#FF6733]/15'
+                    ? 'border-[#FF6733]/40 bg-primary/15'
                     : 'border-white/10 bg-white/[0.03] group-hover:border-[#FF6733]/30'
                 }`}
               >
@@ -769,37 +756,34 @@ function StepTwo({
       </div>
 
       <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="lg"
           onClick={onBack}
           disabled={submitting}
-          className="font-label inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-3.5 text-sm font-medium text-white/80 transition-all duration-200 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="sm:w-auto"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft />
           Back
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          size="lg"
           onClick={onSubmit}
-          disabled={!canSubmit || submitting}
-          className={`font-label inline-flex flex-1 items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98] ${
-            canSubmit && !submitting
-              ? 'bg-[#FF6733] text-white shadow-[0_0_40px_rgba(255,103,51,0.35)] hover:shadow-[0_0_56px_rgba(255,103,51,0.55)]'
-              : 'cursor-not-allowed bg-white/[0.04] text-[#555]'
-          }`}
+          disabled={!canSubmit}
+          loading={submitting}
+          className="flex-1"
         >
           {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Sending Scout...
-            </>
+            'Sending Scout...'
           ) : (
             <>
               Send Scout
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight />
             </>
           )}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -809,10 +793,6 @@ function SuccessView() {
   return (
     <>
       <div className="relative">
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 animate-pulse rounded-full bg-[#FF6733]/30 blur-2xl"
-        />
         <Image
           src={scoutLogo}
           alt="Scout"

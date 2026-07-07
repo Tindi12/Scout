@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { Cookie, X } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
+
 export function CookieConsentBanner({
   onAccept,
   onReject,
@@ -63,20 +65,21 @@ export function CookieConsentBanner({
           </div>
 
           <div className="flex shrink-0 items-center gap-2.5 sm:flex-col sm:items-stretch md:flex-row">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onReject}
-              className="inline-flex h-10 flex-1 items-center justify-center whitespace-nowrap rounded-full border border-white/[0.1] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:border-white/20 hover:text-white active:scale-[0.97]"
+              className="h-10 flex-1 whitespace-nowrap"
             >
               Reject
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={onAccept}
-              className="inline-flex h-10 flex-1 items-center justify-center whitespace-nowrap rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_20px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_30px_rgba(255,103,51,0.55)] active:scale-[0.97]"
+              className="h-10 flex-1 whitespace-nowrap"
             >
               Accept
-            </button>
+            </Button>
           </div>
         </div>
       </div>

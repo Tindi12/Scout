@@ -35,14 +35,6 @@ function XIcon({ className }: SocialIconProps) {
 
 const COLUMNS = [
   {
-    heading: 'Navigation',
-    links: [
-      { label: 'About', href: '/#about' },
-      { label: 'Pricing', href: '/#pricing' },
-      { label: 'FAQ', href: '/#faq' },
-    ],
-  },
-  {
     heading: 'Product',
     links: [
       { label: 'Resume', href: '/resume' },
@@ -52,12 +44,26 @@ const COLUMNS = [
     ],
   },
   {
-    heading: 'Support',
+    heading: 'Company',
+    links: [
+      { label: 'About', href: '/#about' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'FAQ', href: '/#faq' },
+    ],
+  },
+  {
+    heading: 'Account',
     links: [
       { label: 'Sign in', href: '/sign-in' },
       { label: 'Sign up', href: '/sign-up' },
-      { label: 'Privacy', href: '/privacy' },
-      { label: 'Terms', href: '/terms' },
+      { label: 'Dashboard', href: '/dashboard' },
+    ],
+  },
+  {
+    heading: 'Legal',
+    links: [
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
     ],
   },
 ] as const
@@ -85,8 +91,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-20 grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4">
-          <div className="origin-left">
+        <div className="mt-20 grid grid-cols-2 gap-x-8 gap-y-12 md:grid-cols-4 lg:grid-cols-6">
+          <div className="col-span-2 origin-left md:col-span-4 lg:col-span-2">
             <Link href="/" className="inline-flex items-center gap-3">
               <Image
                 src={scoutLogo}
@@ -122,7 +128,7 @@ export function Footer() {
                     </Link>
                   </li>
                 ))}
-                {col.heading === 'Support' ? (
+                {col.heading === 'Legal' ? (
                   <li>
                     <CookiePreferencesLink />
                   </li>
@@ -139,27 +145,33 @@ export function Footer() {
 
           <Link
             href="/#top"
-            className="font-label group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] backdrop-blur-md transition-all duration-200 hover:border-[#FF6733]/40 hover:text-white hover:shadow-[0_0_24px_rgba(255,103,51,0.18)]"
+            className="font-label group inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.05] hover:text-white"
           >
             Back to top
-            <ArrowUp className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:text-[#FF6733]" />
+            <ArrowUp className="h-4 w-4 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:text-primary" />
           </Link>
 
           <div className="flex items-center gap-5">
             {[
               { Icon: TikTokIcon, label: 'TikTok', href: '#' },
-              { Icon: XIcon, label: 'X', href: '#' },
+              { Icon: XIcon, label: 'X', href: 'https://x.com/getscoutintern' },
               { Icon: Instagram, label: 'Instagram', href: '#' },
-            ].map(({ Icon, label, href }) => (
-              <Link
-                key={label}
-                href={href}
-                aria-label={label}
-                className="text-[#888888] opacity-50 grayscale transition-all duration-200 hover:scale-110 hover:text-white hover:opacity-100 hover:grayscale-0"
-              >
-                <Icon className="h-5 w-5" strokeWidth={1.75} />
-              </Link>
-            ))}
+            ].map(({ Icon, label, href }) => {
+              const isExternal = href.startsWith('http')
+              return (
+                <Link
+                  key={label}
+                  href={href}
+                  aria-label={label}
+                  {...(isExternal
+                    ? { target: '_blank', rel: 'noopener noreferrer' }
+                    : {})}
+                  className="text-[#888888] opacity-50 grayscale transition-all duration-200 hover:scale-110 hover:text-white hover:opacity-100 hover:grayscale-0"
+                >
+                  <Icon className="h-5 w-5" strokeWidth={1.75} />
+                </Link>
+              )
+            })}
           </div>
         </div>
       </div>

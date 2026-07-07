@@ -56,10 +56,6 @@ export function HowItWorks() {
               key={step.title}
               className={`glass-card group relative flex-1 basis-0 overflow-hidden rounded-2xl p-7 transition-all duration-300 hover:bg-white/[0.04] ${CARD_OFFSET[i]}`}
             >
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.04] blur-3xl transition-opacity duration-500 group-hover:bg-[#FF6733]/10"
-              />
               <div className="relative">
                 <div className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">
                   0{i + 1}

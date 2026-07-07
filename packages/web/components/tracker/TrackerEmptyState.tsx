@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 
+import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 
 export function TrackerEmptyState() {
@@ -28,12 +29,9 @@ export function TrackerEmptyState() {
       <p className="mt-2 max-w-xs font-body text-sm text-[#555]">
         Head to Explore to find your matches and send Scout.
       </p>
-      <Link
-        href="/explore"
-        className="mt-6 inline-flex h-10 items-center justify-center rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-      >
-        Go to Explore →
-      </Link>
+      <Button asChild className="mt-6">
+        <Link href="/explore">Go to Explore →</Link>
+      </Button>
     </div>
   )
 }

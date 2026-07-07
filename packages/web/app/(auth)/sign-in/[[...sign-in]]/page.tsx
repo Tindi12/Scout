@@ -35,55 +35,29 @@ export default function SignInPage() {
         </p>
 
         <div className="relative mt-8 w-full">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-8 top-6 -z-10 h-56 rounded-full blur-[120px]"
-            style={{
-              background:
-                'radial-gradient(circle at center, rgba(255,103,51,0.2) 0%, rgba(255,103,51,0.1) 40%, transparent 75%)',
-            }}
-          />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-2 -z-10 opacity-60"
-            style={{
-              backgroundImage:
-                'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
-              backgroundSize: '28px 28px',
-              maskImage:
-                'radial-gradient(ellipse at center, black 25%, transparent 75%)',
-              WebkitMaskImage:
-                'radial-gradient(ellipse at center, black 25%, transparent 75%)',
-            }}
-          />
-          <div className="relative w-full overflow-hidden rounded-2xl p-[1px]">
-            <span
-              aria-hidden
-              className="absolute inset-[-1000%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#000000_0%,#000000_50%,#FF6733_100%)]"
+          <div className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] p-4 sm:p-5">
+            <SignIn
+              routing="path"
+              path="/sign-in"
+              appearance={{
+                baseTheme: dark,
+                variables: {
+                  colorPrimary: '#FF6733',
+                  colorBackground: '#111111',
+                  colorText: '#ffffff',
+                  colorTextSecondary: '#888888',
+                  colorInputBackground: '#1a1a1a',
+                  colorInputText: '#ffffff',
+                  borderRadius: '6px',
+                },
+                elements: {
+                  rootBox: 'w-full',
+                  cardBox: 'w-full overflow-hidden rounded-lg border border-white/15 shadow-none bg-[#0a0a0a]',
+                  card: 'w-full bg-transparent shadow-none',
+                  formButtonPrimary: 'shadow-none !bg-[#FF6733] hover:!bg-[#e85c2e]',
+                },
+              }}
             />
-            <div className="relative z-10 w-full rounded-2xl bg-[#0a0a0a] p-4 backdrop-blur-xl sm:p-5">
-              <SignIn
-                routing="path"
-                path="/sign-in"
-                appearance={{
-                  baseTheme: dark,
-                  variables: {
-                    colorPrimary: '#FF6733',
-                    colorBackground: '#111111',
-                    colorText: '#ffffff',
-                    colorTextSecondary: '#888888',
-                    colorInputBackground: '#1a1a1a',
-                    colorInputText: '#ffffff',
-                    borderRadius: '12px',
-                  },
-                  elements: {
-                    rootBox: 'w-full',
-                    cardBox: 'w-full overflow-hidden rounded-xl border border-white/15 shadow-none bg-[#0a0a0a]',
-                    card: 'w-full bg-transparent shadow-none',
-                  },
-                }}
-              />
-            </div>
           </div>
         </div>
 

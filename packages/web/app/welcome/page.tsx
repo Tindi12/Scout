@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { SecuredByStripe } from '@/components/billing/SecuredByStripe'
+import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   isPaidUser,
@@ -107,20 +108,10 @@ function WelcomeContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-6 py-16 text-white">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 mx-auto h-[420px] max-w-2xl rounded-full"
-        style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(255,103,51,0.10) 0%, transparent 70%)',
-          filter: 'blur(120px)',
-        }}
-      />
-
       <div className="glass-card-strong relative w-full max-w-md rounded-3xl border border-white/10 p-10 text-center">
         <div className="mb-6 flex justify-center">
           {status === 'confirmed' ? (
-            <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-[#FF6733]/15 ring-1 ring-inset ring-[#FF6733]/30">
+            <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 ring-1 ring-inset ring-primary/30">
               <Image
                 src={scoutLogo}
                 alt="Scout"
@@ -128,7 +119,7 @@ function WelcomeContent() {
                 height={32}
                 className="h-8 w-8 select-none object-contain"
               />
-              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#FF6733] shadow-[0_0_18px_rgba(255,103,51,0.6)]">
+              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary">
                 <Check className="h-4 w-4 text-white" strokeWidth={3} />
               </span>
             </span>
@@ -148,17 +139,18 @@ function WelcomeContent() {
               Your plan is active. The full Scout Agent is unlocked — let&apos;s
               put it to work on your applications.
             </p>
-            <button
+            <Button
               type="button"
+              size="lg"
               onClick={() => router.push('/dashboard')}
-              className="group mt-7 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]"
+              className="group mt-7 w-full"
             >
               Go to your dashboard
               <ArrowRight
-                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                className="transition-transform group-hover:translate-x-0.5"
                 strokeWidth={2.5}
               />
-            </button>
+            </Button>
           </>
         ) : status === 'timeout' ? (
           <>
@@ -170,20 +162,17 @@ function WelcomeContent() {
               can happen if Stripe is still confirming. Try again in a few
               seconds.
             </p>
-            <button
-              type="button"
-              onClick={retry}
-              className="mt-7 inline-flex h-11 w-full items-center justify-center rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]"
-            >
+            <Button type="button" size="lg" onClick={retry} className="mt-7 w-full">
               Check again
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => router.push('/dashboard')}
-              className="mt-3 font-label text-sm font-medium text-[#999] transition-colors hover:text-white"
+              className="mt-3"
             >
               Go to dashboard
-            </button>
+            </Button>
           </>
         ) : (
           <>

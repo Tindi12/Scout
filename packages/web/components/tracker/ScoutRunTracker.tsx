@@ -13,6 +13,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -212,13 +213,12 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
               : 'We could not load the Scout run status. Please try again.'}
           </p>
         </div>
-        <Link
-          href="/explore"
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-          Back to Jobs
-        </Link>
+        <Button asChild variant="outline">
+          <Link href="/explore">
+            <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+            Back to Jobs
+          </Link>
+        </Button>
       </section>
     )
   }
@@ -283,7 +283,7 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
 
           <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
             <motion.div
-              className="h-full rounded-full bg-[#FF6733]"
+              className="h-full rounded-full bg-primary"
               initial={{ width: 0 }}
               animate={{ width: `${progressPct}%` }}
               transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -334,13 +334,12 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
               )}
 
               <div className="mt-5 flex justify-center">
-                <Link
-                  href="/explore"
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-                >
-                  <Send className="h-3.5 w-3.5" strokeWidth={2} />
-                  Run Scout Again
-                </Link>
+                <Button asChild>
+                  <Link href="/explore">
+                    <Send className="h-3.5 w-3.5" strokeWidth={2} />
+                    Run Scout Again
+                  </Link>
+                </Button>
               </div>
             </motion.section>
           )}
@@ -396,7 +395,7 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
 
           <div className="flex flex-col gap-3">
             {answerApp?.error_message && (
-              <div className="rounded-xl border border-[#FF6733]/20 bg-[#FF6733]/[0.06] p-3">
+              <div className="rounded-xl border border-[#FF6733]/20 bg-primary/[0.06] p-3">
                 <p className="font-body text-sm text-white">{answerApp.error_message}</p>
               </div>
             )}
@@ -412,32 +411,25 @@ export function ScoutRunTracker({ runId }: ScoutRunTrackerProps) {
           </div>
 
           <DialogFooter className="sm:justify-end">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => {
                 setAnswerApp(null)
                 setAnswerText('')
               }}
               disabled={isSubmittingAnswer}
-              className="inline-flex h-10 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#999] transition-colors hover:text-white disabled:opacity-60"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => void handleSubmitAnswer()}
               disabled={isSubmittingAnswer || !answerText.trim()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
+              loading={isSubmittingAnswer}
             >
-              {isSubmittingAnswer ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                  Submitting…
-                </>
-              ) : (
-                'Submit Answer'
-              )}
-            </button>
+              {isSubmittingAnswer ? 'Submitting…' : 'Submit Answer'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -535,7 +527,7 @@ function ApplicationRow({
             href={app.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-white/[0.08] px-2.5 font-label text-[11px] text-[#888] transition-colors hover:border-white/20 hover:text-white"
+            className="font-label inline-flex h-7 items-center gap-1 rounded-md border border-white/[0.08] px-2.5 text-[11px] text-[#888] transition-colors duration-150 hover:border-white/20 hover:text-white"
           >
             View
             <ExternalLink className="h-3 w-3" strokeWidth={2} />
@@ -543,14 +535,16 @@ function ApplicationRow({
         )}
 
         {app.status === 'needs_attention' && (
-          <button
+          <Button
             type="button"
+            variant="chip"
+            size="sm"
+            className="h-7 px-2.5 text-[11px] font-semibold text-primary"
             onClick={onAnswerClick}
-            className="inline-flex h-7 items-center gap-1 rounded-full bg-[#FF6733]/20 px-2.5 font-label text-[11px] font-semibold text-[#FF6733] transition-colors hover:bg-[#FF6733]/30"
           >
             <AlertCircle className="h-3 w-3" strokeWidth={2} />
             Answer Required
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -569,7 +563,7 @@ function StatusDot({ status }: { status: AppStatus }) {
   const dotClass = cn(
     'h-2.5 w-2.5 shrink-0 rounded-full',
     status === 'queued' && 'bg-[#555] animate-pulse',
-    status === 'in_progress' && 'bg-[#FF6733] animate-pulse',
+    status === 'in_progress' && 'bg-primary animate-pulse',
     status === 'applied' && 'bg-[#22c55e]',
     status === 'failed' && 'bg-[#ef4444]',
   )
@@ -588,10 +582,10 @@ function StatusPill({ status }: { status: AppStatus }) {
 
   const colorMap: Record<AppStatus, string> = {
     queued: 'bg-white/[0.05] text-[#666]',
-    in_progress: 'bg-[#FF6733]/20 text-[#FF6733]',
+    in_progress: 'bg-primary/20 text-[#FF6733]',
     applied: 'bg-[#22c55e]/20 text-[#22c55e]',
     failed: 'bg-[#ef4444]/20 text-[#ef4444]',
-    needs_attention: 'bg-[#FF6733]/15 text-[#FF6733]',
+    needs_attention: 'bg-primary/15 text-[#FF6733]',
   }
 
   return (

@@ -6,11 +6,12 @@ import {
   Compass,
   Download,
   FileText,
-  Loader2,
   Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+
+import { Button } from '@/components/ui/button'
 
 export type BeforeAfterDiff = {
   section: 'experience' | 'projects'
@@ -188,11 +189,6 @@ function ChangesCard({
 }) {
   return (
     <section className="glass-card relative overflow-hidden rounded-2xl border border-white/[0.06] p-6 md:p-7">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.04] blur-3xl"
-      />
-
       <div className="relative">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -476,24 +472,22 @@ function ActionsCard({
 
   return (
     <section className="glass-card flex flex-col gap-3 rounded-2xl border border-white/[0.06] p-5 md:p-6">
-      <button
+      <Button
         type="button"
+        size="lg"
         onClick={onDownload}
-        disabled={loading}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+        loading={loading}
+        className="w-full"
       >
         {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-            Generating PDF...
-          </>
+          'Generating PDF...'
         ) : (
           <>
-            <Download className="h-4 w-4" strokeWidth={2} />
+            <Download strokeWidth={2} />
             Download PDF — scout_resume.pdf
           </>
         )}
-      </button>
+      </Button>
 
       {download.status === 'error' ? (
         <p
@@ -504,13 +498,12 @@ function ActionsCard({
         </p>
       ) : null}
 
-      <Link
-        href="/explore"
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-6 font-label text-sm font-semibold text-[#888] transition-colors hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
-      >
-        <Compass className="h-4 w-4" strokeWidth={2} />
-        Tailor resume for a specific job →
-      </Link>
+      <Button asChild variant="outline" size="lg" className="w-full">
+        <Link href="/explore">
+          <Compass strokeWidth={2} />
+          Tailor resume for a specific job →
+        </Link>
+      </Button>
     </section>
   )
 }

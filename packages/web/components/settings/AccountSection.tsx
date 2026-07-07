@@ -7,6 +7,7 @@ import {
   SettingsReadOnlyRow,
   SettingsSection,
 } from '@/components/settings/SettingsSection'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export function AccountSection() {
@@ -41,13 +42,9 @@ export function AccountSection() {
           <p className="text-xs text-[#666]">
             Managed by our account provider, Clerk.
           </p>
-          <button
-            type="button"
-            onClick={() => openUserProfile()}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white active:scale-[0.97]"
-          >
+          <Button type="button" variant="outline" onClick={() => openUserProfile()}>
             Manage account
-          </button>
+          </Button>
         </>
       )}
     </SettingsSection>

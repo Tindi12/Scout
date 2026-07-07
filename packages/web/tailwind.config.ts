@@ -44,7 +44,7 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card) / <alpha-value>)',
           foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
-        'accent-orange': '#FF6733',
+        'accent-orange': 'hsl(var(--brand))',
         'muted-foreground-2': '#A1A1AA',
         'muted-foreground-3': '#888888',
       },

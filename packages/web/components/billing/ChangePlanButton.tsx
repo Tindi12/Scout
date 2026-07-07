@@ -1,8 +1,8 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ type ChangePlanButtonProps = {
   /** Whether this switch charges now (upgrade) or credits (downgrade) — drives
    * the confirmation copy. */
   direction: 'upgrade' | 'downgrade'
-  /** primary = glow CTA; secondary = bordered pill. */
+  /** primary = solid brand CTA; secondary = bordered button. */
   variant?: 'primary' | 'secondary'
   label?: string
   className?: string
@@ -98,23 +98,20 @@ export function ChangePlanButton({
     }
   }
 
-  const styles =
-    variant === 'primary'
-      ? 'inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70'
-      : 'inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70'
-
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant={variant === 'primary' ? 'default' : 'outline'}
+        size="lg"
         onClick={() => {
           setError(null)
           setOpen(true)
         }}
-        className={`${styles} ${className}`}
+        className={className}
       >
         {text}
-      </button>
+      </Button>
 
       <Dialog
         open={open}
@@ -141,30 +138,17 @@ export function ChangePlanButton({
           ) : null}
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => setOpen(false)}
               disabled={busy}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               Keep current plan
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={busy}
-              aria-busy={busy}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Switching…
-                </>
-              ) : (
-                `Confirm switch to ${tierLabel}`
-              )}
-            </button>
+            </Button>
+            <Button type="button" onClick={handleConfirm} loading={busy}>
+              {busy ? 'Switching…' : `Confirm switch to ${tierLabel}`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

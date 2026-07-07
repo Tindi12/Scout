@@ -32,16 +32,6 @@ export default function PricingPage() {
 
         {/* Hero + tier cards */}
         <section className="relative px-6 pb-20 pt-36 lg:px-12">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-40 -z-10 mx-auto h-[420px] max-w-3xl rounded-full"
-            style={{
-              background:
-                'radial-gradient(ellipse at center, rgba(255,103,51,0.08) 0%, transparent 70%)',
-              filter: 'blur(120px)',
-            }}
-          />
-
           <header className="mx-auto mb-16 max-w-3xl text-center">
             <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
               Pricing

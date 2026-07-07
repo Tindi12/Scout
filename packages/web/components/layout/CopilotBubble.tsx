@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { ChatInput } from '@/components/copilot/ChatInput'
 import { MessageList } from '@/components/copilot/MessageList'
 import { useCopilotChat } from '@/hooks/use-copilot-chat'
@@ -160,12 +161,13 @@ export function CopilotBubble() {
       ) : null}
 
       {/* Floating launcher */}
-      <button
+      <Button
         type="button"
+        size="icon"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? 'Close Scout copilot' : 'Ask Scout'}
         aria-expanded={open}
-        className="group flex h-14 w-14 items-center justify-center rounded-full border border-[#FF6733]/40 bg-[#FF6733] shadow-[0_0_28px_rgba(255,103,51,0.45)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(255,103,51,0.7)] active:scale-95"
+        className="group h-14 w-14 rounded-full"
       >
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/20 transition-transform duration-300 group-hover:rotate-[6deg]">
           <Image
@@ -177,7 +179,7 @@ export function CopilotBubble() {
             className="h-7 w-7 select-none object-contain"
           />
         </span>
-      </button>
+      </Button>
     </div>
   )
 }

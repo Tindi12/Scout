@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/components/tracker/tracker-utils'
 
 const bellButtonClass =
-  'relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.02] text-[#888] transition-colors hover:border-white/[0.12] hover:text-white data-[state=open]:border-white/[0.12] data-[state=open]:text-white'
+  'relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.02] text-[#888] transition-colors duration-150 hover:border-white/[0.12] hover:text-white data-[state=open]:border-white/[0.12] data-[state=open]:text-white'
 
 function NotificationBellButton({
   unreadCount,
@@ -38,7 +38,7 @@ function NotificationBellButton({
       {unreadCount > 0 ? (
         <span
           aria-hidden
-          className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.7)]"
+          className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e0b]"
         />
       ) : null}
     </button>

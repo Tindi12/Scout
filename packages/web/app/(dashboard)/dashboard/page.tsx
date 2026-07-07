@@ -17,6 +17,7 @@ import {
 
 import { ProfilePromptOverlay } from '@/components/profile/ProfilePromptOverlay'
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
+import { Button } from '@/components/ui/button'
 import { isProfilePromptDismissed } from '@/lib/profile-prompt-dismiss'
 import {
   RESUME_UPLOAD_SECTION_ID,
@@ -531,7 +532,7 @@ function OnboardingChecklist({
               className={cn(
                 'flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-colors',
                 active
-                  ? 'border-[#FF6733]/40 bg-[#FF6733]/[0.05]'
+                  ? 'border-[#FF6733]/40 bg-primary/[0.05]'
                   : 'border-white/[0.06] bg-white/[0.01]',
               )}
             >
@@ -542,7 +543,7 @@ function OnboardingChecklist({
                     done
                       ? 'border-[#22c55e]/40 bg-[#22c55e]/10 text-[#22c55e]'
                       : active
-                        ? 'border-[#FF6733]/50 bg-[#FF6733]/15 text-[#FF6733]'
+                        ? 'border-[#FF6733]/50 bg-primary/15 text-[#FF6733]'
                         : 'border-white/[0.08] bg-white/[0.03] text-[#666]',
                   )}
                 >
@@ -564,22 +565,22 @@ function OnboardingChecklist({
 
               {active && step.cta ? (
                 step.id === 'upload' ? (
-                  <button
+                  <Button
                     type="button"
+                    size="sm"
+                    className="shrink-0 gap-1.5 px-4 py-1.5 text-[12px]"
                     onClick={onUploadClick}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FF6733] px-4 py-1.5 font-label text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
                   >
                     {step.cta}
                     <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  </button>
+                  </Button>
                 ) : step.href ? (
-                  <Link
-                    href={step.href}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#FF6733] px-4 py-1.5 font-label text-[12px] font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-                  >
-                    {step.cta}
-                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-                  </Link>
+                  <Button asChild size="sm" className="shrink-0 gap-1.5 px-4 py-1.5 text-[12px]">
+                    <Link href={step.href}>
+                      {step.cta}
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    </Link>
+                  </Button>
                 ) : null
               ) : null}
             </li>
@@ -683,7 +684,7 @@ function StatCard({
           {label}
         </span>
         {delta != null && delta > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6733]/15 px-2 py-0.5 font-label text-[11px] font-semibold text-[#FF6733]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 font-label text-[11px] font-semibold text-[#FF6733]">
             <TrendingUp className="h-3 w-3" strokeWidth={2.25} />+{delta}
           </span>
         ) : null}
@@ -842,7 +843,7 @@ function ApplicationStatusPill({ status }: { status: string | null }) {
     s === 'running'
   ) {
     label = 'FILLING FORM'
-    classes = 'bg-[#FF6733]/15 text-[#FF6733]'
+    classes = 'bg-primary/15 text-[#FF6733]'
   } else if (s === 'failed' || s === 'error') {
     label = 'FAILED'
     classes = 'bg-[#ef4444]/15 text-[#ef4444]'
@@ -882,7 +883,7 @@ function ResumeSummary({
         href={analysisHref}
         className="group flex min-w-0 flex-1 items-center gap-4"
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FF6733]/10">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
           <FileText className="h-5 w-5 text-[#FF6733]" strokeWidth={1.5} />
         </div>
         <div className="min-w-0">
@@ -897,24 +898,19 @@ function ResumeSummary({
       </Link>
 
       <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={onUploadNew}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 font-label text-xs font-semibold text-[#bbb] transition-colors hover:border-[#FF6733]/40 hover:bg-[#FF6733]/[0.06] hover:text-white"
-        >
+        <Button type="button" size="sm" variant="outline" onClick={onUploadNew}>
           <Upload className="h-3.5 w-3.5" strokeWidth={2} />
           Upload new
-        </button>
-        <Link
-          href={analysisHref}
-          className="group inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-[#FF6733] px-4 font-label text-xs font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-shadow hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-        >
-          View analysis
-          <ArrowRight
-            className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-            strokeWidth={2}
-          />
-        </Link>
+        </Button>
+        <Button asChild size="sm" className="group gap-1.5">
+          <Link href={analysisHref}>
+            View analysis
+            <ArrowRight
+              className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+              strokeWidth={2}
+            />
+          </Link>
+        </Button>
       </div>
     </section>
   )
@@ -926,7 +922,7 @@ function CopilotTeaser() {
       href="/copilot"
       className="glass-card group flex flex-col gap-4 rounded-2xl p-6 transition-colors hover:bg-white/[0.04]"
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#FF6733]/10">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
         <Bot className="h-5 w-5 text-[#FF6733]" strokeWidth={1.75} />
       </div>
       <div>
@@ -937,7 +933,7 @@ function CopilotTeaser() {
           Your resume, your roles, your gaps — Scout knows it all.
         </p>
       </div>
-      <div className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 font-body text-sm text-[#666] transition-colors group-hover:border-[#FF6733]/30 group-hover:bg-[#FF6733]/[0.04]">
+      <div className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 font-body text-sm text-[#666] transition-colors group-hover:border-[#FF6733]/30 group-hover:bg-primary/[0.04]">
         <span>Am I ready for Stripe?</span>
         <ArrowRight
           className="h-4 w-4 text-[#666] transition-colors group-hover:text-[#FF6733]"
@@ -992,7 +988,7 @@ function ProfileIncompleteCta() {
     <section className="glass-card rounded-2xl border border-white/[0.06] p-5 md:p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#FF6733]/30 bg-[#FF6733]/[0.08]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#FF6733]/30 bg-primary/[0.08]">
             <AlertCircle
               className="h-[18px] w-[18px] text-[#FF6733]"
               strokeWidth={1.75}
@@ -1007,13 +1003,12 @@ function ProfileIncompleteCta() {
             </p>
           </div>
         </div>
-        <Link
-          href="/profile"
-          className="font-label inline-flex items-center justify-center gap-2 self-start rounded-full bg-[#FF6733] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-shadow duration-200 hover:shadow-[0_0_36px_rgba(255,103,51,0.5)] md:self-auto"
-        >
-          Complete Profile
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <Button asChild>
+          <Link href="/profile">
+            Complete Profile
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
       </div>
     </section>
   )

@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 
 const BASE_INPUT =
-  'font-body w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:bg-white/[0.05] focus:shadow-[0_0_24px_rgba(255,103,51,0.18)] focus:outline-none'
+  'font-body w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-primary/60 focus:bg-white/[0.05] focus:outline-none'
 
 type ProfileInputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,

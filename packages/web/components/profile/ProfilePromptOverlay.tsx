@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   dismissProfilePrompt,
@@ -124,20 +125,15 @@ export function ProfilePromptOverlay({
           </ul>
 
           <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={handleLater}
-              className="inline-flex h-11 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#888] transition-colors hover:text-white"
-            >
+            <Button type="button" variant="ghost" className="h-11" onClick={handleLater}>
               I&apos;ll do this later
-            </button>
-            <Link
-              href="/profile"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.5)] active:scale-[0.97]"
-            >
-              Complete profile
-              <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
-            </Link>
+            </Button>
+            <Button asChild className="h-11">
+              <Link href="/profile">
+                Complete profile
+                <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

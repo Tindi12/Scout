@@ -1522,7 +1522,7 @@ function SponsorshipBanner({
       className={cn(
         'rounded-xl border px-4 py-3 text-xs',
         requires
-          ? 'border-[#FF6733]/30 bg-[#FF6733]/[0.08] text-[#FF6733]'
+          ? 'border-[#FF6733]/30 bg-primary/[0.08] text-[#FF6733]'
           : 'border-[#22c55e]/30 bg-[#22c55e]/[0.08] text-[#22c55e]',
       )}
     >
@@ -1581,7 +1581,7 @@ function PreferenceOptionCard({
         className={cn(
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors duration-200',
           selected
-            ? 'border-[#FF6733]/40 bg-[#FF6733]/15'
+            ? 'border-[#FF6733]/40 bg-primary/15'
             : 'border-white/10 bg-white/[0.03]',
           disabled && 'opacity-70',
         )}
@@ -1602,7 +1602,7 @@ function PreferenceOptionCard({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-white">{option.label}</span>
           {option.recommended && (
-            <span className="rounded-full bg-[#FF6733]/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[#FF6733]">
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[#FF6733]">
               Recommended
             </span>
           )}
@@ -1615,7 +1615,7 @@ function PreferenceOptionCard({
   const cardClassName = cn(
     'flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200',
     selected
-      ? 'border-[#FF6733]/60 bg-[#FF6733]/[0.06] shadow-[0_0_20px_rgba(255,103,51,0.12)]'
+      ? 'border-primary/60 bg-primary/[0.06]'
       : 'border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]',
     disabled && 'cursor-not-allowed opacity-50',
   )
@@ -1653,7 +1653,7 @@ function PreferenceOptionCard({
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className={cn(cardClassName, 'active:scale-[0.99]')}
+      className={cardClassName}
     >
       {cardContent}
     </button>

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { BreakdownCard } from '@/components/resume/BreakdownCard'
+import { Button } from '@/components/ui/button'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { scoutLogo } from '@/lib/scout-logo'
 import { isPaidUser, normalizeSubscriptionPlan } from '@/lib/subscription-plan'
@@ -580,14 +581,14 @@ export default function ResumeAnalysisPage() {
             We couldn’t open that analysis
           </p>
           <p className="mt-2 font-body text-sm text-[#999]">{message}</p>
-          <button
+          <Button
             type="button"
+            className="mt-6"
             onClick={() => router.push('/dashboard')}
-            className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)]"
           >
             <ArrowLeft className="h-4 w-4" strokeWidth={2} />
             Back to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -652,7 +653,7 @@ export default function ResumeAnalysisPage() {
                     disabled={isReanalyzing}
                     aria-haspopup="listbox"
                     aria-expanded={roleMenuOpen}
-                    className="glass-pill inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-white/10 px-4 py-1.5 font-body text-sm text-[#FF6733] transition-colors hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="glass-pill inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-white/10 px-4 py-1.5 font-body text-sm text-[#FF6733] transition-colors duration-150 hover:border-white/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="truncate">
                       Analyzed for: {displayRole(analysis.target_role)}
@@ -865,7 +866,7 @@ function RewriteLoading() {
         aria-hidden
       >
         <motion.span
-          className="absolute top-0 left-0 h-full w-1/3 rounded-full bg-[#FF6733] shadow-[0_0_18px_rgba(255,103,51,0.55)]"
+          className="absolute top-0 left-0 h-full w-1/3 rounded-full bg-primary"
           initial={{ x: '-100%' }}
           animate={{ x: '300%' }}
           transition={{
@@ -912,25 +913,17 @@ function RewriteCta({ isPro, onRewrite, errorMessage }: RewriteCtaProps) {
       </div>
 
       {isPro ? (
-        <button
-          type="button"
-          onClick={onRewrite}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-        >
+        <Button type="button" size="lg" onClick={onRewrite}>
           {errorMessage ? 'Try again' : 'Rewrite with Scout'}
           <ArrowRight className="h-4 w-4" strokeWidth={2} />
-        </button>
+        </Button>
       ) : (
         <>
-          <button
-            type="button"
-            onClick={() => setUpgradeOpen(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-6 font-label text-sm font-semibold text-[#888] transition-colors hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-[#aaa] active:scale-[0.97]"
-          >
+          <Button type="button" size="lg" variant="outline" onClick={() => setUpgradeOpen(true)}>
             <Lock className="h-4 w-4" strokeWidth={2} />
             Rewrite with Scout
             <ArrowRight className="h-4 w-4" strokeWidth={2} />
-          </button>
+          </Button>
           <p className="font-body text-xs text-[#666]">
             Pro feature — Upgrade to unlock
           </p>

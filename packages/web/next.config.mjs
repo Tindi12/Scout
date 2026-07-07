@@ -135,6 +135,15 @@ const nextConfig = {
     if (!isProd) return []
     return [{ source: '/:path*', headers: securityHeaders }]
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.brandfetch.io',
+        pathname: '/domain/**',
+      },
+    ],
+  },
   // instrumentation.ts runs automatically on Next 15 (the instrumentation hook is
   // stable — no experimental flag needed).
 }

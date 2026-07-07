@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -51,21 +52,20 @@ export function ProfileRequiredDialog({
         ) : null}
 
         <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
-          <Link
-            href="/profile"
-            onClick={() => onOpenChange(false)}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#FF6733] px-5 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-          >
-            Go to profile
-            <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
-          </Link>
-          <button
+          <Button asChild className="h-11 w-full">
+            <Link href="/profile" onClick={() => onOpenChange(false)}>
+              Go to profile
+              <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
+            </Link>
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            className="h-10 w-full"
             onClick={() => onOpenChange(false)}
-            className="inline-flex h-10 w-full items-center justify-center rounded-full font-label text-sm font-medium text-[#888] transition-colors hover:text-white"
           >
             Cancel
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

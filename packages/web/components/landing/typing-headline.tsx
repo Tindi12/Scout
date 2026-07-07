@@ -90,7 +90,7 @@ export function TypingHeadline() {
         <span>{text}</span>
         <span
           aria-hidden
-          className="animate-cursor-blink ml-[0.04em] inline-block w-[0.055em] translate-y-[0.06em] rounded-[1px] bg-[#FF6733] align-baseline shadow-[0_0_12px_rgba(255,103,51,0.45)]"
+          className="animate-cursor-blink ml-[0.04em] inline-block w-[0.055em] translate-y-[0.06em] rounded-[1px] bg-primary align-baseline"
           style={{ height: '0.82em' }}
         />
       </span>

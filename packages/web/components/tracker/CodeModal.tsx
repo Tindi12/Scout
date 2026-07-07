@@ -1,8 +1,8 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 
@@ -121,29 +121,22 @@ export function CodeModal({ app, onClose, onSuccess }: CodeModalProps) {
         />
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onClose}
             disabled={submitting}
-            className="inline-flex h-10 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#888] transition-colors hover:text-white disabled:opacity-60"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={submitting || cleaned.length < 3}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#22d3ee] px-5 font-label text-sm font-semibold text-black shadow-[0_0_18px_rgba(34,211,238,0.35)] transition-all hover:shadow-[0_0_24px_rgba(34,211,238,0.55)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-70"
+            loading={submitting}
           >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-                Sending…
-              </>
-            ) : (
-              'Send Code'
-            )}
-          </button>
+            {submitting ? 'Sending…' : 'Send Code'}
+          </Button>
         </div>
       </div>
       <button

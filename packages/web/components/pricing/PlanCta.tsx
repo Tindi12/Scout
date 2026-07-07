@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ChangePlanButton } from '@/components/billing/ChangePlanButton'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { UpgradeButton } from '@/components/billing/UpgradeButton'
+import { Button } from '@/components/ui/button'
 import {
   planDisplayLabel,
   type SubscriptionPlan,
@@ -42,27 +43,25 @@ export function PlanCta({ tierId, viewer, placement = 'card' }: PlanCtaProps) {
       <div
         aria-hidden
         className={`${
-          isCard ? 'h-11 w-full' : 'h-9 w-full'
-        } animate-pulse rounded-full bg-white/[0.05]`}
+          isCard ? 'h-10 w-full' : 'h-9 w-full'
+        } animate-pulse rounded-md bg-white/[0.05]`}
       />
     )
   }
 
   // ---- Logged out: everything routes to sign-up ----
   if (!viewer.isSignedIn) {
-    const ghost =
-      'inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.05] font-label font-medium text-white transition-all duration-200 hover:bg-white/[0.1] active:scale-[0.97]'
-    const solid =
-      'inline-flex items-center justify-center rounded-full bg-[#FF6733] font-label font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.4)] transition-all duration-200 hover:shadow-[0_0_40px_rgba(255,103,51,0.6)] active:scale-[0.97]'
-    const size = isCard ? 'h-11 w-full px-6 text-sm' : 'h-9 w-full px-4 text-[13px]'
     return (
-      <Link
-        href="/sign-up"
-        prefetch
-        className={`${isPaidTier ? solid : ghost} ${size}`}
+      <Button
+        asChild
+        variant={isPaidTier ? 'default' : 'outline'}
+        size={isCard ? 'lg' : 'default'}
+        className="w-full"
       >
-        Get Started
-      </Link>
+        <Link href="/sign-up" prefetch>
+          Get Started
+        </Link>
+      </Button>
     )
   }
 
@@ -72,8 +71,8 @@ export function PlanCta({ tierId, viewer, placement = 'card' }: PlanCtaProps) {
   if (plan === tierId) {
     return (
       <div
-        className={`inline-flex items-center justify-center gap-2 rounded-full border border-[#FF6733]/30 bg-[#FF6733]/[0.08] font-label font-medium text-[#FF8A5C] ${
-          isCard ? 'h-11 w-full px-6 text-sm' : 'h-9 w-full px-4 text-[13px]'
+        className={`inline-flex items-center justify-center gap-2 rounded-md border border-primary/30 bg-primary/[0.08] font-label font-medium text-[#FF8A5C] ${
+          isCard ? 'h-10 w-full px-6 text-sm' : 'h-9 w-full px-4 text-[13px]'
         }`}
       >
         Current plan

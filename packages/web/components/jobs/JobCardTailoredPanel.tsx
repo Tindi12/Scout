@@ -227,7 +227,7 @@ export function JobCardTailoredPanel({
             {status === 'loading' || status === 'generating' ? (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <span className="relative flex h-12 w-12 items-center justify-center">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF6733]/25" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/25" />
                   <Image
                     src={scoutLogo}
                     alt=""
@@ -243,7 +243,7 @@ export function JobCardTailoredPanel({
                     : 'Loading tailored resume...'}
                 </p>
                 <div className="h-1 w-32 overflow-hidden rounded-full bg-white/[0.06]">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-[#FF6733]" />
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
                 </div>
               </div>
             ) : null}
@@ -296,7 +296,7 @@ export function JobCardTailoredPanel({
                   }}
                   disabled={pdfLoading}
                   className={cn(
-                    'inline-flex h-9 w-full items-center justify-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] font-label text-xs font-semibold text-white transition-colors hover:bg-white/[0.08]',
+                    'font-label inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-white/[0.1] bg-white/[0.04] text-xs font-semibold text-white transition-colors duration-150 hover:bg-white/[0.08]',
                     pdfLoading && 'cursor-not-allowed opacity-70',
                   )}
                 >

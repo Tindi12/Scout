@@ -28,7 +28,7 @@ export function ProfileSection({
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border',
             complete
               ? 'border-[#22c55e]/30 bg-[#22c55e]/10'
-              : 'border-[#FF6733]/25 bg-[#FF6733]/[0.06]',
+              : 'border-[#FF6733]/25 bg-primary/[0.06]',
           )}
         >
           <Icon className="h-[18px] w-[18px] text-[#FF6733]" strokeWidth={1.75} />
@@ -47,7 +47,7 @@ export function ProfileSection({
             ) : (
               <span
                 aria-label="Section incomplete"
-                className="inline-block h-1.5 w-1.5 rounded-full bg-[#FF6733]"
+                className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
               />
             )}
           </div>

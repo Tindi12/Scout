@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import {
   formatRelativeTime,
@@ -182,7 +183,7 @@ export function MissionControlHeader({ run, stats }: MissionControlHeaderProps) 
             type="button"
             onClick={handleStopAll}
             disabled={isStopping}
-            className="inline-flex h-9 items-center justify-center rounded-full border border-white/[0.10] bg-[#ef4444]/10 px-4 font-label text-sm font-semibold text-[#ef4444] transition-colors hover:bg-[#ef4444]/15 disabled:cursor-not-allowed disabled:opacity-60"
+            className="font-label inline-flex h-9 items-center justify-center rounded-md border border-white/[0.10] bg-[#ef4444]/10 px-4 text-sm font-semibold text-[#ef4444] transition-colors duration-150 hover:bg-[#ef4444]/15 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isStopping ? 'Stopping…' : `Stop all (${activeCount})`}
           </button>
@@ -228,12 +229,9 @@ export function MissionControlOverviewHeader({
       progressPct={stats.progressPct}
       showProgress={stats.showProgress}
       trailingAction={
-        <Link
-          href="/explore"
-          className="inline-flex h-9 items-center justify-center self-end rounded-full bg-[#FF6733] px-4 font-label text-sm font-semibold text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-        >
-          Jobs →
-        </Link>
+        <Button asChild size="sm" className="self-end">
+          <Link href="/explore">Jobs →</Link>
+        </Button>
       }
     />
   )

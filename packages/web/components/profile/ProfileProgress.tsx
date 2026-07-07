@@ -100,7 +100,7 @@ export function ProfileProgress({
                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
                 unlocked
                   ? 'border border-[#22c55e]/30 bg-[#22c55e]/10 text-[#22c55e]'
-                  : 'border border-[#FF6733]/30 bg-[#FF6733]/10 text-[#FF6733]',
+                  : 'border border-[#FF6733]/30 bg-primary/10 text-[#FF6733]',
               )}
             >
               {unlocked ? (
@@ -137,7 +137,7 @@ export function ProfileProgress({
               >
                 <span
                   aria-hidden
-                  className="inline-block h-1.5 w-1.5 rounded-full bg-[#FF6733]/60"
+                  className="inline-block h-1.5 w-1.5 rounded-full bg-primary/60"
                 />
                 {label}
               </li>

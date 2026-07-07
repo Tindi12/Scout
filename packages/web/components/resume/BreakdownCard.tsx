@@ -44,14 +44,9 @@ function dimColor(percent: number): string {
 export function BreakdownCard({ breakdown }: BreakdownCardProps) {
   return (
     <section
-      className="glass-card group relative overflow-hidden rounded-2xl p-6 md:p-7"
+      className="glass-card relative overflow-hidden rounded-2xl p-6 md:p-7"
       aria-label="Score breakdown"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF6733]/[0.04] blur-3xl transition-opacity duration-500 group-hover:bg-[#FF6733]/[0.08]"
-      />
-
       <div className="relative">
         <p className="font-label text-[11px] font-semibold uppercase tracking-[0.22em] text-[#FF6733]">
           Score Breakdown

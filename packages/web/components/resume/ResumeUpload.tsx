@@ -19,6 +19,7 @@ import {
 } from 'react'
 
 import { uploadResume } from '@/app/actions/resume'
+import { Button } from '@/components/ui/button'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -470,17 +471,17 @@ function IdleView({
         </p>
       </div>
 
-      <button
+      <Button
         type="button"
+        className="mt-1"
         onClick={(e) => {
           e.stopPropagation()
           onChoose()
         }}
-        className="mt-1 inline-flex items-center gap-2 rounded-full bg-[#FF6733] px-6 py-2.5 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
       >
         <Upload className="h-4 w-4" strokeWidth={2} />
         Choose file
-      </button>
+      </Button>
 
       <p className="font-body text-xs text-[#555]">
         or drag and drop a PDF or DOCX
@@ -533,21 +534,13 @@ function SelectedView({
       </div>
 
       <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <button
-          type="button"
-          onClick={onRemove}
-          className="inline-flex h-10 items-center justify-center rounded-full px-5 font-label text-sm font-medium text-[#999] transition-colors hover:text-white"
-        >
+        <Button type="button" variant="ghost" onClick={onRemove}>
           Remove
-        </button>
-        <button
-          type="button"
-          onClick={onAnalyze}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97]"
-        >
+        </Button>
+        <Button type="button" onClick={onAnalyze}>
           Analyze with Scout
           <ArrowRight className="h-4 w-4" strokeWidth={2} />
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -618,7 +611,7 @@ function UploadingView({
 
       <div className="relative h-2 w-full overflow-visible rounded-full bg-white/[0.04]">
         <div
-          className="animate-scout-bar-shimmer absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#FF6733]/90 to-[#FF6733] shadow-[0_0_16px_rgba(255,103,51,0.45)] transition-[width] duration-300 ease-out"
+          className="animate-scout-bar-shimmer absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/90 to-primary transition-[width] duration-300 ease-out"
           style={{ width: `${clamped}%` }}
         />
         <div
@@ -688,13 +681,9 @@ function ErrorView({
         </p>
         <p className="mt-1 font-body text-sm text-[#999]">{message}</p>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-1 inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-white transition-colors hover:border-white/[0.16] hover:bg-white/[0.05]"
-      >
+      <Button type="button" variant="outline" className="mt-1" onClick={onRetry}>
         Try again
-      </button>
+      </Button>
     </div>
   )
 }

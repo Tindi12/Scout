@@ -50,7 +50,7 @@ function Card({ tier, viewer }: { tier: PricingTier; viewer: Viewer }) {
     >
       {popular ? (
         <div className="absolute -top-3 right-6">
-          <div className="font-label inline-flex items-center gap-1.5 rounded-full bg-[#FF6733] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-[0_0_20px_rgba(255,103,51,0.5)]">
+          <div className="font-label inline-flex items-center gap-1.5 rounded-md border border-primary/70 bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-primary-foreground">
             Popular
           </div>
         </div>

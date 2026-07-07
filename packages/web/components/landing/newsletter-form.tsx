@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from 'react'
 
+import { Button } from '@/components/ui/button'
+
 type Status = 'idle' | 'loading' | 'success' | 'already' | 'error'
 
 export function NewsletterForm() {
@@ -61,15 +63,17 @@ export function NewsletterForm() {
           placeholder="you@university.edu"
           aria-label="Email address"
           disabled={isBusy || isDone}
-          className="font-body w-full rounded-full border border-white/10 bg-white/[0.03] px-6 py-4 pr-36 text-[14.5px] text-white placeholder:text-[#888888] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:shadow-[0_0_24px_rgba(255,103,51,0.2)] focus:outline-none disabled:opacity-60"
+          className="font-body w-full rounded-md border border-white/10 bg-white/[0.03] px-4 py-3 pr-32 text-[14.5px] text-white placeholder:text-[#888888] transition-colors duration-150 focus:border-white/25 focus:outline-none disabled:opacity-60"
         />
-        <button
+        <Button
           type="submit"
-          disabled={isBusy || isDone}
-          className="font-label absolute right-1.5 inline-flex items-center justify-center rounded-full bg-[#FF6733] px-5 py-2.5 text-[13px] font-semibold text-white shadow-[0_0_20px_rgba(255,103,51,0.35)] transition-all duration-200 hover:shadow-[0_0_30px_rgba(255,103,51,0.55)] active:scale-95 disabled:opacity-70"
+          size="sm"
+          disabled={isDone}
+          loading={isBusy}
+          className="absolute right-1.5"
         >
           {isBusy ? 'Subscribing…' : isDone ? 'Subscribed' : 'Subscribe'}
-        </button>
+        </Button>
       </form>
       {message ? (
         <p

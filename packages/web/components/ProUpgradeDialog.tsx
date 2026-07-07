@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -58,23 +59,25 @@ export function ProUpgradeDialog({
         </DialogHeader>
 
         <DialogFooter className="sm:justify-center">
-          <button
+          <Button
             type="button"
+            size="lg"
+            className="w-full sm:w-auto"
             onClick={() => {
               onOpenChange(false)
               router.push('/pricing')
             }}
-            className="inline-flex h-11 w-full items-center justify-center rounded-full bg-[#FF6733] px-6 font-label text-sm font-semibold text-white shadow-[0_0_24px_rgba(255,103,51,0.35)] transition-all hover:shadow-[0_0_32px_rgba(255,103,51,0.55)] active:scale-[0.97] sm:w-auto"
           >
             Upgrade to Pro
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="lg"
             onClick={() => onOpenChange(false)}
-            className="inline-flex h-11 items-center justify-center rounded-full px-6 font-label text-sm font-medium text-[#999] transition-colors hover:text-white"
           >
             Maybe later
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -285,7 +285,7 @@ function ScrollFadeArea({
               'linear-gradient(to bottom, rgba(8,8,8,0) 0%, rgba(8,8,8,0.85) 60%, #080808 100%)',
           }}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.1] bg-[#1a1a1a] text-white shadow-[0_4px_14px_rgba(0,0,0,0.45)] transition-all duration-200 group-hover:translate-y-0.5 group-hover:border-[#FF6733]/40 group-hover:bg-[#FF6733] group-hover:shadow-[0_0_22px_rgba(255,103,51,0.45)]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.1] bg-[#1a1a1a] text-white shadow-[0_4px_14px_rgba(0,0,0,0.45)] transition-all duration-200 group-hover:translate-y-0.5 group-hover:border-primary/40 group-hover:bg-primary">
             <ChevronDown className="h-4 w-4" strokeWidth={2.25} />
           </span>
         </button>

@@ -42,7 +42,7 @@ function scorePillClasses(category: string): string {
     case 'STRONG_FIT':
       return 'bg-[#22c55e]/10 text-[#22c55e]'
     case 'GOOD_FIT':
-      return 'bg-[#FF6733]/10 text-[#FF6733]'
+      return 'bg-primary/10 text-[#FF6733]'
     case 'STRETCH':
     default:
       return 'bg-white/5 text-[#888]'
@@ -105,7 +105,7 @@ export function JobCard({
   const visiblePills = pillSource.slice(0, 3)
   const extraPillCount = pillSource.length - visiblePills.length
   const pillTone = hasMatched
-    ? 'bg-[#FF6733]/10 text-[#FF6733]'
+    ? 'bg-primary/10 text-[#FF6733]'
     : 'bg-white/5 text-[#888]'
 
   const showVisa = job.visa_sponsorship !== 'unknown'
@@ -152,7 +152,7 @@ export function JobCard({
       className={cn(
         'group glass-card relative cursor-pointer overflow-hidden rounded-2xl border p-4 transition-all duration-200 focus:outline-none focus-visible:border-[#FF6733]/60 focus-visible:ring-2 focus-visible:ring-[#FF6733]/40',
         selected
-          ? 'border-[#FF6733]/60 bg-[#FF6733]/[0.04]'
+          ? 'border-[#FF6733]/60 bg-primary/[0.04]'
           : 'border-white/[0.06] hover:border-white/10',
         expanded && 'border-white/12',
       )}
@@ -163,7 +163,7 @@ export function JobCard({
         </p>
         <div className="flex shrink-0 items-center gap-2">
           {hasTailoredVariant ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6733]/10 px-2 py-0.5 font-label text-[9px] font-semibold uppercase tracking-wider text-[#FF6733]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-label text-[9px] font-semibold uppercase tracking-wider text-[#FF6733]">
               <Sparkles className="h-2.5 w-2.5" strokeWidth={2} />
               Tailored
             </span>
@@ -184,7 +184,7 @@ export function JobCard({
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded-full transition-all duration-200',
               selected
-                ? 'bg-[#FF6733] text-white shadow-[0_0_12px_rgba(255,103,51,0.4)]'
+                ? 'bg-primary text-primary-foreground'
                 : 'border border-white/20 text-transparent group-hover:border-white/30 group-hover:text-[#888]',
             )}
           >

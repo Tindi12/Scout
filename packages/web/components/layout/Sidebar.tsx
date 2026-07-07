@@ -95,7 +95,7 @@ function NavLink({
       {showAlertDot && (
         <span
           aria-label="Profile incomplete"
-          className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-[#FF6733] shadow-[0_0_8px_rgba(255,103,51,0.7)]"
+          className="ml-auto inline-block h-1.5 w-1.5 rounded-full bg-primary"
         />
       )}
     </Link>

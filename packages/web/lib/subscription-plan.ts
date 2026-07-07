@@ -35,7 +35,7 @@ export function planDisplayLabel(plan: SubscriptionPlan): string {
 export function planBadgeClassName(plan: SubscriptionPlan): string {
   switch (plan) {
     case 'scout_plus':
-      return 'bg-[#F5C542]/15 text-[#F5C542] shadow-[0_0_10px_rgba(245,197,66,0.22)]'
+      return 'bg-[#F5C542]/15 text-[#F5C542]'
     case 'pro':
       return 'bg-[#FF6733]/15 text-[#FF6733]'
     default:

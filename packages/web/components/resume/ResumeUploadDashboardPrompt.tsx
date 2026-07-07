@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, FileText } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { RESUME_UPLOAD_SECTION_ID } from '@/lib/scroll-to-resume-upload'
 
 export function ResumeUploadDashboardPrompt() {
@@ -19,13 +20,12 @@ export function ResumeUploadDashboardPrompt() {
             analysis, breakdowns, and rewrites after your first upload.
           </p>
         </div>
-        <Link
-          href={`/dashboard#${RESUME_UPLOAD_SECTION_ID}`}
-          className="inline-flex items-center gap-2 rounded-full bg-[#FF6733] px-6 py-2.5 font-label text-sm font-semibold text-white transition-all active:scale-[0.97]"
-        >
-          Go to dashboard
-          <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
-        </Link>
+        <Button asChild>
+          <Link href={`/dashboard#${RESUME_UPLOAD_SECTION_ID}`}>
+            Go to dashboard
+            <ArrowRight className="h-4 w-4" strokeWidth={2.25} />
+          </Link>
+        </Button>
       </div>
     </div>
   )

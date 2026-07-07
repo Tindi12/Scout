@@ -3,7 +3,7 @@
 import { ArrowUp } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 export function ChatInput({
   onSend,
@@ -54,20 +54,16 @@ export function ChatInput({
         autoFocus={autoFocus}
         className="max-h-[140px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm leading-relaxed text-white placeholder:text-[#555] focus:outline-none"
       />
-      <button
+      <Button
         type="button"
+        size="icon"
         onClick={submit}
         disabled={disabled || !value.trim()}
         aria-label="Send message"
-        className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all',
-          disabled || !value.trim()
-            ? 'cursor-not-allowed bg-white/[0.04] text-[#555]'
-            : 'bg-[#FF6733] text-white shadow-[0_0_18px_rgba(255,103,51,0.35)] hover:shadow-[0_0_24px_rgba(255,103,51,0.5)] active:scale-95',
-        )}
+        className="h-9 w-9 shrink-0 rounded-xl"
       >
         <ArrowUp className="h-4 w-4" strokeWidth={2.25} />
-      </button>
+      </Button>
     </div>
   )
 }

@@ -137,7 +137,7 @@ export function SchoolAutocomplete({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoComplete="organization"
-        className="font-body w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-[#FF6733]/60 focus:bg-white/[0.05] focus:shadow-[0_0_24px_rgba(255,103,51,0.18)] focus:outline-none"
+        className="font-body w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-[#555] backdrop-blur-md transition-all duration-200 focus:border-primary/60 focus:bg-white/[0.05] focus:outline-none"
       />
       {open && (
         <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">

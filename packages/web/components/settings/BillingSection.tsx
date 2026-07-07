@@ -11,13 +11,12 @@ import {
   SettingsReadOnlyRow,
   SettingsSection,
 } from '@/components/settings/SettingsSection'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTier } from '@/hooks/use-tier'
 import type { ApplicationCreditsSnapshot } from '@/lib/application-credits'
 import { creditsPeriodLabel, planDisplayLabel } from '@/lib/subscription-plan'
 
-const UPGRADE_LINK_CLASS =
-  'inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white active:scale-[0.97]'
 
 export function BillingSection() {
   const { plan, isPaid, loading, refetch } = useTier()
@@ -96,9 +95,9 @@ export function BillingSection() {
                   <ManageBillingButton variant="secondary" />
                 </div>
               ) : (
-                <Link href="/pricing" className={UPGRADE_LINK_CLASS}>
-                  Upgrade
-                </Link>
+                <Button asChild variant="outline">
+                  <Link href="/pricing">Upgrade</Link>
+                </Button>
               )}
               <SecuredByStripe />
             </div>

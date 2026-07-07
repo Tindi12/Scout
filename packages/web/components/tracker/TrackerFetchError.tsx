@@ -1,5 +1,7 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
+
 type TrackerFetchErrorProps = {
   message: string
   onRetry: () => void
@@ -12,13 +14,9 @@ export function TrackerFetchError({ message, onRetry }: TrackerFetchErrorProps) 
         Could not load applications
       </p>
       <p className="mt-2 max-w-sm font-body text-sm text-[#555]">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-6 inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-semibold text-white transition-colors hover:border-white/20 hover:bg-white/[0.06]"
-      >
+      <Button type="button" variant="outline" onClick={onRetry} className="mt-6">
         Try again
-      </button>
+      </Button>
     </div>
   )
 }

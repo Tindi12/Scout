@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
+import { buttonVariants } from '@/components/ui/button'
 import { useExploreBatchOptional } from '@/contexts/explore-batch-context'
 import { scoutLogo } from '@/lib/scout-logo'
 import { cn } from '@/lib/utils'
@@ -19,16 +20,13 @@ type SendScoutButtonProps = {
   className?: string
 }
 
-const SEND_BUTTON_REST_SHADOW = '0 0 40px rgba(255,103,51,0.38)'
-const SEND_BUTTON_PULSE_SHADOW = '0 0 60px rgba(255,103,51,0.7)'
-
-/** Muted top-bar pill — no orange fill or glow (all pages except active Explore). */
+/** Muted top-bar button — no orange fill (all pages except active Explore). */
 const DORMANT_CLASSES =
-  'cursor-default border border-white/[0.08] bg-white/[0.04] text-[#666] shadow-none ring-0 saturate-[0.25] hover:border-white/[0.1] hover:bg-white/[0.05] hover:shadow-none hover:text-[#888] active:scale-100'
+  'cursor-default border border-white/[0.08] bg-white/[0.04] text-[#666] saturate-[0.25] hover:border-white/[0.1] hover:bg-white/[0.05] hover:text-[#888]'
 
-/** Active only on Explore when jobs are selected. */
+/** Active only on Explore when jobs are selected — brightens on hover, no glow. */
 const ACTIVE_CLASSES =
-  'border border-transparent bg-[#CC5229] text-white shadow-[0_0_24px_rgba(204,82,41,0.38)] hover:shadow-[0_0_32px_rgba(204,82,41,0.55)] active:scale-[0.97]'
+  'border border-primary/70 bg-[hsl(var(--brand-hover))] text-white hover:bg-primary'
 
 export function SendScoutButton({
   variant = 'sidebar',
@@ -55,25 +53,21 @@ export function SendScoutButton({
 
   const isDormant = isTopbar && !canSend && !batch?.isSending
 
-  // Clear any orange glow left over from Explore when leaving or deselecting.
+  // Reset any in-flight pulse when leaving Explore or deselecting.
   useEffect(() => {
     if (!isTopbar) return
     if (canSend) return
     controls.stop()
-    void controls.set({ scale: 1, boxShadow: '0px 0px 0px rgba(0,0,0,0)' })
+    void controls.set({ scale: 1 })
   }, [isTopbar, canSend, controls, pathname])
 
-  // One-time attention pulse — Explore only, when jobs are selected.
+  // One-time attention pulse — Explore only, when jobs are selected. Subtle
+  // scale tick only; no box-shadow animation.
   useEffect(() => {
     if (!isTopbar || !canSend) return
     if (pulseNonce === 0) return
     void controls.start({
       scale: [1, 1.04, 1],
-      boxShadow: [
-        SEND_BUTTON_REST_SHADOW,
-        SEND_BUTTON_PULSE_SHADOW,
-        SEND_BUTTON_REST_SHADOW,
-      ],
       transition: { duration: 0.6, ease: 'easeInOut' },
     })
   }, [isTopbar, canSend, pulseNonce, controls])
@@ -116,8 +110,11 @@ export function SendScoutButton({
     ? 'Select jobs below, then send Scout from here'
     : 'Open Jobs to select roles and send Scout'
 
-  const sharedLayout =
-    'relative inline-flex h-10 items-center justify-center gap-1.5 rounded-full px-4 font-label text-xs font-semibold transition-colors duration-200 sm:gap-2 sm:px-5 sm:text-sm'
+  const sharedLayout = cn(
+    // variant: null keeps only the shared button chrome (shape, focus, motion).
+    buttonVariants({ variant: null, size: 'default' }),
+    'relative h-10 gap-1.5 px-4 text-xs font-semibold sm:gap-2 sm:px-5 sm:text-sm',
+  )
 
   const proDialog = (
     <ProUpgradeDialog
@@ -154,10 +151,6 @@ export function SendScoutButton({
         onClick={handleTopbarClick}
         disabled={Boolean(batch?.isSending)}
         animate={controls}
-        initial={{ boxShadow: SEND_BUTTON_REST_SHADOW }}
-        whileHover={
-          canSend ? { boxShadow: '0 0 48px rgba(204,82,41,0.55)' } : undefined
-        }
         whileTap={canSend ? { scale: 0.97 } : undefined}
         className={cn(
           sharedLayout,

@@ -15,7 +15,7 @@ function ValueCell({ value }: { value: ComparisonValue }) {
   if (value === true) {
     return (
       <span className="flex items-center justify-center">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF6733]/15 ring-1 ring-inset ring-[#FF6733]/30">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 ring-1 ring-inset ring-[#FF6733]/30">
           <Check className="h-3 w-3 text-[#FF6733]" strokeWidth={3} />
         </span>
       </span>
@@ -60,7 +60,7 @@ export function ComparisonChart({ viewer }: { viewer: Viewer }) {
                 key={tier.id}
                 className={`flex flex-col items-center gap-2 ${
                   tier.popular
-                    ? 'rounded-xl bg-[#FF6733]/[0.04] px-2 pb-1 pt-2'
+                    ? 'rounded-xl bg-primary/[0.04] px-2 pb-1 pt-2'
                     : ''
                 }`}
               >

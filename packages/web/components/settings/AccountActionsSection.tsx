@@ -5,6 +5,7 @@ import { AlertTriangle, LogOut, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { SettingsSection } from '@/components/settings/SettingsSection'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -127,7 +128,7 @@ export function AccountActionsSection() {
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 font-label text-xs font-medium text-[#ef4444] transition-colors hover:border-[#ef4444]/50 hover:bg-[#ef4444]/20"
+              className="font-label inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 text-xs font-medium text-[#ef4444] transition-colors duration-150 hover:border-[#ef4444]/50 hover:bg-[#ef4444]/20"
             >
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
               Delete account
@@ -188,22 +189,23 @@ export function AccountActionsSection() {
           ) : null}
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => handleOpenChange(false)}
               disabled={deleting}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 font-label text-sm font-medium text-[#bbb] transition-colors hover:border-white/[0.14] hover:text-white disabled:opacity-60"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
               onClick={() => void handleDelete()}
-              disabled={!confirmed || deleting}
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[#ef4444]/40 bg-[#ef4444]/15 px-5 font-label text-sm font-medium text-[#ef4444] transition-colors hover:bg-[#ef4444]/25 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!confirmed}
+              loading={deleting}
             >
               {deleting ? 'Deleting…' : 'Delete my account'}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

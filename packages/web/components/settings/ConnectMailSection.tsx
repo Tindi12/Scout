@@ -4,6 +4,7 @@ import { Mail } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import { SettingsSection } from '@/components/settings/SettingsSection'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { MAIL_PROVIDER_LOGOS } from '@/lib/ats-logos'
@@ -27,9 +28,6 @@ const PROVIDER_LABELS: Record<MailProvider, string> = {
 }
 
 const PROVIDER_LOGOS = MAIL_PROVIDER_LOGOS
-
-const PRIMARY_BTN =
-  'inline-flex h-10 items-center justify-center rounded-full border border-[#FF6733]/40 bg-[#FF6733]/[0.1] px-5 font-label text-sm font-medium text-white transition-all duration-200 hover:bg-[#FF6733]/[0.18] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
 
 /**
  * Why this exists: some job sites (notably Greenhouse) email an 8-character
@@ -136,13 +134,10 @@ function ProviderButton({
 }) {
   const isOpening = connecting === provider
   return (
-    <button
+    <Button
       type="button"
-      // Both stay disabled while either consent screen opens, but only the
-      // clicked provider shows the opening state.
       disabled={connecting !== null}
       onClick={() => onConnect(provider)}
-      className={PRIMARY_BTN}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -156,7 +151,7 @@ function ProviderButton({
         }}
       />
       {isOpening ? 'Opening…' : `Connect ${PROVIDER_LABELS[provider]}`}
-    </button>
+    </Button>
   )
 }
 
