@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 
 import { buildApplicationCredits } from '@/lib/application-credits'
 import { ensureSupabaseUser } from '@/lib/ensure-supabase-user'
+import { normalizeSeenPageIntros } from '@/lib/page-intros'
 import { normalizeSubscriptionPlan } from '@/lib/subscription-plan'
 
 const PROFILE_COLUMNS = [
@@ -43,6 +44,11 @@ const PROFILE_COLUMNS = [
   'veteran_status',
   'disability_status',
   'profile_complete',
+  'has_seen_intro_tour',
+  'profile_nudge_dismissed_at',
+  'last_profile_nudge_shown_at',
+  'seen_page_intros',
+  'onboarding_complete',
 ] as const
 
 // Columns that must NEVER be returned to the browser (secrets / credentials).
@@ -113,6 +119,17 @@ export async function GET() {
     applicationUsed,
   )
 
+  const {
+    has_seen_intro_tour: _hasSeenIntro,
+    profile_nudge_dismissed_at: _nudgeDismissed,
+    last_profile_nudge_shown_at: _nudgeShown,
+    seen_page_intros: _seenPageIntros,
+    onboarding_complete: _onboardingComplete,
+    profile_complete: _profileComplete,
+    subscription_plan: _subscriptionPlan,
+    ...profileFields
+  } = row
+
   return NextResponse.json(
     {
       id: supabaseUserId,
@@ -127,7 +144,13 @@ export async function GET() {
       onboarding_complete: Boolean(
         row.onboarding_complete ?? ensured?.onboarding_complete,
       ),
-      profile: data ? row : null,
+      has_seen_intro_tour: Boolean(row.has_seen_intro_tour),
+      profile_nudge_dismissed_at:
+        (row.profile_nudge_dismissed_at as string | null | undefined) ?? null,
+      last_profile_nudge_shown_at:
+        (row.last_profile_nudge_shown_at as string | null | undefined) ?? null,
+      seen_page_intros: normalizeSeenPageIntros(row.seen_page_intros),
+      profile: data ? profileFields : null,
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )

@@ -68,6 +68,16 @@ def get_tier_limits(plan: str | None) -> TierLimits:
     return _TIER_LIMITS[normalize_plan(plan)]
 
 
+def is_upgrade(from_plan: str | None, to_plan: str | None) -> bool:
+    """True when `to_plan` is a STRICTLY higher tier than `from_plan` in the
+    free < pro < scout_plus order.
+
+    Use to distinguish a genuine upgrade (free→pro, pro→scout_plus) from a renewal
+    (same tier) or a downgrade (scout_plus→pro) — e.g. so a congratulatory email
+    fires only on real upgrades, not on every subscription.updated event."""
+    return _TIER_RANK[normalize_plan(to_plan)] > _TIER_RANK[normalize_plan(from_plan)]
+
+
 def meets_minimum_tier(plan: str | None, min_tier: str) -> bool:
     """True when `plan` is at least `min_tier` in the free < pro < scout_plus order.
 

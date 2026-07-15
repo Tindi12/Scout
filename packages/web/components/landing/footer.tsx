@@ -47,6 +47,8 @@ const COLUMNS = [
   {
     heading: 'Company',
     links: [
+      { label: 'Blog', href: '/blog' },
+      { label: 'Changelog', href: '/changelog' },
       { label: 'About', href: '/#about' },
       { label: 'Pricing', href: '/#pricing' },
       { label: 'FAQ', href: '/#faq' },

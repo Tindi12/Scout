@@ -1,5 +1,6 @@
 'use client'
 
+import type { CSSProperties } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Menu, X } from 'lucide-react'
@@ -10,10 +11,11 @@ import { LandingHashLink } from '@/components/landing/landing-hash-link'
 import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 
-const NAV_SECTIONS = [
-  { hash: '#about', label: 'About' },
-  { hash: '#pricing', label: 'Pricing' },
-  { hash: '#faq', label: 'FAQ' },
+const NAV_LINKS = [
+  { hash: '#about', label: 'About', kind: 'hash' as const },
+  { hash: '#pricing', label: 'Pricing', kind: 'hash' as const },
+  { hash: '#faq', label: 'FAQ', kind: 'hash' as const },
+  { href: '/blog', label: 'Blog', kind: 'route' as const },
 ] as const
 
 /** Scroll distance (px) over which the flat bar morphs into the glass pill. */
@@ -33,17 +35,35 @@ function clamp01(value: number) {
 export function DynamicIsland() {
   const pathname = usePathname()
   const isLanding = pathname === '/'
+  const isMarketingChrome =
+    isLanding ||
+    pathname === '/pricing' ||
+    pathname === '/blog' ||
+    pathname.startsWith('/blog/') ||
+    pathname === '/changelog'
   const [menuOpen, setMenuOpen] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
   const progressRef = useRef(0)
+  const clearanceRef = useRef(0)
   const rafRef = useRef(0)
 
   const navLinks = useMemo(
     () =>
-      NAV_SECTIONS.map((link) => ({
-        ...link,
-        href: landingNavHref(pathname, link.hash),
-      })),
+      NAV_LINKS.map((link) =>
+        link.kind === 'hash'
+          ? {
+              key: link.hash,
+              label: link.label,
+              href: landingNavHref(pathname, link.hash),
+              kind: 'hash' as const,
+            }
+          : {
+              key: link.href,
+              label: link.label,
+              href: link.href,
+              kind: 'route' as const,
+            },
+      ),
     [pathname],
   )
 
@@ -57,9 +77,34 @@ export function DynamicIsland() {
       headerRef.current?.style.setProperty('--nav-progress', String(next))
     }
 
+    const applyBannerClearance = () => {
+      if (!isLanding) {
+        if (clearanceRef.current !== 0) {
+          clearanceRef.current = 0
+          headerRef.current?.style.setProperty('--banner-clearance', '0px')
+        }
+        return
+      }
+      const banner = document.getElementById('announcement-banner')
+      if (!banner) {
+        if (clearanceRef.current !== 0) {
+          clearanceRef.current = 0
+          headerRef.current?.style.setProperty('--banner-clearance', '0px')
+        }
+        return
+      }
+      const rect = banner.getBoundingClientRect()
+      const remaining = Math.max(0, Math.min(rect.height, rect.bottom))
+      const next = Math.round(remaining)
+      if (next === clearanceRef.current) return
+      clearanceRef.current = next
+      headerRef.current?.style.setProperty('--banner-clearance', `${next}px`)
+    }
+
     const update = () => {
       rafRef.current = 0
       applyProgress(clamp01(window.scrollY / NAV_MORPH_RANGE))
+      applyBannerClearance()
     }
 
     const onScroll = () => {
@@ -69,11 +114,13 @@ export function DynamicIsland() {
 
     update()
     window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
       if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
     }
-  }, [])
+  }, [isLanding])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -90,7 +137,12 @@ export function DynamicIsland() {
     <header
       ref={headerRef}
       className="landing-nav-header pointer-events-none fixed inset-x-0 z-50 flex flex-col items-center gap-2"
-      style={{ ['--nav-progress' as string]: 0 }}
+      style={
+        {
+          ['--nav-progress' as string]: 0,
+          ['--banner-clearance' as string]: '0px',
+        } as CSSProperties
+      }
     >
       <div className="relative w-full">
         <div className="landing-nav-pad w-full">
@@ -100,25 +152,46 @@ export function DynamicIsland() {
               aria-label="Primary"
             >
               <div className="flex min-w-0 shrink items-center gap-3">
-                {isLanding ? (
-                  <LandingHashLink
-                    href={homeHref}
-                    className="group flex shrink-0 items-center gap-2.5 transition-all duration-300"
-                    aria-label="Scout home"
-                  >
-                    <Image
-                      src={scoutLogo}
-                      alt="Scout AI Logo"
-                      width={32}
-                      height={32}
-                      priority
-                      draggable={false}
-                      className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
-                    />
-                    <span className="font-headline text-lg font-semibold tracking-tight text-white">
-                      Scout
-                    </span>
-                  </LandingHashLink>
+                {isMarketingChrome ? (
+                  isLanding ? (
+                    <LandingHashLink
+                      href={homeHref}
+                      className="group flex shrink-0 items-center gap-2.5 transition-all duration-300"
+                      aria-label="Scout home"
+                    >
+                      <Image
+                        src={scoutLogo}
+                        alt="Scout AI Logo"
+                        width={32}
+                        height={32}
+                        priority
+                        draggable={false}
+                        className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
+                      />
+                      <span className="font-headline text-lg font-semibold tracking-tight text-white">
+                        Scout
+                      </span>
+                    </LandingHashLink>
+                  ) : (
+                    <Link
+                      href="/"
+                      className="group flex shrink-0 items-center gap-2.5 transition-all duration-300"
+                      aria-label="Scout home"
+                    >
+                      <Image
+                        src={scoutLogo}
+                        alt="Scout AI Logo"
+                        width={32}
+                        height={32}
+                        priority
+                        draggable={false}
+                        className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
+                      />
+                      <span className="font-headline text-lg font-semibold tracking-tight text-white">
+                        Scout
+                      </span>
+                    </Link>
+                  )
                 ) : (
                   <Link
                     href="/"
@@ -142,13 +215,26 @@ export function DynamicIsland() {
                 )}
               </div>
 
-              {isLanding ? (
+              {isMarketingChrome ? (
                 <ul className="hidden items-center gap-8 md:flex">
                   {navLinks.map((link) => (
-                    <li key={link.hash}>
-                      <LandingHashLink href={link.href} className={navLinkClass}>
-                        {link.label}
-                      </LandingHashLink>
+                    <li key={link.key}>
+                      {link.kind === 'hash' ? (
+                        <LandingHashLink href={link.href} className={navLinkClass}>
+                          {link.label}
+                        </LandingHashLink>
+                      ) : (
+                        <Link
+                          href={link.href}
+                          className={`${navLinkClass}${
+                            pathname === link.href || pathname.startsWith(`${link.href}/`)
+                              ? ' text-white'
+                              : ''
+                          }`}
+                        >
+                          {link.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -205,16 +291,26 @@ export function DynamicIsland() {
           className="glass-pill pointer-events-auto w-full max-w-3xl rounded-3xl p-4 md:hidden"
         >
           <ul className="flex flex-col gap-1">
-            {isLanding
+            {isMarketingChrome
               ? navLinks.map((link) => (
-                  <li key={link.hash}>
-                    <LandingHashLink
-                      href={link.href}
-                      className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
-                      onClick={closeMenu}
-                    >
-                      {link.label}
-                    </LandingHashLink>
+                  <li key={link.key}>
+                    {link.kind === 'hash' ? (
+                      <LandingHashLink
+                        href={link.href}
+                        className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                        onClick={closeMenu}
+                      >
+                        {link.label}
+                      </LandingHashLink>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                        onClick={closeMenu}
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))
               : null}

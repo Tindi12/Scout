@@ -38,7 +38,7 @@ from core.stripe_client import (
     stripe_client,
     tier_for_price_id,
 )
-from core.subscription import FREE, PRO, SCOUT_PLUS, is_paid_user
+from core.subscription import FREE, PRO, SCOUT_PLUS, is_paid_user, is_upgrade
 from core.supabase_client import supabase
 
 load_dotenv()
@@ -657,7 +657,9 @@ def _session_belongs_to_user(session: dict, user_row: dict) -> bool:
     return bool(customer_id and stored_customer and customer_id == stored_customer)
 
 
-def _user_was_paid_before_grant(user_id: str) -> bool:
+def _current_plan(user_id: str) -> str | None:
+    """The user's stored subscription_plan, read fresh (used to compare against a new
+    tier before granting)."""
     row = (
         supabase.table("users")
         .select("subscription_plan")
@@ -665,7 +667,11 @@ def _user_was_paid_before_grant(user_id: str) -> bool:
         .maybe_single()
         .execute()
     )
-    return is_paid_user((row.data or {}).get("subscription_plan"))
+    return (row.data or {}).get("subscription_plan")
+
+
+def _user_was_paid_before_grant(user_id: str) -> bool:
+    return is_paid_user(_current_plan(user_id))
 
 
 def _activate_from_completed_checkout(session: dict, *, source: str) -> str | None:
@@ -750,15 +756,21 @@ def _handle_subscription_updated(subscription) -> None:
                 user_id,
             )
             return
+        # Read the prior plan BEFORE granting so we can tell an upgrade from a
+        # renewal or a downgrade — subscription.updated fires on all three.
+        prev_plan = _current_plan(user_id)
         _grant_tier(user_id, tier, subscription_id=subscription_id)
         logger.info("Set user %s to %s (status=%s)", user_id, tier, status)
         # Keep the PostHog person's tier accurate on upgrades/downgrades (portal plan
         # changes flow through here, not checkout). Not counted as an activation —
         # subscription.updated also fires on every renewal, which would inflate it.
         set_user_properties(_clerk_id_for_user(user_id), {"subscription_plan": tier})
-        # Thank-you rides the same webhook truth. The per-(user, tier) claim inside
-        # makes renewals a no-op and gives portal switches (Pro→Scout+) one thanks.
-        _send_upgrade_thanks(user_id, tier)
+        # Thank-you fires ONLY on a genuine tier upgrade (free→pro, pro→scout_plus) —
+        # never on a renewal (same tier) or a downgrade. The rank check is the real
+        # filter; the per-(user, tier) email_sends claim inside is a second guard so a
+        # re-upgrade to a previously-held tier can't re-thank.
+        if is_upgrade(prev_plan, tier):
+            _send_upgrade_thanks(user_id, tier)
     elif status in _REVOKE_STATUSES:
         _revert_to_free(user_id)
         logger.info("Reverted user %s to free (status=%s)", user_id, status)

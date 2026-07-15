@@ -43,6 +43,18 @@ export const ANALYTICS_EVENTS = {
   APPLICATION_MANUALLY_MANAGED: 'application_manually_managed',
   NOTIFICATION_CLICKED: 'notification_clicked',
   BILLING_PORTAL_OPENED: 'billing_portal_opened',
+
+  // ---- Mascot tutorial / profile nudge ----
+  INTRO_TOUR_SHOWN: 'intro_tour_shown',
+  INTRO_TOUR_CONTINUED: 'intro_tour_continued',
+  INTRO_TOUR_SKIPPED: 'intro_tour_skipped',
+  PROFILE_NUDGE_SHOWN: 'profile_nudge_shown',
+  PROFILE_NUDGE_DISMISSED: 'profile_nudge_dismissed',
+  PROFILE_NUDGE_CTA_CLICKED: 'profile_nudge_cta_clicked',
+  PAGE_INTRO_SHOWN: 'page_intro_shown',
+  PAGE_INTRO_DISMISSED: 'page_intro_dismissed',
+  FIRST_SCOUT_RUN_ACK_SHOWN: 'first_scout_run_ack_shown',
+  FIRST_SCOUT_RUN_ACK_DISMISSED: 'first_scout_run_ack_dismissed',
 } as const
 
 export type AnalyticsEvent =

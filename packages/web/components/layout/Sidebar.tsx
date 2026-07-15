@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlanBadge } from '@/components/billing/PlanBadge'
 import { ApplicationCreditsMeter } from '@/components/layout/ApplicationCreditsMeter'
+import { PROFILE_TOUR_TARGET_ID } from '@/lib/mascot'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   normalizeSubscriptionPlan,
@@ -68,14 +69,17 @@ function NavLink({
   item,
   active,
   showAlertDot,
+  id,
 }: {
   item: NavItem
   active: boolean
   showAlertDot?: boolean
+  id?: string
 }) {
   const Icon = item.icon
   return (
     <Link
+      id={id}
       href={item.href}
       className={cn(
         'group relative mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150',
@@ -348,6 +352,7 @@ export function Sidebar() {
 
         <div className="space-y-0.5">
           <NavLink
+            id={PROFILE_TOUR_TARGET_ID}
             item={PROFILE_ITEM}
             active={isActive(pathname, PROFILE_ITEM.href)}
             showAlertDot={profileComplete === false}

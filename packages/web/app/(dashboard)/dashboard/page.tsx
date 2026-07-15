@@ -15,11 +15,9 @@ import {
   Upload,
 } from 'lucide-react'
 
-import { ProfilePromptOverlay } from '@/components/profile/ProfilePromptOverlay'
 import { NeedsAttentionInfo } from '@/components/dashboard/NeedsAttentionInfo'
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
 import { Button } from '@/components/ui/button'
-import { isProfilePromptDismissed } from '@/lib/profile-prompt-dismiss'
 import {
   RESUME_UPLOAD_SECTION_ID,
   scrollToResumeUpload,
@@ -96,7 +94,6 @@ export default function DashboardPage() {
     status: Status
     data?: ScoutRunRow
   }>({ status: 'loading' })
-  const [profilePromptHidden, setProfilePromptHidden] = useState(false)
   const [showResumeUpload, setShowResumeUpload] = useState(false)
 
   const openResumeUpload = useCallback(() => {
@@ -105,11 +102,6 @@ export default function DashboardPage() {
       scrollToResumeUpload()
     })
   }, [])
-
-  useEffect(() => {
-    if (!user?.id) return
-    setProfilePromptHidden(isProfilePromptDismissed(user.id))
-  }, [user?.id])
 
   // Fetch the Supabase user row first — we need its id for the other queries.
   // Go through /api/user/me (service role) so RLS doesn't hide the row from
@@ -335,13 +327,6 @@ export default function DashboardPage() {
 
   const strongFitsCount = 0 // job matching engine not wired yet
 
-  const showProfilePrompt =
-    Boolean(user?.id) &&
-    clerkLoaded &&
-    userState.status === 'loaded' &&
-    userState.data?.profile_complete !== true &&
-    !profilePromptHidden
-
   useEffect(() => {
     if (!user?.id) return
     if (window.location.hash !== `#${RESUME_UPLOAD_SECTION_ID}`) return
@@ -357,14 +342,6 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-      {user?.id ? (
-        <ProfilePromptOverlay
-          clerkUserId={user.id}
-          open={showProfilePrompt}
-          onDismiss={() => setProfilePromptHidden(true)}
-        />
-      ) : null}
-
       <Greeting
         firstName={firstName}
         isNewUser={isNewUser}

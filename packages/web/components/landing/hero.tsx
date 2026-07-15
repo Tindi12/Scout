@@ -11,7 +11,7 @@ export function Hero() {
   return (
     // No opaque background on the section — the page-level LandingRails
     // overlay sits at -z-10 and must show through on both sides of the hero.
-    <section id="top" className="px-6 pb-32 pt-28 lg:px-12 lg:pt-32">
+    <section id="top" className="px-6 pb-32 pt-40 lg:px-12 lg:pt-44">
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
         {/* Apply animation sits where the old stats pill used to be. */}
         <div className="mb-8">

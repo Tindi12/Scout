@@ -477,6 +477,9 @@ export default function ProfilePage() {
       setFieldStatus(key, 'saved')
       flashSaved(key)
       showSectionToast(section, `${label} updated`)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('scout:profile_saved'))
+      }
     },
     [flashSaved, setFieldStatus, showSectionToast],
   )
@@ -536,6 +539,9 @@ export default function ProfilePage() {
       setLibraryFieldStatus(key, 'saved')
       flashLibrarySaved(key)
       showSectionToast('answers_library', 'Answer saved')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('scout:profile_saved'))
+      }
     },
     [flashLibrarySaved, profile.answers_library, setLibraryFieldStatus, showSectionToast],
   )

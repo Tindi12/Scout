@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 
 import { AccountDeletedNotice } from '@/components/landing/account-deleted-notice'
+import { AnnouncementBanner } from '@/components/landing/announcement-banner'
 import { AtsCoverage } from '@/components/landing/ats-coverage'
 import { DynamicIsland } from '@/components/landing/dynamic-island'
 import { LandingHashScroll } from '@/components/landing/landing-hash-scroll'
@@ -13,12 +14,14 @@ import { Pricing } from '@/components/landing/pricing'
 import { LandingRails, SectionFrame } from '@/components/landing/section-frame'
 import { Stats } from '@/components/landing/stats'
 import { UniversityBelt } from '@/components/landing/university-belt'
+
 export default function Page() {
   return (
     <>
       <Suspense fallback={null}>
         <AccountDeletedNotice />
       </Suspense>
+      <AnnouncementBanner />
       <DynamicIsland />
       <LandingHashScroll />
       <main className="relative">

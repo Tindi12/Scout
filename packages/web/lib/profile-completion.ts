@@ -123,6 +123,10 @@ const REQUIRED_FIELDS: ReadonlyArray<{
   { key: 'earliest_start_date', label: 'Earliest start date' },
 ]
 
+/** Must stay in sync with `public.is_profile_complete(users)` in Supabase
+ * (migration `add_mascot_tutorial_state_and_profile_complete_fn`). The DB trigger
+ * is the authoritative writer of `users.profile_complete`; this helper powers
+ * missing-field labels and optimistic UI. */
 const PROFILE_COMPLETE_THRESHOLD = Math.ceil(REQUIRED_FIELDS.length * 0.8)
 
 function isFilled(

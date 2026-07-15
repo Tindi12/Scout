@@ -21,9 +21,12 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    (process.env.NEXT_PUBLIC_SITE_URL || 'https://scoutintern.com').replace(/\/$/, ''),
+  ),
   title: 'Scout - Never Apply Again.',
   description:
-    'Scout is the autonomous AI agent that parses your resume, tailors it for every role, and applies on your behalf — so you can stop filling out forms and start interviewing.',
+    'Scout is the autonomous AI agent that parses your resume, tailors it for every role, and applies on your behalf so you can stop filling out forms and start interviewing.',
 }
 
 export default function RootLayout({

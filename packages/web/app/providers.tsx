@@ -7,6 +7,7 @@ import {
   CookieConsentProvider,
   useCookieConsent,
 } from '@/components/consent/CookieConsentProvider'
+import { ScoutMascotController } from '@/components/mascot/ScoutMascotController'
 import {
   identifyUser,
   isAnalyticsEnabled,
@@ -28,8 +29,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <CookieConsentProvider>
       <AnalyticsIdentity />
       {children}
+      <MascotHost />
     </CookieConsentProvider>
   )
+}
+
+/** Global Scout mascot — gated to signed-in + allowlisted app routes. */
+function MascotHost() {
+  const { isLoaded, isSignedIn } = useAuth()
+  if (!isLoaded || !isSignedIn) return null
+  return <ScoutMascotController />
 }
 
 /**

@@ -25,6 +25,11 @@ import {
 import { JobCard, type JobMatch } from '@/components/jobs/JobCard'
 import { ColumnSelectActions, JobColumn } from '@/components/jobs/JobColumn'
 import { ANALYTICS_EVENTS, track } from '@/lib/analytics'
+import {
+  ACTIVE_RUN_KEY,
+  SCOUT_RUN_STARTED_EVENT,
+  type ScoutRunStartedDetail,
+} from '@/lib/mascot'
 import { ProUpgradeDialog } from '@/components/ProUpgradeDialog'
 import { ProfileRequiredDialog } from '@/components/profile/ProfileRequiredDialog'
 import {
@@ -599,6 +604,19 @@ export default function ExplorePage() {
           track(ANALYTICS_EVENTS.SCOUT_RUN_STARTED, {
             job_count: jobIds.length,
           })
+          try {
+            window.sessionStorage.setItem(ACTIVE_RUN_KEY, data.scout_run_id)
+          } catch {
+            /* ignore */
+          }
+          const detail: ScoutRunStartedDetail = {
+            scout_run_id: data.scout_run_id,
+            job_count: jobIds.length,
+            source: 'explore_batch',
+          }
+          window.dispatchEvent(
+            new CustomEvent(SCOUT_RUN_STARTED_EVENT, { detail }),
+          )
           router.push(`/tracker?run_id=${encodeURIComponent(data.scout_run_id)}`)
         }
       } finally {

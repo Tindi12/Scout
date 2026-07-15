@@ -1,0 +1,16 @@
+{{headline}}
+
+{{body}}
+
+{{cta_label}} {{cta_url}}
+
+Questions or feedback? Just reply — it lands in my actual inbox.
+
+Tindi
+
+Founder and CEO of Scout
+
+----------------------------------------
+
+Scout: Never Apply Again.
+You're receiving this because you subscribed to Scout updates. Unsubscribe {{{RESEND_UNSUBSCRIBE_URL}}}

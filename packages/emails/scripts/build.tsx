@@ -12,6 +12,7 @@ import { join } from 'node:path'
 
 import { render } from '@react-email/render'
 
+import AnnouncementEmail from '../emails/announcement'
 import FarewellEmail from '../emails/farewell'
 import NewsletterConfirmEmail from '../emails/newsletter-confirm'
 import OtpNoticeEmail from '../emails/otp-notice'
@@ -29,6 +30,7 @@ const EMAILS: { name: string; element: React.ReactElement }[] = [
   { name: 'newsletter_confirm', element: <NewsletterConfirmEmail /> },
   { name: 'recruiter_forward', element: <RecruiterForwardEmail /> },
   { name: 'otp_notice', element: <OtpNoticeEmail /> },
+  { name: 'announcement', element: <AnnouncementEmail /> },
 ]
 
 async function main() {
