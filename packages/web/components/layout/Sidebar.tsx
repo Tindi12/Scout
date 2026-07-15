@@ -21,12 +21,11 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PlanBadge } from '@/components/billing/PlanBadge'
 import { ApplicationCreditsMeter } from '@/components/layout/ApplicationCreditsMeter'
 import { scoutLogo } from '@/lib/scout-logo'
 import {
   normalizeSubscriptionPlan,
-  planBadgeClassName,
-  planDisplayLabel,
   type SubscriptionPlan,
 } from '@/lib/subscription-plan'
 import { cn } from '@/lib/utils'
@@ -43,8 +42,9 @@ const PRIMARY_NAV: NavItem[] = [
   { href: '/explore', label: 'Jobs', icon: Compass },
   { href: '/tracker', label: 'Tracker', icon: Activity },
   { href: '/copilot', label: 'Copilot', icon: Bot },
-  { href: '/profile', label: 'Profile', icon: User },
 ]
+
+const PROFILE_ITEM: NavItem = { href: '/profile', label: 'Profile', icon: User }
 
 const SCOUT_PLUS_NAV: NavItem = {
   href: '/analytics',
@@ -78,16 +78,18 @@ function NavLink({
     <Link
       href={item.href}
       className={cn(
-        'group relative flex items-center gap-3 border-l-2 px-5 py-2.5 text-sm transition-colors duration-150',
+        'group relative mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors duration-150',
         active
-          ? 'border-[#FF6733] bg-[#FF6733]/5 text-white'
-          : 'border-transparent text-[#666] hover:text-[#999]',
+          ? 'bg-[#1c1c1c] text-white'
+          : 'text-[#888] hover:bg-[#1c1c1c] hover:text-white',
       )}
     >
       <Icon
         className={cn(
           'h-[18px] w-[18px] shrink-0 transition-colors',
-          active ? 'text-[#FF6733]' : 'text-[#555] group-hover:text-[#888]',
+          active
+            ? 'text-[#FF6733]'
+            : 'text-[#888] group-hover:text-[#FF6733]',
         )}
         strokeWidth={1.75}
       />
@@ -99,19 +101,6 @@ function NavLink({
         />
       )}
     </Link>
-  )
-}
-
-function PlanBadge({ plan }: { plan: SubscriptionPlan }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider',
-        planBadgeClassName(plan),
-      )}
-    >
-      {planDisplayLabel(plan)}
-    </span>
   )
 }
 
@@ -344,7 +333,6 @@ export function Sidebar() {
             key={item.href}
             item={item}
             active={isActive(pathname, item.href)}
-            showAlertDot={item.href === '/profile' && profileComplete === false}
           />
         ))}
         {!planLoading && plan === 'scout_plus' ? (
@@ -356,10 +344,19 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-3 pb-5 pt-2">
-        <NavLink
-          item={SETTINGS_ITEM}
-          active={isActive(pathname, SETTINGS_ITEM.href)}
-        />
+        <div aria-hidden className="mx-6 h-px bg-white/[0.07]" />
+
+        <div className="space-y-0.5">
+          <NavLink
+            item={PROFILE_ITEM}
+            active={isActive(pathname, PROFILE_ITEM.href)}
+            showAlertDot={profileComplete === false}
+          />
+          <NavLink
+            item={SETTINGS_ITEM}
+            active={isActive(pathname, SETTINGS_ITEM.href)}
+          />
+        </div>
 
         <div className="px-4">
           <ApplicationCreditsMeter />

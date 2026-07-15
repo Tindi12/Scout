@@ -1,7 +1,7 @@
 'use client'
 
 import { CheckCircle2, CircleSlash, Info } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import {
   Tooltip,
@@ -20,12 +20,17 @@ type FailureSummary = {
   summary: string
 }
 
-const SUMMARY_CACHE_VERSION = 'v2'
+const SUMMARY_CACHE_VERSION = 'v3'
 
 const summaryCache = new Map<string, FailureSummary>()
 
-async function fetchFailureSummary(appId: string): Promise<FailureSummary> {
-  const cacheKey = `${SUMMARY_CACHE_VERSION}:${appId}`
+async function fetchFailureSummary(
+  appId: string,
+  errorMessage: string,
+): Promise<FailureSummary> {
+  // Key on the error too: a retried application can fail again with a
+  // different error, and must not serve the previous attempt's summary.
+  const cacheKey = `${SUMMARY_CACHE_VERSION}:${appId}:${errorMessage.slice(0, 80)}`
   const cached = summaryCache.get(cacheKey)
   if (cached) return cached
 
@@ -65,6 +70,30 @@ export function ApplicationOutcomeChip({
     )
   }
 
+  // needs_attention cards are purely informational (2026-07-13: the prior
+  // "Answer Required" flow made typing a free-text answer a prerequisite,
+  // which contradicted Scout's autonomous-agent premise). error_message here is
+  // ALREADY the polished, user-safe attention_question written by
+  // services/browser_agent.py's _interpret_agent_result — unlike a failed row's
+  // error_message (a raw technical string), it needs no AI summarization and no
+  // hover-to-fetch: show it directly.
+  if (app.status === 'needs_attention') {
+    if (!app.error_message) return null
+    return (
+      <p
+        className={[
+          'mt-1.5 flex items-start gap-1.5 font-label text-[10px] leading-relaxed text-[#f59e0b]',
+          className,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
+        <span>{app.error_message}</span>
+      </p>
+    )
+  }
+
   if (app.status !== 'failed' || !app.error_message) return null
 
   return (
@@ -84,7 +113,7 @@ const TONES = {
     chip: 'border-[#ef4444]/20 bg-[#ef4444]/[0.06] text-[#ef4444] hover:border-[#ef4444]/30 hover:bg-[#ef4444]/10',
     heading: 'text-[#ef4444]',
     fallbackSummary:
-      "Scout couldn't complete this application. Try again, or check your resume and Scout settings if it keeps failing.",
+      'We ran into an unexpected issue while submitting this application. Retrying usually resolves this.',
   },
   cancelled: {
     Icon: CircleSlash,
@@ -93,6 +122,31 @@ const TONES = {
     fallbackSummary: 'You stopped this application before Scout could finish.',
   },
 } as const
+
+/**
+ * "Figuring out what went wrong" with trailing dots that cycle
+ * . → .. → ... → (none) while the summary loads. The dot slot has a fixed
+ * width so the text never shifts as the dots change.
+ */
+function AnalyzingIndicator() {
+  const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setFrame((f) => (f + 1) % 4), 400)
+    return () => clearInterval(id)
+  }, [])
+
+  const dots = ['.', '..', '...', ''][frame]
+
+  return (
+    <p className="mt-2 font-label text-[11px] leading-relaxed text-[#888]">
+      Figuring out what went wrong
+      <span aria-hidden className="inline-block w-4 text-left">
+        {dots}
+      </span>
+    </p>
+  )
+}
 
 function OutcomeSummaryChip({
   app,
@@ -117,14 +171,14 @@ function OutcomeSummaryChip({
     if (summary || loading) return
     setLoading(true)
     try {
-      const data = await fetchFailureSummary(app.id)
+      const data = await fetchFailureSummary(app.id, errorMessage)
       setSummary(data)
     } catch {
       setSummary({ kind: tone, summary: fallbackSummary })
     } finally {
       setLoading(false)
     }
-  }, [app.id, fallbackSummary, loading, summary, tone])
+  }, [app.id, errorMessage, fallbackSummary, loading, summary, tone])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -161,13 +215,31 @@ function OutcomeSummaryChip({
             What happened
           </p>
           {loading ? (
-            <p className="mt-2 font-label text-[11px] leading-relaxed text-[#888]">
-              Figuring out what went wrong…
-            </p>
+            <AnalyzingIndicator />
           ) : (
-            <p className="mt-2 font-label text-[11px] leading-relaxed text-[#ccc]">
-              {summary?.summary ?? 'Hover to see what happened.'}
-            </p>
+            <>
+              <p className="mt-2 font-label text-[11px] leading-relaxed text-[#ccc]">
+                {summary?.summary ?? 'Hover to see what happened.'}
+              </p>
+              <p className="mt-2 font-label text-[10px] leading-relaxed text-[#22c55e]/80">
+                Your credit for this application was automatically refunded —
+                retry anytime.
+              </p>
+              {tone === 'failed' ? (
+                <p className="mt-2 border-t border-white/[0.06] pt-2 font-label text-[10px] leading-relaxed text-[#666]">
+                  All application failures are automatically reported to the
+                  Scout team. If you&apos;d like to help us investigate
+                  further, you can also report this issue to{' '}
+                  <a
+                    href="mailto:tindi@scoutintern.com"
+                    className="text-[#999] underline decoration-white/20 underline-offset-2 transition-colors hover:text-white"
+                  >
+                    tindi@scoutintern.com
+                  </a>
+                  .
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </TooltipContent>

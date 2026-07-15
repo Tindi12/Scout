@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from postgrest.exceptions import APIError
 
 from core.auth import verify_resume_api_user
+from core.embedding_service import embed_resume
 from core.entitlements import require_paid
 from core.rate_limit import resume_llm_rate_limit
 from core.supabase_client import supabase
@@ -361,6 +362,60 @@ _DEFAULT_BREAKDOWN: dict[str, int] = {
     "keywords": 0,
 }
 
+# A resume is never "done" — iterative refactors approach this but can't hit 100.
+_SCORE_CEILING = 99
+_BREAKDOWN_DIMS = ("experience", "metrics", "structure", "keywords")
+
+
+def _iterated_refactor_score(previous: int | None, rescored: int) -> int:
+    """Score for a refactored resume: monotonic and asymptotic toward the ceiling.
+
+    The LLM re-score is the starting point, but a refactor must always land
+    visibly above the previous score — closing ~30% of the remaining gap —
+    while never reaching a perfect 100.
+    """
+    rescored = max(0, min(_SCORE_CEILING, int(rescored)))
+    if previous is None:
+        return rescored
+    prev = max(0, min(_SCORE_CEILING, int(previous)))
+    guaranteed = prev + max(1, round((_SCORE_CEILING - prev) * 0.30))
+    return min(_SCORE_CEILING, max(rescored, guaranteed))
+
+
+def _scale_breakdown(breakdown: dict | None, target_score: int) -> dict[str, int]:
+    """Rescale breakdown dims (0–25 each) so they sum to target_score exactly.
+
+    ResumeScore enforces score == breakdown.total(), so whenever the iteration
+    floor lifts the score above the raw LLM re-score the radar has to follow.
+    """
+    target = max(0, min(_SCORE_CEILING, int(target_score)))
+    raw = breakdown or {}
+    values = {
+        dim: max(0, min(25, int(raw.get(dim) or 0))) for dim in _BREAKDOWN_DIMS
+    }
+    current = sum(values.values())
+    if current <= 0:
+        values = {dim: min(25, target // 4) for dim in _BREAKDOWN_DIMS}
+    else:
+        values = {
+            dim: min(25, round(v * target / current)) for dim, v in values.items()
+        }
+
+    diff = target - sum(values.values())
+    guard = 0
+    while diff != 0 and guard < 200:
+        for dim in _BREAKDOWN_DIMS:
+            if diff > 0 and values[dim] < 25:
+                values[dim] += 1
+                diff -= 1
+            elif diff < 0 and values[dim] > 0:
+                values[dim] -= 1
+                diff += 1
+            if diff == 0:
+                break
+        guard += 1
+    return values
+
 
 def _analysis_score_snapshot(*, resume_id: str, user_id: str) -> dict:
     """Return score, breakdown, and weaknesses for a new analyses insert."""
@@ -399,10 +454,12 @@ def _persist_rewrite_analysis(
     before_after: list,
     analysis_id: Optional[str],
     current_user: dict,
+    score_fields: Optional[dict] = None,
 ) -> dict:
     """
-    Store rewrite output on an existing analysis (preferred) or insert a new row
-    with score fields copied from the latest analysis for this resume.
+    Store rewrite output on an existing analysis (preferred) or insert a new row.
+    `score_fields` (score/breakdown/weaknesses from re-scoring the rewrite)
+    replaces the stored score; without it the prior score is carried over.
     """
     if analysis_id:
         existing = _execute_pg(
@@ -424,22 +481,25 @@ def _persist_rewrite_analysis(
                 detail="analysis_id does not belong to this resume",
             )
 
+        update_payload: dict = {
+            "rewritten_resume": rewritten,
+            "before_after": before_after,
+            "target_role": target_role,
+        }
+        if score_fields:
+            update_payload.update(score_fields)
         _execute_pg(
             "update analysis with rewrite",
             lambda: supabase.table("analyses")
-            .update(
-                {
-                    "rewritten_resume": rewritten,
-                    "before_after": before_after,
-                    "target_role": target_role,
-                }
-            )
+            .update(update_payload)
             .eq("id", analysis_id)
             .execute(),
         )
         return {"id": analysis_id}
 
-    snapshot = _analysis_score_snapshot(resume_id=resume_id, user_id=user_id)
+    snapshot = score_fields or _analysis_score_snapshot(
+        resume_id=resume_id, user_id=user_id
+    )
     return _analysis_insert_row(
         {
             "user_id": user_id,
@@ -597,7 +657,7 @@ async def analyze_resume(
     resume = _execute_pg(
         "load resume for analyze",
         lambda: supabase.table("resumes")
-        .select("storage_path, file_type, user_id, users!inner(clerk_id)")
+        .select("storage_path, file_type, parsed_content, user_id, users!inner(clerk_id)")
         .eq("id", request.resume_id)
         .execute(),
     )
@@ -611,29 +671,57 @@ async def analyze_resume(
     if not _user_owns_resume_row(row, users_row, current_user["sub"]):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    storage_path = row["storage_path"]
-    file_type = row["file_type"]
-
-    raw_text = await resume_parser.parse_resume(storage_path, file_type)
-    parsed_content = await structure_resume_text(raw_text)
-
-    _execute_pg(
-        "save parsed resume after analyze",
-        lambda: supabase.table("resumes")
-        .update({"parsed_content": parsed_content})
-        .eq("id", request.resume_id)
+    # If Scout has refactored this resume, the refactor was promoted to
+    # parsed_content and IS the current resume — analyze that baseline, not the
+    # originally uploaded file (re-parsing would clobber the refactor).
+    latest = _execute_pg(
+        "load latest analysis for analyze baseline",
+        lambda: supabase.table("analyses")
+        .select("score, rewritten_resume")
+        .eq("resume_id", request.resume_id)
+        .eq("user_id", row["user_id"])
+        .order("created_at", desc=True)
+        .limit(1)
         .execute(),
     )
+    latest_rows = latest.data or []
+    prior = latest_rows[0] if latest_rows else None
+    refactored_baseline = bool(
+        prior and prior.get("rewritten_resume") and row.get("parsed_content")
+    )
+
+    if refactored_baseline:
+        parsed_content = _coerce_parsed_content(row["parsed_content"])
+    else:
+        raw_text = await resume_parser.parse_resume(
+            row["storage_path"], row["file_type"]
+        )
+        parsed_content = await structure_resume_text(raw_text)
+
+        _execute_pg(
+            "save parsed resume after analyze",
+            lambda: supabase.table("resumes")
+            .update({"parsed_content": parsed_content})
+            .eq("id", request.resume_id)
+            .execute(),
+        )
 
     result = await resume_scorer.score_resume(parsed_content, request.target_role)
+
+    score = result["score"]
+    breakdown = result["breakdown"]
+    if refactored_baseline and prior and prior.get("score") is not None:
+        # Iteration baseline: re-analyzing a refactored resume never regresses.
+        score = min(_SCORE_CEILING, max(int(score), int(prior["score"])))
+        breakdown = _scale_breakdown(breakdown, score)
 
     analysis_row = _analysis_insert_row(
         {
             "user_id": row["user_id"],
             "resume_id": request.resume_id,
             "target_role": request.target_role,
-            "score": result["score"],
-            "breakdown": result["breakdown"],
+            "score": score,
+            "breakdown": breakdown,
             "weaknesses": result["weaknesses"],
             "rewritten_resume": None,
             "before_after": [],
@@ -642,8 +730,8 @@ async def analyze_resume(
 
     return {
         "parsed": parsed_content,
-        "score": result["score"],
-        "breakdown": result["breakdown"],
+        "score": score,
+        "breakdown": breakdown,
         "weaknesses": result["weaknesses"],
         "resume_id": request.resume_id,
         "analysis_id": str(analysis_row["id"]),
@@ -900,6 +988,29 @@ async def rewrite_resume(
     rewritten = await resume_rewriter.general_rewrite(parsed_content)
     before_after = _build_before_after(parsed_content, rewritten)
 
+    # Re-score the refactored resume. Refactoring exists to improve alignment,
+    # so the new score always lands above the previous one (asymptotically
+    # approaching, never reaching, 100).
+    previous = _analysis_score_snapshot(
+        resume_id=request.resume_id, user_id=str(row["user_id"])
+    )
+    score_fields: Optional[dict] = None
+    try:
+        rescore = await resume_scorer.score_resume(rewritten, request.target_role)
+        final_score = _iterated_refactor_score(
+            previous.get("score"), rescore.get("score") or 0
+        )
+        score_fields = {
+            "score": final_score,
+            "breakdown": _scale_breakdown(rescore.get("breakdown"), final_score),
+            "weaknesses": rescore.get("weaknesses") or [],
+        }
+    except HTTPException as exc:
+        # Rewrite already succeeded — don't fail it over the score refresh.
+        logger.warning("Post-rewrite re-score failed: %s", exc.detail)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Post-rewrite re-score failed: %s", exc)
+
     analysis_row = _persist_rewrite_analysis(
         user_id=str(row["user_id"]),
         resume_id=request.resume_id,
@@ -908,7 +1019,19 @@ async def rewrite_resume(
         before_after=before_after,
         analysis_id=request.analysis_id,
         current_user=current_user,
+        score_fields=score_fields,
     )
+
+    # The refactored resume becomes the app-wide active resume: future
+    # rewrites, re-analyses, job matching, and PDFs all build on it.
+    _execute_pg(
+        "promote rewritten resume to active",
+        lambda: supabase.table("resumes")
+        .update({"parsed_content": rewritten})
+        .eq("id", request.resume_id)
+        .execute(),
+    )
+    await embed_resume(request.resume_id, json.dumps(rewritten)[:3000])
 
     return {
         "resume_id": request.resume_id,
@@ -916,6 +1039,9 @@ async def rewrite_resume(
         "analysis_id": str(analysis_row["id"]),
         "rewritten": rewritten,
         "before_after": before_after,
+        "score": (score_fields or previous).get("score"),
+        "breakdown": (score_fields or previous).get("breakdown"),
+        "weaknesses": (score_fields or previous).get("weaknesses"),
     }
 
 

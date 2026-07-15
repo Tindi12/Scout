@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from postgrest.exceptions import APIError
 
 from core.supabase_client import supabase
-from services.role_keywords import role_relevance_score
+from services.role_keywords import role_label, role_relevance_score
 
 load_dotenv()
 
@@ -317,4 +317,115 @@ async def match_jobs(
         resume_quality_score,
     )
 
+    return top
+
+
+def _fetch_jobs_title_search(terms: list[str], limit: int) -> list[dict]:
+    """Exact-ish title hits across the whole jobs table (complements semantic)."""
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for term in terms[:3]:
+        cleaned = term.strip().replace("%", "").replace("_", " ")
+        if len(cleaned) < 3:
+            continue
+        try:
+            response = (
+                supabase.table("jobs")
+                .select(_JOB_SELECT)
+                .ilike("title", f"%{cleaned}%")
+                .limit(limit)
+                .execute()
+            )
+        except APIError as e:
+            logger.warning(
+                "title search failed for %r (%s)", cleaned, getattr(e, "message", e)
+            )
+            continue
+        for row in response.data or []:
+            job_id = row.get("id")
+            if not job_id or job_id in seen:
+                continue
+            seen.add(job_id)
+            rows.append(row)
+    return rows
+
+
+async def search_jobs(
+    query: str,
+    query_embedding: list[float],
+    parsed_resume: dict,
+    *,
+    role_ids: list[str],
+    requires_sponsorship: bool = False,
+    limit: int = 50,
+    user_id: str | None = None,
+    resume_quality_score: int | None = None,
+) -> list[dict]:
+    """Search the whole jobs table for a role the user typed, then rank by fit.
+
+    Retrieval is query-driven (semantic + title match) so results are NOT
+    limited to the user's onboarding roles — a SWE can search "cheme".
+    Scoring still uses the user's resume skills, so fit categories reflect how
+    competitive *they* are within the searched role.
+    """
+    from starlette.concurrency import run_in_threadpool
+
+    # Title terms: the raw query plus resolved discipline labels ("cheme" alone
+    # would ILIKE-match nothing, but its label contributes "chemical").
+    terms: list[str] = [query]
+    for role_id in role_ids:
+        label = role_label(role_id)
+        if label:
+            terms.append(label.replace("Engineering", "").strip() or label)
+
+    semantic_rows = await run_in_threadpool(
+        _get_candidate_jobs,
+        query_embedding,
+        requires_sponsorship,
+        limit,
+    )
+    keyword_rows = await run_in_threadpool(_fetch_jobs_title_search, terms, limit * 2)
+
+    candidates: list[dict] = []
+    seen: set[str] = set()
+    for job in [*semantic_rows, *keyword_rows]:
+        job_id = job.get("id")
+        if not job_id or job_id in seen:
+            continue
+        seen.add(job_id)
+        candidates.append(job)
+
+    applied_job_ids: set[str] = set()
+    if user_id:
+        applied_job_ids = await run_in_threadpool(_get_applied_job_ids, user_id)
+
+    resume_skills_lower = _extract_resume_skills(parsed_resume)
+
+    scored: list[dict] = []
+    for job in candidates:
+        if job.get("id") in applied_job_ids:
+            continue
+        if requires_sponsorship and job.get("visa_sponsorship") == "no":
+            continue
+        # Relevance is judged against the SEARCHED role, not the user's
+        # onboarding target roles — that's what opens up the full database.
+        result = _score_job(
+            job,
+            resume_skills_lower,
+            target_role_ids=role_ids,
+            target_role_label=query,
+            resume_quality_score=resume_quality_score,
+        )
+        if result is not None:
+            scored.append(result)
+
+    scored.sort(key=lambda j: j["final_score"], reverse=True)
+    top = _assign_fit_categories(scored[:limit])
+    logger.info(
+        "Search %r (roles=%s): %d candidates -> %d results",
+        query,
+        role_ids,
+        len(candidates),
+        len(top),
+    )
     return top

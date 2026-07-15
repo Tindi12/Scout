@@ -27,7 +27,10 @@
     --brand-hover: 14 85% 52%;
     --radius: 0.5rem;
     --landing-line: rgba(255, 255, 255, 0.16);
+    --landing-line-outer: rgba(255, 255, 255, 0.14);
     --landing-corner: rgba(255, 255, 255, 0.32);
+    --landing-corner-outer: rgba(255, 255, 255, 0.28);
+    --landing-frame-gap: 1.75rem;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
     --scrollbar-track: transparent;
@@ -56,10 +59,20 @@
     --brand: 14 100% 60%;
     --brand-hover: 14 85% 52%;
     --landing-line: rgba(255, 255, 255, 0.16);
+    --landing-line-outer: rgba(255, 255, 255, 0.14);
     --landing-corner: rgba(255, 255, 255, 0.32);
+    --landing-corner-outer: rgba(255, 255, 255, 0.28);
+    --landing-frame-gap: 1.75rem;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
     --scrollbar-track: transparent;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root,
+  .dark {
+    --landing-frame-gap: 3.5rem;
   }
 }
 
@@ -103,6 +116,27 @@
   body {
     background-color: #000;
     color: #fff;
+  }
+
+  /* Chrome/Edge autofill paints inputs with a light background that can't be
+     overridden via background-color. Repaint it with a huge inset shadow and
+     force the text/caret back to the app's dark-theme colors, so autofilled
+     fields look identical to normal ones. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #0f0f0f inset;
+    box-shadow: 0 0 0 1000px #0f0f0f inset;
+    -webkit-text-fill-color: #fff;
+    caret-color: #fff;
+    /* Chrome re-applies its autofill background asynchronously; an effectively
+       infinite transition delay stops the white flash before our repaint. */
+    transition: background-color 9999999s ease-in-out 0s;
   }
 }
 
@@ -172,9 +206,56 @@
     right: 0;
   }
 
+  /* Secondary outer rails — parallel double-frame outside the primary column. */
+  .landing-rails-outer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(-1 * var(--landing-frame-gap));
+    right: calc(-1 * var(--landing-frame-gap));
+    pointer-events: none;
+  }
+
+  .landing-rails-outer::before,
+  .landing-rails-outer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: var(--landing-line-outer);
+  }
+
+  .landing-rails-outer::before {
+    left: 0;
+  }
+
+  .landing-rails-outer::after {
+    right: 0;
+  }
+
   /* Hairline divider drawn at the top of a framed section. */
   .frame-divider {
+    position: relative;
     border-top: 1px solid var(--landing-line);
+  }
+
+  /* Outer wings that extend the divider to the secondary frame rails. */
+  .frame-divider::before,
+  .frame-divider::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    width: var(--landing-frame-gap);
+    border-top: 1px solid var(--landing-line-outer);
+  }
+
+  .frame-divider::before {
+    right: 100%;
+  }
+
+  .frame-divider::after {
+    left: 100%;
   }
 
   /* Small "+" intersection mark placed where a divider meets a rail. */
@@ -185,6 +266,7 @@
     top: 0;
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
+    z-index: 1;
   }
 
   .frame-corner::before,
@@ -208,6 +290,68 @@
     left: 50%;
     width: 1px;
     transform: translateX(-50%);
+  }
+
+  .frame-corner-outer::before,
+  .frame-corner-outer::after {
+    background-color: var(--landing-corner-outer);
+  }
+
+  /*
+   * Landing nav morph: --nav-progress 0 = flat grid-aligned bar,
+   * 1 = floating glass pill. Driven by scroll in dynamic-island.tsx.
+   */
+  .landing-nav-header {
+    --nav-progress: 0;
+    top: calc(var(--nav-progress) * 1.5rem);
+  }
+
+  .landing-nav-pad {
+    padding-left: calc(1.5rem - var(--nav-progress) * 0.5rem);
+    padding-right: calc(1.5rem - var(--nav-progress) * 0.5rem);
+  }
+
+  @media (min-width: 1024px) {
+    .landing-nav-pad {
+      padding-left: calc(3rem - var(--nav-progress) * 2rem);
+      padding-right: calc(3rem - var(--nav-progress) * 2rem);
+    }
+  }
+
+  .landing-nav-shell {
+    width: 100%;
+    max-width: calc(80rem - var(--nav-progress) * 32rem);
+  }
+
+  .landing-nav {
+    background-color: rgba(0, 0, 0, calc(0.4 * var(--nav-progress)));
+    -webkit-backdrop-filter: blur(calc(var(--nav-progress) * 16px));
+    backdrop-filter: blur(calc(var(--nav-progress) * 16px));
+    border: 1px solid rgba(255, 255, 255, calc(0.1 * var(--nav-progress)));
+    border-radius: calc(var(--nav-progress) * 9999px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, calc(0.6 * var(--nav-progress)));
+    /* Flat bar keeps CTA/logo off the rails; pill settles to the original inset. */
+    padding-left: calc(1.25rem - var(--nav-progress) * 0.25rem);
+    padding-right: calc(1.25rem - var(--nav-progress) * 0.5rem);
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  /* Divider stays locked to the page grid gutters, independent of pill shrink. */
+  .landing-nav-divider {
+    left: 0;
+    right: 0;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    opacity: calc(1 - var(--nav-progress));
+    pointer-events: none;
+  }
+
+  @media (min-width: 1024px) {
+    .landing-nav-divider {
+      padding-left: 3rem;
+      padding-right: 3rem;
+    }
   }
 }
 
@@ -318,54 +462,16 @@
   }
 }
 
-@keyframes scout-comet-strike {
+@keyframes scout-tick-pulse {
   0%,
   100% {
-    transform: translateX(0) scale(1);
-  }
-  35% {
-    transform: translateX(4px) scale(1.2);
-  }
-  55% {
-    transform: translateX(1px) scale(0.95);
-  }
-  75% {
-    transform: translateX(5px) scale(1.15);
-  }
-}
-
-@keyframes scout-comet-pulse {
-  0%,
-  100% {
-    opacity: 0.75;
-    box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.55);
-  }
-  50% {
     opacity: 1;
-    box-shadow: 0 0 14px 4px rgba(255, 255, 255, 0.95);
-  }
-}
-
-@keyframes scout-bar-shimmer {
-  0% {
-    filter: brightness(1);
   }
   50% {
-    filter: brightness(1.15);
-  }
-  100% {
-    filter: brightness(1);
+    opacity: 0.4;
   }
 }
 
-.animate-scout-comet-strike {
-  animation: scout-comet-strike 0.55s ease-in-out infinite;
-}
-
-.animate-scout-comet-pulse {
-  animation: scout-comet-pulse 0.55s ease-in-out infinite;
-}
-
-.animate-scout-bar-shimmer {
-  animation: scout-bar-shimmer 0.55s ease-in-out infinite;
+.animate-scout-tick-pulse {
+  animation: scout-tick-pulse 0.9s ease-in-out infinite;
 }

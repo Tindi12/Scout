@@ -46,7 +46,7 @@ function logDev(message) {
   process.stdout.write(`${PREFIX_COLORS.dev}[dev:workers]${RESET} ${message}\n`)
 }
 
-function startWorker(index) {
+function startWorker(index, { beat = false } = {}) {
   const name = `worker${index}`
   const color = workerColor(index)
   const args = [
@@ -60,6 +60,13 @@ function startWorker(index) {
     `${name}@%h`,
     '-l',
     'info',
+    // Embed Celery beat on this ONE worker so the periodic stale-application
+    // reaper (tasks.reap_stale_applications) runs. It's the backstop that fails
+    // applications a hard worker death stranded at in_progress/queued and closes
+    // their scout_runs — without a beat they'd read "APPLYING" on the tracker
+    // forever. Beat must run on EXACTLY ONE instance (idempotent, but N beats =
+    // N duplicate schedules), so only worker1 gets -B.
+    ...(beat ? ['-B'] : []),
   ]
 
   const child = spawn(uvCmd, args, {
@@ -85,10 +92,12 @@ function startWorker(index) {
 logDev(
   `Starting ${count} Celery worker(s) (--pool=solo, cwd packages/api)…`,
 )
+logDev('worker1 also runs beat (stale-application reaper, every 5 min).')
 logDev('Requires Redis (REDIS_URL in packages/api/.env). Ctrl+C stops all workers.')
 
 for (let i = 1; i <= count; i++) {
-  startWorker(i)
+  // Only worker1 embeds beat — exactly one scheduler across the fleet.
+  startWorker(i, { beat: i === 1 })
 }
 
 let shuttingDown = false

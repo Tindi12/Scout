@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
+import { BrandedLoader } from '@/components/branded-loader'
 import { ChatInput } from '@/components/copilot/ChatInput'
 import {
   ConversationSidebar,
@@ -213,7 +214,7 @@ function EmptyState({
 
 export default function CopilotPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<BrandedLoader fill label="Loading Copilot" />}>
       <CopilotPageContent />
     </Suspense>
   )

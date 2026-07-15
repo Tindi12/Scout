@@ -225,12 +225,11 @@ export default function PrivacyPolicyPage() {
             These credentials are stored in encrypted form.
           </LegalLi>
           <LegalLi>
-            <Strong>Email verification codes (optional):</Strong> if you connect
-            your Gmail or Outlook inbox, the one-time verification codes that
-            job-application platforms email you while Scout is submitting an
-            application on your behalf. See &quot;Automated Job
-            Applications&quot; for how this works; we do not store your mailbox
-            contents or your email password.
+            <Strong>Email verification codes:</Strong> for applications submitted
+            through Greenhouse, the one-time verification codes that Greenhouse
+            emails to a secure Scout-managed relay address while Scout is submitting
+            an application on your behalf. See &quot;Automated Job Applications&quot;
+            for how this works.
           </LegalLi>
           <LegalLi>
             <Strong>Communications:</Strong> messages you send to our AI assistant
@@ -359,56 +358,23 @@ export default function PrivacyPolicyPage() {
           applications in the Services.
         </LegalP>
         <LegalP>
-          <Strong>Email access for verification codes (optional).</Strong> Some
-          application platforms (for example, Greenhouse) email you a one-time
-          verification code before accepting a submission. If you choose to
-          connect your Gmail or Outlook account, Scout retrieves those codes
-          automatically so your applications can complete without interruption.
-          This access works as follows:
+          <Strong>Application relay address (Greenhouse applications).</Strong>{' '}
+          When Scout submits an application through Greenhouse, the application
+          may list a secure Scout-managed relay email address (operated by our
+          inbound-email provider, <Strong>AgentMail</Strong>) as the applicant
+          contact email instead of your personal address. This lets Scout
+          receive the platform&apos;s one-time verification codes and complete
+          your submission without needing access to your personal mailbox.
+          Verification-code emails are processed automatically and are not
+          forwarded or retained; any other message sent to the relay address —
+          such as a recruiter&apos;s reply or an interview request — is
+          forwarded to your real email address, with the reply address set to
+          the original sender so that your response goes directly to them, not
+          through Scout. Relayed messages are used only to deliver them to you
+          and are never used for advertising, sold, or sent to any AI model.
+          Applications submitted through other platforms use the email address
+          on your profile.
         </LegalP>
-        <LegalUl>
-          <LegalLi>
-            You grant access through the hosted consent screen of our managed
-            OAuth provider, <Strong>Composio</Strong>. Composio stores the OAuth
-            token; Scout never sees or stores your email password or token.
-          </LegalLi>
-          <LegalLi>
-            Access is <Strong>read-only</Strong> (Gmail scope{' '}
-            <Strong>gmail.readonly</Strong>; Outlook scope{' '}
-            <Strong>Mail.Read</Strong>). Scout cannot send, delete, or modify
-            your email.
-          </LegalLi>
-          <LegalLi>
-            Scout reads your mailbox <Strong>only</Strong> while an application
-            you initiated is actively waiting on a verification code, using a
-            narrow automated search for the application platform&apos;s
-            verification email. The only thing extracted and used is the
-            one-time code itself; it is held briefly in transient storage to
-            complete your submission and is not retained afterwards. Message
-            bodies are never stored, never logged, and never sent to any AI
-            model.
-          </LegalLi>
-          <LegalLi>
-            Our use of information received from Google APIs adheres to the{' '}
-            <a
-              href="https://developers.google.com/terms/api-services-user-data-policy"
-              className="text-[#FF6733] underline-offset-2 hover:underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Google API Services User Data Policy
-            </a>
-            , including its Limited Use requirements. We do not use email data
-            for advertising, do not sell it, do not transfer it except to
-            provide the verification-code feature you requested, and do not
-            allow humans to read it (absent your explicit consent, security
-            review, or legal requirement).
-          </LegalLi>
-          <LegalLi>
-            You can disconnect at any time in Settings, which revokes the
-            connection.
-          </LegalLi>
-        </LegalUl>
       </LegalSection>
 
       <LegalSection id="sharing" title="5. When and with whom we share information">
@@ -427,10 +393,10 @@ export default function PrivacyPolicyPage() {
             operate the automated agent that submits applications (see Section 4).
           </LegalLi>
           <LegalLi>
-            <Strong>Managed OAuth / email-integration provider</Strong>{' '}
-            (Composio) — to hold the OAuth connection and provide read-only
-            retrieval of application verification codes when you connect your
-            email (see Section 4).
+            <Strong>Inbound email relay provider</Strong> (AgentMail) — to
+            operate the secure relay address that receives Greenhouse
+            verification codes and any recruiter replies for applications Scout
+            submits on your behalf (see Section 4).
           </LegalLi>
           <LegalLi>
             <Strong>Job-application platforms and employers</Strong> (e.g.,

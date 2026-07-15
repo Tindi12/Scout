@@ -8,10 +8,10 @@ import { getApiBaseUrl } from '@/lib/api'
  * ever read from the request — so a user can only delete their own account.
  *
  * Two-phase, in this order:
- *  1. FastAPI POST /account/delete — Stripe cancel + customer delete, Composio
- *     revoke, Storage purge, then the users row (children cascade). If any external
- *     step fails, FastAPI aborts BEFORE deleting the row and returns 502 so a retry
- *     still has the ids it needs.
+ *  1. FastAPI POST /account/delete — Stripe cancel + customer delete, Storage
+ *     purge, then the users row (children cascade). If any external step fails,
+ *     FastAPI aborts BEFORE deleting the row and returns 502 so a retry still has
+ *     the ids it needs.
  *  2. Clerk user deletion LAST — once Clerk is gone the session is gone, so it must
  *     come after everything that might need a retry under this identity.
  *

@@ -65,6 +65,24 @@ function portalMeta(portal: string): PortalMeta {
   if (value === 'workday') {
     return { label: 'Workday', classes: 'bg-blue-500/10 text-blue-400' }
   }
+  if (value === 'smartrecruiters') {
+    return { label: 'SmartRecruiters', classes: 'bg-sky-500/10 text-sky-400' }
+  }
+  if (value === 'workable') {
+    return { label: 'Workable', classes: 'bg-orange-500/10 text-orange-400' }
+  }
+  if (value === 'recruitee') {
+    return { label: 'Recruitee', classes: 'bg-teal-500/10 text-teal-400' }
+  }
+  if (value === 'bamboohr') {
+    return { label: 'BambooHR', classes: 'bg-emerald-500/10 text-emerald-400' }
+  }
+  if (value === 'teamtailor') {
+    return { label: 'Teamtailor', classes: 'bg-fuchsia-500/10 text-fuchsia-400' }
+  }
+  if (value === 'icims') {
+    return { label: 'iCIMS', classes: 'bg-cyan-500/10 text-cyan-400' }
+  }
   if (value === 'usajobs') {
     return { label: 'USAJobs', classes: 'bg-amber-500/10 text-amber-400' }
   }

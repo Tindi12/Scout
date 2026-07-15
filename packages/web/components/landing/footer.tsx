@@ -2,6 +2,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 import { CookiePreferencesLink } from '@/components/consent/CookiePreferencesLink'
+import { LandingHashLink } from '@/components/landing/landing-hash-link'
 import { NewsletterForm } from '@/components/landing/newsletter-form'
 import { scoutLogo } from '@/lib/scout-logo'
 import { ArrowUp, Instagram } from 'lucide-react'
@@ -120,12 +121,21 @@ export function Footer() {
               <ul className="mt-6 space-y-4">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <Link
-                      href={link.href}
-                      className="font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white"
-                    >
-                      {link.label}
-                    </Link>
+                    {link.href.includes('#') ? (
+                      <LandingHashLink
+                        href={link.href}
+                        className="font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white"
+                      >
+                        {link.label}
+                      </LandingHashLink>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white"
+                      >
+                        {link.label}
+                      </Link>
+                    )}
                   </li>
                 ))}
                 {col.heading === 'Legal' ? (
@@ -143,13 +153,13 @@ export function Footer() {
             © {new Date().getFullYear()} Scout. Never Apply Again
           </p>
 
-          <Link
-            href="/#top"
+          <LandingHashLink
+            href="#top"
             className="font-label group inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.05] hover:text-white"
           >
             Back to top
             <ArrowUp className="h-4 w-4 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:text-primary" />
-          </Link>
+          </LandingHashLink>
 
           <div className="flex items-center gap-5">
             {[

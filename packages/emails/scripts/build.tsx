@@ -14,6 +14,8 @@ import { render } from '@react-email/render'
 
 import FarewellEmail from '../emails/farewell'
 import NewsletterConfirmEmail from '../emails/newsletter-confirm'
+import OtpNoticeEmail from '../emails/otp-notice'
+import RecruiterForwardEmail from '../emails/recruiter-forward'
 import UpgradeEmail from '../emails/upgrade'
 import WelcomeEmail from '../emails/welcome'
 
@@ -25,6 +27,8 @@ const EMAILS: { name: string; element: React.ReactElement }[] = [
   { name: 'upgrade_scout_plus', element: <UpgradeEmail tier="scout_plus" /> },
   { name: 'farewell', element: <FarewellEmail /> },
   { name: 'newsletter_confirm', element: <NewsletterConfirmEmail /> },
+  { name: 'recruiter_forward', element: <RecruiterForwardEmail /> },
+  { name: 'otp_notice', element: <OtpNoticeEmail /> },
 ]
 
 async function main() {

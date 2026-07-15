@@ -1,0 +1,22 @@
+Hey {{first_name}},
+
+Good news: you got a response to your Greenhouse application at {{company}}. Here's what they said:
+
+From: {{sender_line}}
+
+----------------------------------------
+
+{{message_body}}
+
+Just hit reply to this email and your answer goes straight to them. Scout stays out of the conversation from here.
+
+Open your tracker → {{cta_url}}
+
+Tindi
+
+Founder and CEO of Scout
+
+----------------------------------------
+
+Scout: Never Apply Again.
+You're receiving this because Scout relayed a message sent to your application's contact address.

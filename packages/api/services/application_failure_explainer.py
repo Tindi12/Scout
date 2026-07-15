@@ -1,4 +1,11 @@
-"""Plain-language explanations for failed Scout applications."""
+"""User-facing explanations for failed Scout applications.
+
+Everything returned from here is shown verbatim in the app, so it must read
+from the STUDENT's perspective and never leak how Scout works internally (no
+browsers, sessions, vendors, models, timeouts, error codes). The AI output is
+run through a hard blocklist as a backstop — if any internal term slips
+through, the user gets a calm generic summary instead.
+"""
 
 import logging
 import re
@@ -7,25 +14,61 @@ from core.ai_router import call_ai
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM = """You write short failure explanations for Scout, an internship application agent
-that automatically applies to jobs on behalf of college students using browser automation.
+# Shown whenever we can't (or shouldn't) show a specific summary. Calm, no
+# internals, points at the retry as the next step.
+GENERIC_FAILURE_SUMMARY = (
+    "We ran into an unexpected issue while submitting this application, so it "
+    "couldn't be completed. Retrying usually resolves this."
+)
 
-The student sees your text in the Scout app when an application fails. They did NOT apply
-manually — Scout was filling out the employer's application form for them.
+CANCELLED_SUMMARY = "You stopped this application before Scout could finish."
 
-The raw log below is from Scout's automated run. It is NOT the employer rejecting the
-candidate's resume or interview performance.
+_SYSTEM = """You write short, user-facing failure notes for Scout, an app that applies to
+internships on behalf of college students. Scout was submitting this application for the
+student and could not finish it.
+
+The raw log below is internal. It is NOT the employer rejecting the student's resume or
+candidacy — the application simply didn't get submitted.
 
 Rules:
-- Write exactly 1-2 sentences in plain English, speaking directly to the student ("you", "Scout").
-- Say what Scout was trying to do and what stopped the application from finishing.
-- Do NOT blame the employer's internal systems, dev environment, or account tiers.
-- Do NOT speculate about the company's tech stack or suggest the error is "on their end".
-- Be specific to Scout: browser session issues, form steps Scout couldn't complete, resume
-  PDF generation, verification walls, usage limits, or the student stopping the run.
-- If retry might work, say so. If they need to fix something in Scout (resume, settings),
-  say what. If it's a Scout platform limit, say that clearly.
-- No markdown, bullet points, quotes, error codes, or mention of being an AI."""
+- Write 1-3 sentences in plain English, speaking directly to the student ("you", "Scout").
+- Explain what happened from the student's perspective: the outcome, never the mechanics.
+- NEVER mention or hint at how Scout works internally. Forbidden: browsers, browser
+  automation, sessions, agents, AI, language models, APIs, servers, backends,
+  infrastructure, timeouts, rate limits, quotas, error codes, logs, stack traces, and
+  any tool or vendor name. Refer to everything as "the application" or "the employer's
+  application process".
+- Do NOT blame the employer's internal systems or speculate about their tech.
+- Do NOT repeat any part of the log verbatim.
+- End with the student's next step. Retrying is the primary recovery — if a retry could
+  work, say so plainly. If something in Scout needs fixing first (like their resume),
+  say exactly what.
+- Tone: calm, reassuring, professional. No markdown, bullet points, quotes, or
+  exclamation marks."""
+
+# Backstop blocklist: if the AI summary contains ANY of these, it is discarded
+# in favor of GENERIC_FAILURE_SUMMARY. Word-bounded so e.g. "rapid" never trips
+# on "api".
+_INTERNAL_TERMS = re.compile(
+    r"(?i)\b("
+    r"browserbase|playwright|selenium|chromium|chrome|headless|browsers?|"
+    r"automation|automated|bots?|scripts?|"
+    r"llms?|a\.i\.|ai|gpt|openai|gemini|groq|anthropic|claude|model|prompt|"
+    r"apis?|endpoints?|servers?|backend|infrastructure|database|supabase|"
+    r"redis|celery|python|sandbox|proxy|proxies|"
+    r"timeouts?|timed\s+out|rate[-\s]?limit(?:ed|s)?|quotas?|"
+    r"exceptions?|tracebacks?|stack\s?traces?|error\s?codes?|logs?|"
+    r"sessions?|selectors?|dom|cdp|https?|json|tokens?|4\d\d|5\d\d|"
+    # ATS / job-board vendor names — the application-process implementation detail
+    # the student should never see (they just see "the employer's application").
+    r"greenhouse|lever|ashby|workday|myworkday|icims|taleo|smartrecruiters|"
+    r"jobvite|bamboohr|adzuna|jsearch|rapidapi|browser[-\s]?use|"
+    # Scout's own stack / product names.
+    r"clerk|vercel|railway|stripe|agentmail|resend|celery|"
+    # Internal run-control concepts that describe HOW Scout drives the form.
+    r"step\s?budget|step\s?limit|max\s?steps"
+    r")\b"
+)
 
 
 def _is_cancelled(error_message: str) -> bool:
@@ -38,29 +81,73 @@ def _static_summary(error_message: str) -> str | None:
     lower = error_message.lower()
     if "pdflatex" in lower or "resume pdf" in lower:
         return (
-            "Scout couldn't generate your tailored resume PDF before applying. "
-            "Check that your resume is uploaded and try again."
+            "We couldn't prepare your tailored resume for this application, so it "
+            "wasn't submitted. Make sure your resume is uploaded in Scout, then retry."
+        )
+    if "missing_required_document" in lower:
+        return (
+            "This employer's application asks for a document Scout doesn't have on "
+            "file for you yet. Add it to your profile and retry, or apply directly "
+            "on the employer's site."
         )
     if "service limit" in lower or "browserbase" in lower:
         return (
-            "Scout hit a browser automation limit on our side, so this application "
-            "couldn't finish. Try again later or contact support if it keeps happening."
+            "Scout couldn't start this application due to high demand. Your credits "
+            "weren't used — please retry in a little while."
         )
     if "browser_session" in lower:
         return (
-            "Scout lost its browser session while filling out the application. "
-            "This is usually temporary — try running Scout again."
+            "This application was interrupted before Scout could finish submitting "
+            "it. This is usually temporary — retrying often works."
+        )
+    if "planner_deadlock" in lower:
+        return (
+            "The employer's application flow changed unexpectedly before submission "
+            "could be completed. Retrying gives Scout a fresh start and usually works."
         )
     if "verification" in lower or "captcha" in lower or "awaiting_code" in lower:
         return (
-            "The employer's site asked for email verification and Scout paused waiting "
-            "for a code. Enter the code when prompted, or apply manually if it expired."
+            "The employer's site required extra verification that couldn't be "
+            "completed this time. You can retry, or apply directly on the "
+            "employer's site."
+        )
+    if "spam" in lower or "spam_blocked" in lower:
+        return (
+            "The employer's site flagged this application as possible spam and "
+            "refused it. Please apply directly on the employer's site — retrying "
+            "with Scout is unlikely to help."
         )
     if re.search(r"\b429\b|rate.?limit", lower):
         return (
-            "Scout was rate-limited while applying. Wait a few minutes and try again."
+            "We ran into a temporary issue while submitting this application. "
+            "Wait a few minutes and retry."
         )
     return None
+
+
+def _sanitize(summary: str) -> str:
+    """Last line of defense: never let internal terminology reach the user."""
+    text = (summary or "").strip()
+    if not text:
+        return GENERIC_FAILURE_SUMMARY
+    if _INTERNAL_TERMS.search(text):
+        logger.warning(
+            "failure summary blocked by internal-terms filter: %r", text[:200]
+        )
+        return GENERIC_FAILURE_SUMMARY
+    # A well-formed summary is 1-3 sentences; anything sprawling is suspect.
+    if len(text) > 420:
+        return GENERIC_FAILURE_SUMMARY
+    return text
+
+
+def ensure_user_safe(summary: str) -> str:
+    """Public guard for summaries produced/stored ELSEWHERE (precomputed notification
+    bodies, older rows) before they are shown to a user. Runs the same blocklist +
+    length cap as freshly-generated summaries, so a raw run log / verbose agent dump
+    that ever lands in storage still can't reach the tracker — it collapses to the
+    calm generic copy instead."""
+    return _sanitize(summary)
 
 
 async def explain_application_failure(
@@ -69,28 +156,17 @@ async def explain_application_failure(
     role: str,
     error_message: str,
 ) -> dict[str, str]:
+    """Return {"kind", "summary"} — user-facing only, no technical details."""
     technical = (error_message or "").strip()
     if not technical:
-        return {
-            "kind": "failed",
-            "summary": "Scout couldn't finish this application.",
-            "technical": "",
-        }
+        return {"kind": "failed", "summary": GENERIC_FAILURE_SUMMARY}
 
     if _is_cancelled(technical):
-        return {
-            "kind": "cancelled",
-            "summary": "You stopped this application before Scout could finish.",
-            "technical": technical,
-        }
+        return {"kind": "cancelled", "summary": CANCELLED_SUMMARY}
 
     static = _static_summary(technical)
     if static:
-        return {
-            "kind": "failed",
-            "summary": static,
-            "technical": technical,
-        }
+        return {"kind": "failed", "summary": static}
 
     company_label = (company or "this company").strip() or "this company"
     role_label = (role or "this role").strip() or "this role"
@@ -107,13 +183,6 @@ async def explain_application_failure(
         summary = await call_ai(prompt, _SYSTEM, task="quality")
     except Exception as exc:
         logger.warning("failure summary AI failed: %s", exc)
-        summary = (
-            "Scout couldn't complete this application. Try again, or check your "
-            "resume and Scout settings if it keeps failing."
-        )
+        summary = GENERIC_FAILURE_SUMMARY
 
-    return {
-        "kind": "failed",
-        "summary": summary.strip(),
-        "technical": technical,
-    }
+    return {"kind": "failed", "summary": _sanitize(summary)}

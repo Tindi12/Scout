@@ -16,9 +16,10 @@ system prompt tells the agent to open in a new tab:
   GET /apply-code/{token}     →  "WAIT" | "CANCEL" | "TIMEOUT" | "<the code>"
       Polled when an ATS demands an emailed verification code. The FIRST hit writes
       the gate marker (apply:gate:{app_id} = epoch seconds) — that is the worker's
-      awaiting-verification signal; the worker then fetches the code (Composio) into
-      the existing Redis mailbox apply:code:{app_id}, which this route serves. The
-      manual CodeModal path writes the SAME mailbox, so auto and manual converge.
+      awaiting-verification signal. The code lands in the Redis mailbox
+      apply:code:{app_id} — pushed there by the AgentMail relay webhook or pasted by
+      the user via the CodeModal — and this route serves it. Both sources converge on
+      the same mailbox.
 
 Security model: no Clerk auth (the agent has no user token) — authentication is the
 128-bit single-purpose token, minted per attempt, stored only in Redis with a TTL,
@@ -94,7 +95,7 @@ async def apply_code(token: str) -> str:
 
         # First poll = the gate signal. SET NX so only the first hit timestamps it;
         # the worker's poll loop reacts within one tick (status -> awaiting_code,
-        # notification, Composio fetch).
+        # notification).
         gate = gate_key(application_id)
         now = int(time.time())
         if r.set(gate, str(now), nx=True, ex=GATE_FLAG_TTL):

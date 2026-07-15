@@ -2,7 +2,7 @@ Hey {{first_name}},
 
 Thank you for upgrading, seriously. Scout is a student-built project, and your subscription is what keeps it running.
 
-You're on Scout+ now: 600 applications every 30 days and priority on everything: runs, rewrites, support.
+You're on Scout+ now: 100 applications every 30 days and priority on everything: runs, rewrites, support.
 
 Start a Scout run → {{cta_url}}
 
@@ -14,5 +14,5 @@ Founder and CEO of Scout
 
 ----------------------------------------
 
-Scout: built by a student, for students.
+Scout: Never Apply Again.
 You're receiving this because you have a Scout account.

@@ -3,7 +3,7 @@ Self-serve account deletion (Settings → Account → Delete account).
 
 One authenticated endpoint. The user is derived from the session — a user_id is never
 accepted from the request, so a user can only ever delete their OWN account. The
-orchestration itself (Stripe → Composio → Storage → DB, in that order, idempotent,
+orchestration itself (Stripe → Storage → DB, in that order, idempotent,
 step-logged) lives in services/account_deletion.py; the Next.js proxy route deletes
 the Clerk user LAST after this returns success.
 """

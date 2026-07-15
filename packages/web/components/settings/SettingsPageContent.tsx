@@ -3,7 +3,6 @@
 import { AccountActionsSection } from '@/components/settings/AccountActionsSection'
 import { AccountSection } from '@/components/settings/AccountSection'
 import { BillingSection } from '@/components/settings/BillingSection'
-import { ConnectMailSection } from '@/components/settings/ConnectMailSection'
 import { NotificationsSection } from '@/components/settings/NotificationsSection'
 
 export function SettingsPageContent() {
@@ -19,7 +18,6 @@ export function SettingsPageContent() {
       </header>
 
       <AccountSection />
-      <ConnectMailSection />
       <BillingSection />
       <NotificationsSection />
       <AccountActionsSection />

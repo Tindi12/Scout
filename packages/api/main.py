@@ -22,6 +22,7 @@ from routes.scout import router as scout_router
 from routes.strategy import router as strategy_router
 from routes.stripe_router import router as stripe_router
 from routes.user import router as user_router
+from routes.webhooks import router as webhooks_router
 from core.supabase_client import test_connection
 
 load_dotenv()
@@ -116,6 +117,9 @@ app.include_router(newsletter_router, prefix="/newsletter", tags=["newsletter"])
 app.include_router(clerk_router, prefix="/clerk", tags=["clerk"])
 app.include_router(user_router, prefix="/user", tags=["user"])
 app.include_router(account_router, prefix="/account", tags=["account"])
+# Signature-authenticated third-party push (AgentMail message.received — the
+# Greenhouse verification-code source). No Clerk auth: Svix signature is the auth.
+app.include_router(webhooks_router, prefix="/webhooks", tags=["webhooks"])
 # Public (token-authenticated) mid-run agent channel — no prefix: the system prompt
 # hands the agent absolute URLs /apply-control/{token} and /apply-code/{token}.
 app.include_router(apply_code_router, tags=["apply-code"])

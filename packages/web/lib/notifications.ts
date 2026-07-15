@@ -3,6 +3,7 @@ export type NotificationType =
   | 'application_needs_attention'
   | 'application_awaiting_code'
   | 'application_applied'
+  | 'application_response'
   | 'scout_run_finished'
 
 export type NotificationRecord = {
@@ -32,6 +33,7 @@ export const NOTIFICATION_TYPE_META: Record<
   application_needs_attention: { label: 'Needs attention', color: '#f59e0b' },
   application_awaiting_code: { label: 'Code required', color: '#22d3ee' },
   application_applied: { label: 'Applied', color: '#22c55e' },
+  application_response: { label: 'Recruiter reply', color: '#FF6733' },
   scout_run_finished: { label: 'Run finished', color: '#a78bfa' },
 }
 

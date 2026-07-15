@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from core.supabase_client import supabase
@@ -22,6 +23,44 @@ def _label(company: str | None, role: str | None) -> tuple[str, str]:
         (company or "").strip() or "Unknown company",
         (role or "").strip() or "Role",
     )
+
+
+def _precomputed_failure_body(company: str, role: str, raw_error: str) -> str:
+    """
+    Compute the user-facing failure summary NOW, at write time, instead of leaving
+    it for a live AI call when the user hovers the outcome chip (ApplicationOutcomeChip
+    -> GET /applications/{id}/failure-summary). Every caller of notify_application
+    with type="application_failed" runs in a background Celery task or the
+    already-instant cancelled_by_user path (see routes/applications.py stop-all), so
+    this never adds latency to a request a user is waiting on.
+
+    explain_application_failure is async; every current caller of notify_application
+    is a plain sync function with no running event loop (Celery task body, or a
+    run_in_threadpool worker thread), so asyncio.run here is safe.
+    """
+    from services.application_failure_explainer import (
+        GENERIC_FAILURE_SUMMARY,
+        explain_application_failure,
+    )
+
+    try:
+        result = asyncio.run(
+            explain_application_failure(
+                company=company, role=role, error_message=raw_error
+            )
+        )
+        return result["summary"]
+    except Exception:
+        # NEVER store the raw error as the body: it can be a verbose agent run log
+        # (form field values, ATS/vendor names, internal step counters) and would be
+        # shown VERBATIM on the tracker's failure tooltip. A calm generic line is the
+        # only safe fallback — the raw error is still preserved in applications.error_message
+        # for support/debugging, just never surfaced to the student.
+        logger.warning(
+            "Precomputed failure summary failed; using generic user-facing copy",
+            exc_info=True,
+        )
+        return GENERIC_FAILURE_SUMMARY
 
 
 def notify_application(
@@ -48,7 +87,12 @@ def notify_application(
         company, role = _label(row.get("company"), row.get("role"))
         title_fn = _TYPE_TITLES.get(notification_type)
         title = title_fn(company, role) if title_fn else f"{company} — {role}"
-        body = body_override if body_override is not None else row.get("error_message")
+        raw_body = body_override if body_override is not None else row.get("error_message")
+        body = (
+            _precomputed_failure_body(company, role, raw_body or "")
+            if notification_type == "application_failed"
+            else raw_body
+        )
         run_id = scout_run_id or row.get("scout_run_id")
 
         create_notification(

@@ -31,15 +31,15 @@ class TierLimits(TypedDict):
     copilot_unlimited: bool
 
 
-# Per-tier limits in one place (pricing: free 25 lifetime, pro 200/30d,
-# scout_plus 600/30d). application_limit is the canonical cap per tier; note the
+# Per-tier limits in one place (pricing: free 10 lifetime, pro 40/30d,
+# scout_plus 100/30d). application_limit is the canonical cap per tier; note the
 # users table also stores applications_limit per-row, which is what runtime
 # credit checks read — these constants are the source for what that column
 # should be set to when a plan changes.
 _TIER_LIMITS: dict[str, TierLimits] = {
-    FREE: {"application_limit": 25, "copilot_unlimited": False},
-    PRO: {"application_limit": 200, "copilot_unlimited": True},
-    SCOUT_PLUS: {"application_limit": 600, "copilot_unlimited": True},
+    FREE: {"application_limit": 10, "copilot_unlimited": False},
+    PRO: {"application_limit": 40, "copilot_unlimited": True},
+    SCOUT_PLUS: {"application_limit": 100, "copilot_unlimited": True},
 }
 
 

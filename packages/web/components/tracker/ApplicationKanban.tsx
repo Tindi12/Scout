@@ -1,7 +1,9 @@
 'use client'
 
 import * as Accordion from '@radix-ui/react-accordion'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ExternalLink, X } from 'lucide-react'
+
+import { useNotificationsContext } from '@/contexts/notifications-context'
 import {
   useCallback,
   useEffect,
@@ -13,12 +15,15 @@ import {
 
 import { PortalBadge } from '@/components/tracker/PortalBadge'
 import { ApplicationOutcomeChip } from '@/components/tracker/ApplicationOutcomeChip'
+import { RetryApplicationButton } from '@/components/tracker/RetryApplicationButton'
 import {
   TooltipProvider,
 } from '@/components/ui/tooltip'
 import {
   detectPortalFromUrl,
   formatRelativeTime,
+  isManualApplyRecommended,
+  isRetryableApplication,
   STATUS_CONFIG,
   type ApplicationRecord,
 } from '@/components/tracker/tracker-utils'
@@ -56,16 +61,17 @@ function defaultOpenColumns(
 type ApplicationKanbanProps = {
   apps: ApplicationRecord[]
   loading?: boolean
-  onAnswerClick?: (app: ApplicationRecord) => void
-  onCodeClick?: (app: ApplicationRecord) => void
+  onRetry?: (app: ApplicationRecord) => Promise<void> | void
 }
 
 export function ApplicationKanban({
   apps,
   loading = false,
-  onAnswerClick,
-  onCodeClick,
+  onRetry,
 }: ApplicationKanbanProps) {
+  const { isApplicationDismissed, dismissForApplication } =
+    useNotificationsContext()
+
   const grouped = useMemo(() => {
     const map: Record<KanbanColumnId, ApplicationRecord[]> = {
       queued: [],
@@ -76,19 +82,23 @@ export function ApplicationKanban({
     }
     for (const app of apps) {
       const status = (app.status || 'queued') as KanbanColumnId
+      // X-ed attention cards stay dismissed (server-persisted, same mechanism
+      // as the live feed) — drop them from the board.
+      if (status === 'needs_attention' && isApplicationDismissed(app.id)) {
+        continue
+      }
       if (status in map) {
         map[status].push(app)
       } else if (app.status === 'awaiting_code') {
-        // Time-sensitive live state: surface it in ATTENTION (which auto-opens)
-        // so the Enter Email Code card is impossible to miss. When the code is
-        // sent the status flips back to in_progress and the card moves home.
-        map.needs_attention.push(app)
+        // Agent-internal verifying state: Scout retrieves the emailed code
+        // itself, so this is just a live in-progress application.
+        map.in_progress.push(app)
       } else {
         map.queued.push(app)
       }
     }
     return map
-  }, [apps])
+  }, [apps, isApplicationDismissed])
 
   const defaultOpen = useMemo(() => defaultOpenColumns(grouped), [grouped])
 
@@ -115,8 +125,8 @@ export function ApplicationKanban({
             columnId={col.id}
             label={col.label}
             cards={grouped[col.id]}
-            onAnswerClick={onAnswerClick}
-            onCodeClick={onCodeClick}
+            onRetry={onRetry}
+            onDismissAttention={(app) => void dismissForApplication(app.id)}
           />
         ))}
       </div>
@@ -162,8 +172,8 @@ export function ApplicationKanban({
                     <KanbanCard
                       key={app.id}
                       app={app}
-                      onAnswerClick={onAnswerClick}
-                      onCodeClick={onCodeClick}
+                      onRetry={onRetry}
+                      onDismissAttention={(a) => void dismissForApplication(a.id)}
                     />
                   ))
                 )}
@@ -298,14 +308,14 @@ function KanbanColumn({
   columnId,
   label,
   cards,
-  onAnswerClick,
-  onCodeClick,
+  onRetry,
+  onDismissAttention,
 }: {
   columnId: KanbanColumnId
   label: string
   cards: ApplicationRecord[]
-  onAnswerClick?: (app: ApplicationRecord) => void
-  onCodeClick?: (app: ApplicationRecord) => void
+  onRetry?: (app: ApplicationRecord) => Promise<void> | void
+  onDismissAttention?: (app: ApplicationRecord) => void
 }) {
   const color = STATUS_CONFIG[columnId].color
 
@@ -333,8 +343,8 @@ function KanbanColumn({
               <KanbanCard
                 key={app.id}
                 app={app}
-                onAnswerClick={onAnswerClick}
-                onCodeClick={onCodeClick}
+                onRetry={onRetry}
+                onDismissAttention={onDismissAttention}
               />
             ))
           )}
@@ -346,46 +356,61 @@ function KanbanColumn({
 
 function KanbanCard({
   app,
-  onAnswerClick,
-  onCodeClick,
+  onRetry,
+  onDismissAttention,
 }: {
   app: ApplicationRecord
-  onAnswerClick?: (app: ApplicationRecord) => void
-  onCodeClick?: (app: ApplicationRecord) => void
+  onRetry?: (app: ApplicationRecord) => Promise<void> | void
+  onDismissAttention?: (app: ApplicationRecord) => void
 }) {
   const portal = detectPortalFromUrl(app.job_url)
-  const ts = app.applied_at ?? app.created_at ?? null
+  // applications.created_at is frozen at the row's ORIGINAL creation and goes
+  // stale across a retry (same row reused for a new attempt) — status_changed_at
+  // (derived from this application's most recent notification) reflects the
+  // CURRENT attempt instead. See tracker-utils.ts's ApplicationRecord doc.
+  const ts = app.applied_at ?? app.status_changed_at ?? app.created_at ?? null
 
   return (
     <article
       data-kanban-card
       className="glass-card rounded-xl border border-white/[0.06] p-3"
     >
-      <p className="truncate text-sm font-semibold text-white">
-        {app.company || 'Unknown company'}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-sm font-semibold text-white">
+          {app.company || 'Unknown company'}
+        </p>
+        {isRetryableApplication(app) && onRetry ? (
+          <RetryApplicationButton
+            className="-mr-0.5 -mt-0.5"
+            onRetry={() => onRetry(app)}
+          />
+        ) : null}
+        {app.status === 'needs_attention' && onDismissAttention ? (
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => onDismissAttention(app)}
+            className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#555] transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        ) : null}
+      </div>
       <p className="mt-0.5 truncate text-xs text-[#666]">{app.role || 'Role'}</p>
 
       <ApplicationOutcomeChip app={app} />
 
-      {app.status === 'needs_attention' ? (
-        <button
-          type="button"
-          onClick={() => onAnswerClick?.(app)}
-          className="mt-2 w-full rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 py-1.5 font-label text-[11px] font-semibold text-[#f59e0b] transition-colors hover:bg-[#f59e0b]/15"
+      {isManualApplyRecommended(app) && app.job_url ? (
+        <a
+          href={app.job_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[#f59e0b]/25 bg-[#f59e0b]/[0.08] px-2 py-1 font-label text-[11px] font-medium text-[#f59e0b] transition-colors hover:border-[#f59e0b]/50 hover:bg-[#f59e0b]/[0.14]"
         >
-          Answer Required
-        </button>
-      ) : null}
-
-      {app.status === 'awaiting_code' ? (
-        <button
-          type="button"
-          onClick={() => onCodeClick?.(app)}
-          className="mt-2 w-full rounded-lg border border-[#22d3ee]/25 bg-[#22d3ee]/10 py-1.5 font-label text-[11px] font-semibold text-[#22d3ee] transition-colors hover:bg-[#22d3ee]/15"
-        >
-          Enter Email Code
-        </button>
+          <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
+          Apply manually
+        </a>
       ) : null}
 
       <div className="mt-2 flex items-center justify-between gap-2">

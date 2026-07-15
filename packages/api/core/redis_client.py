@@ -48,6 +48,32 @@ CODE_CONSUMED_TTL = 3600  # seconds
 # task's finally.
 GH_VERIFY_MUTEX_TTL = 1200  # seconds
 
+# Forwarded-inbound-message marker (apply:forward:{message_id}): a webhook redelivery
+# can never re-forward the same recruiter email to the user. TTL comfortably outlives
+# Svix's retry schedule. Claim-first — a crash mid-forward costs one missed forward,
+# never a duplicate (the in-app notification is the backstop either way).
+FORWARDED_MESSAGE_TTL = 7 * 24 * 3600  # seconds
+
+# Sentinel "user" scope for the SHARED AgentMail inbox (core/agentmail_inbox.py): all
+# users' Greenhouse codes land in ONE address, so when AgentMail is active a Greenhouse
+# apply must also hold the mutex under this scope — at most one application PLATFORM-
+# wide at the code gate keeps the shared inbox's inbound mail unambiguous.
+GH_SHARED_INBOX_SCOPE = "shared-inbox"
+
+# OTP-notice marker (apply:otpnotice:{application_id}): the user gets at most one
+# "Scout is handling the verification step" heads-up email per application per
+# window, however many code emails/redeliveries the inbox sees.
+OTP_NOTICE_TTL = 6 * 3600  # seconds
+
+# Parked OTP (apply:ghotp:parked): a Greenhouse verification email routinely BEATS the
+# gate stamp — Greenhouse sends it seconds after Submit, while the agent stamps the
+# gate only on its first request_verification_code call. When the webhook classifies
+# OTP-shaped mail but no application is awaiting_code yet, the code is parked here
+# (single shared slot — the GH_SHARED_INBOX_SCOPE mutex guarantees at most one
+# Greenhouse apply platform-wide is at the verification stage) for the relay poll to
+# claim. TTL bounds staleness; the relay also checks the embedded timestamp.
+PENDING_OTP_TTL = 900  # seconds
+
 _client: redis.Redis | None = None
 
 
@@ -85,6 +111,21 @@ def gate_key(application_id: str) -> str:
 
 def code_consumed_key(message_id: str) -> str:
     return f"apply:code:consumed:{message_id}"
+
+
+def pending_otp_key() -> str:
+    """Single shared parking slot for a Greenhouse OTP that arrived before the gate
+    was stamped (see PENDING_OTP_TTL). Value: JSON {"code": str, "ts": float}."""
+    return "apply:ghotp:parked"
+
+
+def forwarded_message_key(message_id: str) -> str:
+    return f"apply:forward:{message_id}"
+
+
+def otp_notice_key(application_id: str) -> str:
+    """One OTP heads-up email per application per OTP_NOTICE_TTL window."""
+    return f"apply:otpnotice:{application_id}"
 
 
 def gh_verify_mutex_key(user_id: str) -> str:

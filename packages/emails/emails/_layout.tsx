@@ -38,14 +38,18 @@ export const bodyText = {
   margin: '0 0 16px',
 } as const
 
+/** Mirrors the app's button system (packages/web/components/ui/button.tsx —
+ * rounded-md, bg-primary with a border-primary/70 edge, compact semibold label).
+ * Keep in sync when the app button changes. */
 export const ctaButton = {
   fontFamily: FONT_STACK,
-  fontSize: '15px',
+  fontSize: '14px',
   fontWeight: 600 as const,
   color: '#ffffff',
   backgroundColor: ACCENT,
-  borderRadius: '9999px',
-  padding: '12px 28px',
+  border: '1px solid rgba(255, 103, 51, 0.7)',
+  borderRadius: '6px',
+  padding: '9px 18px',
   textDecoration: 'none',
   display: 'inline-block',
 }
@@ -106,7 +110,7 @@ export function ScoutLayout({
               margin: 0,
             }}
           >
-            Scout: built by a student, for students.
+            Scout: Never Apply Again.
             <br />
             {footer ?? "You're receiving this because you have a Scout account."}
           </Text>

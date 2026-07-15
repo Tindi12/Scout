@@ -26,7 +26,7 @@ const PRO_FEATURES: Feature[] = [
 
 const SCOUT_PLUS_FEATURES: Feature[] = [
   { label: 'Everything in Pro' },
-  { label: '3x higher application volume', emphasis: true },
+  { label: '2.5× Pro application volume', emphasis: true },
   { label: 'Dedicated support queue' },
   { label: 'Early access to new features' },
   { label: 'Advanced analytics dashboard' },
@@ -78,7 +78,7 @@ export function Pricing() {
             <span className="font-body text-lg text-[#A1A1AA]">forever</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
-            25 lifetime applications
+            10 lifetime applications
           </p>
           <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
             Perfect for trying Scout&apos;s resume intelligence before you let
@@ -118,7 +118,7 @@ export function Pricing() {
             <span className="font-body text-lg text-[#A1A1AA]">/month</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
-            200 applications / 30 days
+            40 applications / 30 days
           </p>
           <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
             Unleash the full agent. Tailored resumes for every role, applied
@@ -158,7 +158,7 @@ export function Pricing() {
             <span className="font-body text-lg text-[#A1A1AA]">/month</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
-            600 applications / 30 days
+            100 applications / 30 days
           </p>
           <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
             Maximum volume, priority support, and first access when Scout ships

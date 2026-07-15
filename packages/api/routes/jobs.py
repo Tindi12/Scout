@@ -12,7 +12,8 @@ from core.entitlements import require_paid
 from core.rate_limit import job_match_rate_limit
 from core.subscription import get_tier_limits
 from core.supabase_client import supabase
-from services.job_matcher import match_jobs
+from services.job_matcher import match_jobs, search_jobs
+from services.role_keywords import resolve_role_ids_for_query, role_label
 from tasks.job_tasks import apply_to_job_task, refresh_jobs_task
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,70 @@ class MatchJobsRequest(BaseModel):
     remote_only: bool = False
     visa_friendly_only: bool = False
 
+
+class SearchJobsRequest(BaseModel):
+    query: str
+    limit: int = 50
+
 class ScoutRunRequest(BaseModel):
     job_ids: list[str]
+
+
+def _fetch_match_user(clerk_id: str) -> dict | None:
+    # supabase-py returns None (not a result object) from .maybe_single().execute()
+    # when there are zero rows, so guard the whole result, not just .data.
+    result = (
+        supabase.table("users")
+        .select("id, subscription_plan, requires_sponsorship, target_roles")
+        .eq("clerk_id", clerk_id)
+        .maybe_single()
+        .execute()
+    )
+    data = getattr(result, "data", None)
+    return data if isinstance(data, dict) else None
+
+
+def _fetch_latest_analysis(user_id: str) -> dict | None:
+    result = (
+        supabase.table("analyses")
+        .select("id, resume_id, score, target_role")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .maybe_single()
+        .execute()
+    )
+    data = getattr(result, "data", None)
+    return data if isinstance(data, dict) else None
+
+
+def _fetch_resume_for_match(resume_id: str) -> dict:
+    result = (
+        supabase.table("resumes")
+        .select("embedding, parsed_content")
+        .eq("id", resume_id)
+        .single()
+        .execute()
+    )
+    return result.data
+
+
+async def _load_match_context(clerk_id: str) -> tuple[dict, dict, dict]:
+    """User row + latest analysis + resume row, or the 404s both endpoints share."""
+    user_row = await run_in_threadpool(_fetch_match_user, clerk_id)
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    analysis = await run_in_threadpool(_fetch_latest_analysis, user_row["id"])
+    if not analysis:
+        raise HTTPException(
+            status_code=404,
+            detail="No resume analysis found. Upload and analyze your resume first.",
+        )
+
+    resume = await run_in_threadpool(_fetch_resume_for_match, analysis["resume_id"])
+    return user_row, analysis, resume
+
 
 @router.post("/match")
 async def get_job_matches(
@@ -34,56 +97,7 @@ async def get_job_matches(
     current_user: dict = Depends(verify_resume_api_user),
     _rl: dict = Depends(job_match_rate_limit),
 ) -> list[dict]:
-    clerk_id = current_user["sub"]
-
-    def _fetch_user() -> dict | None:
-        # supabase-py returns None (not a result object) from .maybe_single().execute()
-        # when there are zero rows, so guard the whole result, not just .data.
-        result = (
-            supabase.table("users")
-            .select("id, subscription_plan, requires_sponsorship, target_roles")
-            .eq("clerk_id", clerk_id)
-            .maybe_single()
-            .execute()
-        )
-        data = getattr(result, "data", None)
-        return data if isinstance(data, dict) else None
-
-    def _fetch_analysis(user_id: str) -> dict | None:
-        result = (
-            supabase.table("analyses")
-            .select("id, resume_id, score, target_role")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .maybe_single()
-            .execute()
-        )
-        data = getattr(result, "data", None)
-        return data if isinstance(data, dict) else None
-
-    def _fetch_resume(resume_id: str) -> dict:
-        result = (
-            supabase.table("resumes")
-            .select("embedding, parsed_content")
-            .eq("id", resume_id)
-            .single()
-            .execute()
-        )
-        return result.data
-
-    user_row = await run_in_threadpool(_fetch_user)
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    analysis = await run_in_threadpool(_fetch_analysis, user_row["id"])
-    if not analysis:
-        raise HTTPException(
-            status_code=404,
-            detail="No resume analysis found. Upload and analyze your resume first.",
-        )
-
-    resume = await run_in_threadpool(_fetch_resume, analysis["resume_id"])
+    user_row, analysis, resume = await _load_match_context(current_user["sub"])
 
     if resume["embedding"] is None:
         text = json.dumps(resume["parsed_content"])[:3000]
@@ -114,6 +128,44 @@ async def get_job_matches(
         results = [j for j in results if j.get("visa_sponsorship") != "no"]
 
     return results
+
+
+@router.post("/search")
+async def search_job_database(
+    request: SearchJobsRequest,
+    current_user: dict = Depends(verify_resume_api_user),
+    _rl: dict = Depends(job_match_rate_limit),
+) -> list[dict]:
+    """Role search over the WHOLE jobs table (not just the user's matches).
+
+    The typed query drives retrieval; the user's resume drives ranking, so a
+    SWE with ChemE coursework can search "cheme" and see those roles bucketed
+    into the normal Strong/Good/Stretch columns.
+    """
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query is required")
+    if len(query) > 120:
+        raise HTTPException(status_code=422, detail="query is too long")
+
+    user_row, analysis, resume = await _load_match_context(current_user["sub"])
+
+    role_ids = resolve_role_ids_for_query(query)
+    resolved_label = role_label(role_ids[0]) if role_ids else None
+    embed_text = f"{resolved_label or query} internship"
+    query_embedding = await generate_embedding(embed_text)
+
+    limit = max(1, min(request.limit, 100))
+    return await search_jobs(
+        query=query,
+        query_embedding=query_embedding,
+        parsed_resume=resume["parsed_content"],
+        role_ids=role_ids,
+        requires_sponsorship=user_row["requires_sponsorship"],
+        limit=limit,
+        user_id=user_row["id"],
+        resume_quality_score=analysis.get("score"),
+    )
 
 
 @router.get("/")

@@ -1,6 +1,6 @@
 """Account-deletion endpoint safety properties.
 
-Hermetic (no Supabase/Stripe/Composio network): the orchestrator's step functions are
+Hermetic (no Supabase/Stripe network): the orchestrator's step functions are
 monkeypatched at the module level, but auth, routing, and the abort-before-DB ordering
 run for real. The properties proven here are the ones that make deletion safe to ship:
 
@@ -52,7 +52,6 @@ def test_external_failure_aborts_before_db_delete(monkeypatch: pytest.MonkeyPatc
         "id": "aaaaaaaa-0000-0000-0000-000000000001",
         "stripe_customer_id": "cus_123",
         "stripe_subscription_id": "sub_123",
-        "composio_account_id": None,
     }
     monkeypatch.setattr(deletion, "_fetch_deletion_row", lambda clerk_id: row)
 
@@ -81,52 +80,14 @@ def test_external_failure_aborts_before_db_delete(monkeypatch: pytest.MonkeyPatc
     assert db_calls == []
 
 
-def test_composio_disconnect_failure_is_non_blocking(monkeypatch: pytest.MonkeyPatch):
-    """Composio remote revoke is best-effort — a 500 must not block deletion."""
-    row = {
-        "id": "aaaaaaaa-0000-0000-0000-000000000001",
-        "email": "user@example.com",
-        "name": "Test User",
-        "stripe_customer_id": None,
-        "stripe_subscription_id": None,
-        "composio_account_id": "ca_9-IsYM1EdGGk",
-    }
-    monkeypatch.setattr(deletion, "_fetch_deletion_row", lambda clerk_id: row)
-    monkeypatch.setattr(deletion.composio_mail, "is_configured", lambda: True)
-
-    def _composio_500(_account_id: str) -> None:
-        raise RuntimeError(
-            "Error code: 500 - Failed to delete connected account by id"
-        )
-
-    monkeypatch.setattr(deletion.composio_mail, "disconnect", _composio_500)
-    monkeypatch.setattr(deletion, "_purge_bucket_prefix", lambda b, p: deletion.SKIPPED)
-
-    db_calls: list[str] = []
-    monkeypatch.setattr(
-        deletion, "_delete_users_row", lambda cid: db_calls.append(cid) or deletion.DELETED
-    )
-
-    res = client.post("/account/delete", headers=_headers("user_a"))
-
-    assert res.status_code == 200
-    body = res.json()
-    assert body["ok"] is True
-    assert body["steps"]["composio_mail"] == deletion.SKIPPED
-    assert body["steps"]["database"] == deletion.DELETED
-    assert db_calls == ["user_a"]
-
-
 def test_full_success_reports_every_step(monkeypatch: pytest.MonkeyPatch):
     row = {
         "id": "aaaaaaaa-0000-0000-0000-000000000001",
         "stripe_customer_id": "cus_123",
         "stripe_subscription_id": None,
-        "composio_account_id": "conn_123",
     }
     monkeypatch.setattr(deletion, "_fetch_deletion_row", lambda clerk_id: row)
     monkeypatch.setattr(deletion, "_delete_stripe_customer", lambda cid: deletion.DELETED)
-    monkeypatch.setattr(deletion, "_disconnect_composio", lambda aid: deletion.DELETED)
     monkeypatch.setattr(deletion, "_purge_bucket_prefix", lambda b, p: deletion.DELETED)
     monkeypatch.setattr(deletion, "_delete_users_row", lambda cid: deletion.DELETED)
 

@@ -31,7 +31,7 @@ export default function PricingPage() {
         <LandingRails />
 
         {/* Hero + tier cards */}
-        <section className="relative px-6 pb-20 pt-36 lg:px-12">
+        <section className="relative px-6 pb-20 pt-28 lg:px-12 lg:pt-32">
           <header className="mx-auto mb-16 max-w-3xl text-center">
             <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
               Pricing
@@ -63,7 +63,7 @@ export default function PricingPage() {
 
             <p className="mx-auto mt-16 max-w-2xl text-center font-body text-[13px] leading-relaxed text-[#71717A]">
               Plans are billed monthly and you can cancel anytime from the
-              billing portal. Prices in USD. Free includes 25 lifetime
+              billing portal. Prices in USD. Free includes 10 lifetime
               applications.
             </p>
           </section>

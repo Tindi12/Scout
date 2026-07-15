@@ -13,6 +13,18 @@ def detect_portal(url: str, portal: str = "unknown") -> str:
         result = "ashby"
     elif "myworkdayjobs.com" in url:
         result = "workday"
+    elif "smartrecruiters.com" in url:
+        result = "smartrecruiters"
+    elif "workable.com" in url:
+        result = "workable"
+    elif "recruitee.com" in url:
+        result = "recruitee"
+    elif "bamboohr.com" in url:
+        result = "bamboohr"
+    elif "teamtailor.com" in url:
+        result = "teamtailor"
+    elif "icims.com" in url:
+        result = "icims"
     elif "usajobs.gov" in url:
         result = "usajobs"
     else:

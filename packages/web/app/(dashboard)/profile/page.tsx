@@ -10,6 +10,7 @@ import {
   Heart,
   Info,
   Library,
+  Lock,
   Mail,
   MapPin,
   MessageSquare,
@@ -30,6 +31,7 @@ import {
   type ProfileData,
 } from '@/app/actions/profile'
 import type { TargetRole } from '@/app/actions/onboarding'
+import { ClearanceChips } from '@/components/profile/ClearanceChips'
 import { CompactRoleGrid } from '@/components/profile/CompactRoleGrid'
 import { CoverLetterOpeningInfo } from '@/components/profile/CoverLetterOpeningInfo'
 import { FieldRow, type FieldStatus } from '@/components/profile/FieldRow'
@@ -45,6 +47,7 @@ import { ProfileProgress } from '@/components/profile/ProfileProgress'
 import { ProfileSection } from '@/components/profile/ProfileSection'
 import { SchoolAutocomplete } from '@/components/profile/SchoolAutocomplete'
 import { Toggle } from '@/components/profile/Toggle'
+import { TranscriptUpload } from '@/components/profile/TranscriptUpload'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -66,6 +69,7 @@ import {
   type DegreeType,
   type HeardAboutUs,
   type RemotePreference,
+  type SecurityClearanceStatus,
   type WorkAuthorization,
 } from '@/lib/profile-completion'
 import { scoutLogo } from '@/lib/scout-logo'
@@ -75,6 +79,7 @@ import { cn } from '@/lib/utils'
 type SectionId =
   | 'personal'
   | 'authorization'
+  | 'clearance'
   | 'education'
   | 'preferences'
   | 'application'
@@ -194,6 +199,9 @@ const EMPTY_PROFILE: ProfileData = {
   cpt_eligible: false,
   opt_eligible: false,
   requires_sponsorship: null,
+  security_clearance_status: null,
+  security_clearances: [],
+  willing_to_obtain_clearance: false,
   school: null,
   degree_type: null,
   major: null,
@@ -224,6 +232,15 @@ const WORK_AUTH_OPTIONS: ReadonlyArray<{ value: WorkAuthorization; label: string
   { value: 'h1b', label: 'H-1B Visa' },
   { value: 'other_visa', label: 'Other Visa' },
   { value: 'not_authorized', label: 'Not Authorized' },
+]
+
+const CLEARANCE_STATUS_OPTIONS: ReadonlyArray<{
+  value: SecurityClearanceStatus
+  label: string
+}> = [
+  { value: 'none', label: 'No clearance' },
+  { value: 'active', label: 'Active clearance' },
+  { value: 'inactive', label: 'Previously held' },
 ]
 
 const DEGREE_OPTIONS: ReadonlyArray<{ value: DegreeType; label: string }> = [
@@ -540,6 +557,10 @@ export default function ProfilePage() {
           opt_eligible: false,
         }))
       }
+      // Selecting "No clearance" clears the levels list (server does the same)
+      if (key === 'security_clearance_status' && value === 'none') {
+        setProfile((prev) => ({ ...prev, security_clearances: [] }))
+      }
       await persistField(key, value, section, label)
     },
     [persistField, updateLocal],
@@ -560,6 +581,7 @@ export default function ProfilePage() {
         trimmed(profile.address_zip) &&
         trimmed(profile.address_country),
       authorization: Boolean(profile.work_authorization),
+      clearance: Boolean(profile.security_clearance_status),
       education:
         trimmed(profile.school) &&
         Boolean(profile.degree_type) &&
@@ -932,6 +954,86 @@ export default function ProfilePage() {
       </ProfileSection>
 
       <ProfileSection
+        title="Security Clearance"
+        icon={Lock}
+        description="Defense, aerospace, and government applications often ask about clearances. Scout answers these questions exactly as you set them here."
+        complete={sectionComplete.clearance}
+      >
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs leading-relaxed text-[#888]">
+          A security clearance is granted by the U.S. government (e.g. Secret, Top
+          Secret, TS/SCI) — usually through a past job, internship, or military
+          service. Most students don&apos;t have one: if that&apos;s you, pick{' '}
+          <span className="text-[#aaa]">No clearance</span> so Scout answers
+          confidently instead of guessing.
+        </div>
+
+        <FieldRow
+          label="Clearance status"
+          status={statusByField.security_clearance_status}
+          errorMessage={errorByField.security_clearance_status}
+        >
+          <PillGroup<SecurityClearanceStatus>
+            ariaLabel="Security clearance status"
+            options={CLEARANCE_STATUS_OPTIONS}
+            value={profile.security_clearance_status}
+            onChange={(value) =>
+              void commitImmediate(
+                'security_clearance_status',
+                value,
+                'clearance',
+                'Clearance status',
+              )
+            }
+          />
+        </FieldRow>
+
+        {(profile.security_clearance_status === 'active' ||
+          profile.security_clearance_status === 'inactive') && (
+          <FieldRow
+            htmlFor="profile-clearances"
+            label={
+              profile.security_clearance_status === 'active'
+                ? 'Clearances you hold'
+                : 'Clearances you previously held'
+            }
+            helper="Pick from the common levels or type your own (e.g. DoE Q)."
+            status={statusByField.security_clearances}
+            errorMessage={errorByField.security_clearances}
+          >
+            <ClearanceChips
+              id="profile-clearances"
+              values={profile.security_clearances}
+              onChange={(next) =>
+                void commitImmediate(
+                  'security_clearances',
+                  next,
+                  'clearance',
+                  'Clearances',
+                )
+              }
+            />
+          </FieldRow>
+        )}
+
+        {profile.security_clearance_status !== 'active' && (
+          <Toggle
+            id="willing-clearance"
+            label="Willing to obtain a clearance if a role requires it"
+            description="Some postings ask whether you'd undergo a background investigation for a clearance. Scout answers with this."
+            checked={profile.willing_to_obtain_clearance}
+            onChange={(value) =>
+              void commitImmediate(
+                'willing_to_obtain_clearance',
+                value,
+                'clearance',
+                'Clearance willingness',
+              )
+            }
+          />
+        )}
+      </ProfileSection>
+
+      <ProfileSection
         title="Education"
         icon={GraduationCap}
         description="Scout uses this to fill education fields on applications"
@@ -1087,6 +1189,14 @@ export default function ProfilePage() {
             />
           </FieldRow>
         </div>
+
+        <FieldRow
+          label="Unofficial transcript"
+          optional
+          helper="Some university postings require a transcript upload — Scout attaches this file when a form asks for one. Without it, those applications stop and ask you to apply manually."
+        >
+          <TranscriptUpload />
+        </FieldRow>
       </ProfileSection>
 
       <ProfileSection

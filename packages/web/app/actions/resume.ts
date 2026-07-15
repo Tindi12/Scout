@@ -102,6 +102,15 @@ export async function uploadResume(formData: FormData): Promise<{
     return { success: false, error: 'File must be under 10MB' }
   }
 
+  const lowerName = raw.name.toLowerCase()
+  const fileType = lowerName.endsWith('.pdf')
+    ? 'pdf'
+    : lowerName.endsWith('.docx')
+      ? 'docx'
+      : null
+  if (!fileType) {
+    return { success: false, error: 'Please upload a PDF or DOCX file' }
+  }
   if (raw.type && !ACCEPT_MIME.has(raw.type)) {
     return { success: false, error: 'Please upload a PDF or DOCX file' }
   }
@@ -138,7 +147,7 @@ export async function uploadResume(formData: FormData): Promise<{
       user_id: resolvedSupabaseUserId,
       storage_path: storagePath,
       filename: raw.name,
-      file_type: raw.type.includes('pdf') ? 'pdf' : 'docx',
+      file_type: fileType,
       is_current: true,
     })
     .select('id')

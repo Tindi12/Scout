@@ -1,8 +1,8 @@
 export type SubscriptionPlan = 'free' | 'pro' | 'scout_plus'
 
-export const FREE_APPLICATION_LIMIT = 25
-export const PRO_APPLICATION_LIMIT = 200
-export const SCOUT_PLUS_APPLICATION_LIMIT = 600
+export const FREE_APPLICATION_LIMIT = 10
+export const PRO_APPLICATION_LIMIT = 40
+export const SCOUT_PLUS_APPLICATION_LIMIT = 100
 
 /**
  * Coerce a raw subscription_plan value to a canonical tier string. Defends
@@ -32,14 +32,18 @@ export function planDisplayLabel(plan: SubscriptionPlan): string {
   }
 }
 
+/** Shared chrome for tier pills — matches SendScoutButton / button chip shape. */
+export const planBadgeBaseClassName =
+  'inline-flex items-center rounded-md border px-2 py-0.5 font-label text-[10px] font-semibold uppercase tracking-[0.12em]'
+
 export function planBadgeClassName(plan: SubscriptionPlan): string {
   switch (plan) {
     case 'scout_plus':
-      return 'bg-[#F5C542]/15 text-[#F5C542]'
+      return 'border-[#F5C542]/25 bg-[#F5C542]/[0.06] text-[#D4AF37]'
     case 'pro':
-      return 'bg-[#FF6733]/15 text-[#FF6733]'
+      return 'border-primary/30 bg-primary/[0.08] text-[#FF8A5C]'
     default:
-      return 'bg-white/[0.06] text-[#888]'
+      return 'border-white/[0.08] bg-white/[0.04] text-[#777]'
   }
 }
 

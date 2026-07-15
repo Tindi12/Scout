@@ -9,12 +9,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { PlanBadge } from '@/components/billing/PlanBadge'
 import {
   FREE_APPLICATION_LIMIT,
   PRO_APPLICATION_LIMIT,
   SCOUT_PLUS_APPLICATION_LIMIT,
   creditsPeriodLabel,
-  planBadgeClassName,
   planDisplayLabel,
   type SubscriptionPlan,
 } from '@/lib/subscription-plan'
@@ -60,14 +60,7 @@ function CreditsInfoPanel({ plan }: { plan?: SubscriptionPlan | null }) {
                 isCurrent && 'bg-white/[0.04] ring-1 ring-white/[0.08]',
               )}
             >
-              <span
-                className={cn(
-                  'inline-flex rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wider',
-                  planBadgeClassName(row.plan),
-                )}
-              >
-                {planDisplayLabel(row.plan)}
-              </span>
+              <PlanBadge plan={row.plan} />
               <span className="font-body tabular-nums text-[#ccc]">
                 {row.limit}{' '}
                 <span className="text-[#666]">
@@ -78,6 +71,15 @@ function CreditsInfoPanel({ plan }: { plan?: SubscriptionPlan | null }) {
           )
         })}
       </ul>
+
+      <p className="mt-3 border-t border-white/[0.06] pt-2 font-body text-xs leading-relaxed text-[#aaa]">
+        <span className="font-semibold text-[#ccc]">
+          Failed applications do not cost you credits.
+        </span>{' '}
+        If an application fails, your credits are automatically refunded and
+        you can retry the application anytime. Credits are only used when
+        Scout successfully begins a new application attempt.
+      </p>
 
       <p className="mt-3 border-t border-white/[0.06] pt-2 font-body text-[10px] leading-relaxed text-[#666]">
         Paid plans reset each billing period. Free credits are lifetime and do

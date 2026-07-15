@@ -1,0 +1,9 @@
+@keyframes analytics-connector-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.analytics-connector {
+  animation: analytics-connector-dash 2s linear infinite;
+}

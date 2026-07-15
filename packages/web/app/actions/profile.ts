@@ -11,6 +11,7 @@ import {
   type HeardAboutUs,
   type ProfileData as BaseProfileData,
   type RemotePreference,
+  type SecurityClearanceStatus,
   type WorkAuthorization,
 } from '@/lib/profile-completion'
 
@@ -55,6 +56,9 @@ const PROFILE_COLUMNS = [
   'cpt_eligible',
   'opt_eligible',
   'requires_sponsorship',
+  'security_clearance_status',
+  'security_clearances',
+  'willing_to_obtain_clearance',
   'school',
   'degree_type',
   'major',
@@ -125,6 +129,29 @@ const ALLOWED_HEARD: ReadonlySet<HeardAboutUs> = new Set<HeardAboutUs>([
 
 const ALLOWED_OPEN_ENDED: ReadonlySet<OpenEndedPreference> =
   new Set<OpenEndedPreference>(['auto', 'library', 'sms', 'email'])
+
+const ALLOWED_CLEARANCE_STATUS: ReadonlySet<SecurityClearanceStatus> =
+  new Set<SecurityClearanceStatus>(['none', 'active', 'inactive'])
+
+const CLEARANCE_MAX_ENTRIES = 10
+const CLEARANCE_MAX_LENGTH = 80
+
+function normalizeClearances(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const seen = new Set<string>()
+  const cleaned: string[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+    const trimmed = entry.trim().slice(0, CLEARANCE_MAX_LENGTH)
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    cleaned.push(trimmed)
+    if (cleaned.length >= CLEARANCE_MAX_ENTRIES) break
+  }
+  return cleaned
+}
 
 const ANSWERS_LIBRARY_KEYS = [
   'why_company',
@@ -257,11 +284,22 @@ function buildUpdates(
     if (v !== undefined) updates.heard_about_us = v
   }
 
+  if (Object.prototype.hasOwnProperty.call(patch, 'security_clearance_status')) {
+    const v = pickEnum(patch.security_clearance_status, ALLOWED_CLEARANCE_STATUS)
+    if (v !== undefined) updates.security_clearance_status = v
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'security_clearances')) {
+    const v = normalizeClearances(patch.security_clearances)
+    if (v !== undefined) updates.security_clearances = v
+  }
+
   for (const key of [
     'cpt_eligible',
     'opt_eligible',
     'willing_to_relocate',
     'generate_cover_letters',
+    'willing_to_obtain_clearance',
   ] as const) {
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
       const v = asBoolean(patch[key])
@@ -358,6 +396,13 @@ export async function updateProfile(
       ...(updates.answers_library as AnswersLibrary),
     }
     merged.answers_library = updates.answers_library as AnswersLibrary
+  }
+
+  if ('security_clearance_status' in updates) {
+    const status = updates.security_clearance_status as SecurityClearanceStatus | null
+    if (status === 'none' || status === null) {
+      updates.security_clearances = []
+    }
   }
 
   if ('work_authorization' in updates) {

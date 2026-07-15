@@ -43,9 +43,21 @@ export type ApplicationRecord = {
   role: string
   job_url: string
   error_message: string | null
+  /** Machine reason derived server-side (e.g. spam_blocked). Not user-facing. */
+  failure_code?: string | null
   applied_at: string | null
   created_at?: string | null
   updated_at?: string | null
+  /**
+   * created_at of this application's most recent notification event, i.e. the
+   * true "last changed" time. applications.created_at is frozen at the row's
+   * ORIGINAL creation and does NOT move when a retry/re-queue reuses the same
+   * row for a new attempt (new scout_run_id, new status, same id) — displaying
+   * it as "how long ago" for a retried application shows a stale date. Prefer
+   * this field; fall back to created_at only when it's absent (e.g. an app that
+   * has never had a terminal transition yet). See GET /api/applications.
+   */
+  status_changed_at?: string | null
 }
 
 /**
@@ -106,7 +118,9 @@ export const STATUS_CONFIG: Record<
 > = {
   queued: { color: '#444', label: 'QUEUED', columnColor: '#444' },
   in_progress: { color: '#FF6733', label: 'APPLYING', columnColor: '#FF6733' },
-  awaiting_code: { color: '#22d3ee', label: 'CODE NEEDED', columnColor: '#22d3ee' },
+  // awaiting_code is agent-internal (Scout retrieves the emailed code itself);
+  // render it as a normal verifying step, never as a user action.
+  awaiting_code: { color: '#22d3ee', label: 'VERIFYING', columnColor: '#22d3ee' },
   applied: { color: '#22c55e', label: 'APPLIED', columnColor: '#22c55e' },
   failed: { color: '#ef4444', label: 'FAILED', columnColor: '#ef4444' },
   needs_attention: {
@@ -116,7 +130,18 @@ export const STATUS_CONFIG: Record<
   },
 }
 
-export type PortalType = 'greenhouse' | 'lever' | 'ashby' | 'workday' | 'unknown'
+export type PortalType =
+  | 'greenhouse'
+  | 'lever'
+  | 'ashby'
+  | 'workday'
+  | 'smartrecruiters'
+  | 'workable'
+  | 'recruitee'
+  | 'bamboohr'
+  | 'teamtailor'
+  | 'icims'
+  | 'unknown'
 
 export const PORTAL_META: Record<
   Exclude<PortalType, 'unknown'>,
@@ -138,6 +163,30 @@ export const PORTAL_META: Record<
     label: 'Workday',
     classes: 'bg-white/[0.06] text-[#888]',
   },
+  smartrecruiters: {
+    label: 'SmartRecruiters',
+    classes: 'bg-sky-500/10 text-sky-400',
+  },
+  workable: {
+    label: 'Workable',
+    classes: 'bg-orange-500/10 text-orange-400',
+  },
+  recruitee: {
+    label: 'Recruitee',
+    classes: 'bg-teal-500/10 text-teal-400',
+  },
+  bamboohr: {
+    label: 'BambooHR',
+    classes: 'bg-emerald-500/10 text-emerald-400',
+  },
+  teamtailor: {
+    label: 'Teamtailor',
+    classes: 'bg-fuchsia-500/10 text-fuchsia-400',
+  },
+  icims: {
+    label: 'iCIMS',
+    classes: 'bg-cyan-500/10 text-cyan-400',
+  },
 }
 
 export function isCancelledByUser(
@@ -147,14 +196,57 @@ export function isCancelledByUser(
   return value === 'cancelled_by_user' || value.startsWith('cancelled_by_user')
 }
 
+/** Failure codes that must not re-enter Scout's automatic apply flow. */
+const NON_RETRYABLE_FAILURE_CODES = new Set(['spam_blocked', 'captcha_detected'])
+
+/**
+ * Whether the tracker should offer Retry for this application. Spam/CAPTCHA
+ * blocks reinforce the ATS verdict when re-automated — apply manually instead.
+ */
+export function isRetryableApplication(
+  app: Pick<ApplicationRecord, 'status' | 'failure_code' | 'error_message'>,
+): boolean {
+  if (app.status !== 'failed' && app.status !== 'needs_attention') return false
+  const code = (app.failure_code || '').trim().toLowerCase()
+  if (code && NON_RETRYABLE_FAILURE_CODES.has(code)) return false
+  // Belt-and-suspenders for older rows that lack failure_code but carry spam text.
+  const msg = (app.error_message || '').toLowerCase()
+  if (msg.includes('possible spam') || msg.includes('spam and refused')) return false
+  if (msg.includes('captcha verification required')) return false
+  return true
+}
+
+/**
+ * Whether the tracker should show an "Apply manually" link instead of Retry.
+ * True exactly for spam/CAPTCHA-blocked terminal applications: re-automating
+ * them reinforces the ATS verdict, but a human applying on the job page works.
+ */
+export function isManualApplyRecommended(
+  app: Pick<ApplicationRecord, 'status' | 'failure_code' | 'error_message'>,
+): boolean {
+  if (app.status !== 'failed' && app.status !== 'needs_attention') return false
+  const code = (app.failure_code || '').trim().toLowerCase()
+  if (code && NON_RETRYABLE_FAILURE_CODES.has(code)) return true
+  const msg = (app.error_message || '').toLowerCase()
+  if (msg.includes('possible spam') || msg.includes('spam and refused')) return true
+  if (msg.includes('captcha verification required')) return true
+  return false
+}
+
+// Short, strictly user-facing chip labels — never surface internal mechanics
+// (vendors, sessions, timeouts). The hover summary carries the full story.
 export function failureShortLabel(errorMessage: string): string {
   if (isCancelledByUser(errorMessage)) return 'Cancelled'
   const lower = errorMessage.toLowerCase()
   if (lower.includes('pdflatex')) return 'Resume issue'
+  if (lower.includes('missing_required_document')) return 'Document needed'
+  if (lower.includes('spam')) return 'Spam blocked'
   if (lower.includes('service limit') || lower.includes('browserbase')) {
-    return 'Scout limit reached'
+    return 'Temporary issue'
   }
-  if (lower.includes('browser_session')) return 'Session dropped'
+  if (lower.includes('browser_session') || lower.includes('planner_deadlock')) {
+    return 'Interrupted'
+  }
   if (lower.includes('verification') || lower.includes('captcha')) {
     return 'Verification needed'
   }
@@ -185,8 +277,8 @@ export type RunStatusCounts = {
  * failure paths never make (cancellations, kill artifacts, backfills), so they
  * can read 0 while the kanban — which counts rows — shows the truth. Always
  * derive from rows; fall back to the stored counters only when the payload has
- * no applications attached. `attention` includes awaiting_code: it needs the
- * user's eyes just as urgently.
+ * no applications attached. awaiting_code is NOT attention — Scout retrieves
+ * the code itself; it renders as an active verifying step.
  */
 export function runStatusCounts(run: ScoutRun): RunStatusCounts {
   if (run.applications.length === 0) {
@@ -202,8 +294,7 @@ export function runStatusCounts(run: ScoutRun): RunStatusCounts {
   for (const a of run.applications) {
     if (a.status === 'applied') applied += 1
     else if (a.status === 'failed') failed += 1
-    else if (a.status === 'needs_attention' || a.status === 'awaiting_code')
-      attention += 1
+    else if (a.status === 'needs_attention') attention += 1
   }
   return { applied, failed, attention }
 }
@@ -230,13 +321,21 @@ export type LifetimeOverviewStats = {
 
 export function lifetimeStatsFromApps(
   apps: ApplicationRecord[],
+  /**
+   * Same dismissal predicate the kanban uses to drop X-ed attention cards.
+   * Without it the header ATTENTION stat counts rows the board no longer
+   * shows — a phantom "1 needs attention" over zero visible cards.
+   */
+  isApplicationDismissed?: (applicationId: string) => boolean,
 ): LifetimeOverviewStats {
   const applied = apps.filter((a) => a.status === 'applied').length
   const failed = apps.filter((a) => a.status === 'failed').length
-  // awaiting_code counts as attention — it's shown in the kanban ATTENTION
-  // column and needs the user's eyes just as urgently.
+  // awaiting_code is deliberately excluded — Scout handles the code itself,
+  // so it renders as an active verifying step, not attention.
   const needsAttention = apps.filter(
-    (a) => a.status === 'needs_attention' || a.status === 'awaiting_code',
+    (a) =>
+      a.status === 'needs_attention' &&
+      !(isApplicationDismissed && isApplicationDismissed(a.id)),
   ).length
   const terminal = applied + failed + needsAttention
   const progressPct =
@@ -293,6 +392,12 @@ export function detectPortalFromUrl(url: string): PortalType {
   if (lower.includes('lever.co')) return 'lever'
   if (lower.includes('ashbyhq.com')) return 'ashby'
   if (lower.includes('myworkdayjobs.com')) return 'workday'
+  if (lower.includes('smartrecruiters.com')) return 'smartrecruiters'
+  if (lower.includes('workable.com')) return 'workable'
+  if (lower.includes('recruitee.com')) return 'recruitee'
+  if (lower.includes('bamboohr.com')) return 'bamboohr'
+  if (lower.includes('teamtailor.com')) return 'teamtailor'
+  if (lower.includes('icims.com')) return 'icims'
   return 'unknown'
 }
 

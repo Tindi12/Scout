@@ -173,6 +173,10 @@ export function ResumeUpload({
   const inputRef = useRef<HTMLInputElement>(null)
   const analyzeCreepRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bumping this invalidates any in-flight analyze run (cancel or unmount),
+  // so a stale run can never navigate or write state afterwards.
+  const runIdRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
 
   const clearAnalyzeCreep = useCallback(() => {
     if (analyzeCreepRef.current) {
@@ -211,12 +215,32 @@ export function ResumeUpload({
 
   useEffect(() => {
     return () => {
+      runIdRef.current += 1
+      abortRef.current?.abort()
+      abortRef.current = null
       clearAnalyzeCreep()
       if (successTimeoutRef.current) {
         clearTimeout(successTimeoutRef.current)
         successTimeoutRef.current = null
       }
     }
+  }, [clearAnalyzeCreep])
+
+  const handleCancelUpload = useCallback(() => {
+    runIdRef.current += 1
+    abortRef.current?.abort()
+    abortRef.current = null
+    clearAnalyzeCreep()
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current)
+      successTimeoutRef.current = null
+    }
+    // Back to the selected file so a retry is one click away.
+    setState((prev) =>
+      prev.status === 'uploading'
+        ? { status: 'selected', file: prev.file }
+        : { status: 'idle' },
+    )
   }, [clearAnalyzeCreep])
 
   const acceptFile = useCallback((file: File) => {
@@ -262,6 +286,11 @@ export function ResumeUpload({
     if (state.status !== 'selected') return
     const file = state.file
 
+    const runId = ++runIdRef.current
+    const controller = new AbortController()
+    abortRef.current = controller
+    const stale = () => runIdRef.current !== runId
+
     patchUpload(file, 6, 'uploading_file')
 
     try {
@@ -271,6 +300,7 @@ export function ResumeUpload({
       fd.append('supabaseUserId', supabaseUserId)
 
       const result = await uploadResume(fd)
+      if (stale()) return
 
       if (!result.success || !result.resumeId) {
         clearAnalyzeCreep()
@@ -292,6 +322,7 @@ export function ResumeUpload({
         .select('target_roles')
         .eq('clerk_id', userId)
         .maybeSingle()
+      if (stale()) return
 
       if (rolesError) {
         console.warn('Could not load target_roles:', rolesError.message)
@@ -313,11 +344,14 @@ export function ResumeUpload({
           resume_id: result.resumeId,
           target_role: targetRoleLabel,
         }),
+        signal: controller.signal,
       })
 
       clearAnalyzeCreep()
+      if (stale()) return
 
       const analyzeText = await analyzeRes.text()
+      if (stale()) return
       if (!analyzeRes.ok) {
         let message = 'Could not analyze resume. Please try again.'
         try {
@@ -355,11 +389,15 @@ export function ResumeUpload({
       }
 
       successTimeoutRef.current = setTimeout(() => {
+        if (stale()) return
         router.push(`/resume/analysis?id=${analysisId}`)
         onSuccess?.()
       }, 800)
     } catch (err) {
       clearAnalyzeCreep()
+      if (stale() || (err instanceof DOMException && err.name === 'AbortError')) {
+        return
+      }
       setState({
         status: 'error',
         message:
@@ -404,6 +442,7 @@ export function ResumeUpload({
           file={state.file}
           progress={state.progress}
           phase={state.phase}
+          onCancel={handleCancelUpload}
         />
       ) : null}
 
@@ -546,14 +585,18 @@ function SelectedView({
   )
 }
 
+const PROGRESS_TICKS = 48
+
 function UploadingView({
   file,
   progress,
   phase,
+  onCancel,
 }: {
   file: File
   progress: number
   phase: UploadPhase
+  onCancel: () => void
 }) {
   const [statusLine, setStatusLine] = useState(() =>
     pickScoutStatus(phase, []),
@@ -584,6 +627,7 @@ function UploadingView({
   }, [phase])
 
   const clamped = Math.max(4, Math.min(100, progress))
+  const litTicks = Math.round((clamped / 100) * PROGRESS_TICKS)
   const phaseLabel =
     phase === 'uploading_file'
       ? 'Uploading'
@@ -604,26 +648,37 @@ function UploadingView({
           {phaseLabel}…{' '}
           <span className="text-white">{file.name}</span>
         </p>
-        <span className="shrink-0 font-label text-xs font-medium tabular-nums text-[#888]">
-          {Math.round(clamped)}%
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="font-label text-xs font-medium tabular-nums text-[#888]">
+            {Math.round(clamped)}%
+          </span>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="font-label text-xs text-[#888] transition-colors hover:text-white"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
 
-      <div className="relative h-2 w-full overflow-visible rounded-full bg-white/[0.04]">
-        <div
-          className="animate-scout-bar-shimmer absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/90 to-primary transition-[width] duration-300 ease-out"
-          style={{ width: `${clamped}%` }}
-        />
-        <div
-          className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 transition-[left] duration-300 ease-out"
-          style={{ left: `${clamped}%` }}
-          aria-hidden
-        >
-          <div className="animate-scout-comet-strike relative -translate-x-full">
-            <span className="block h-[2px] w-10 bg-gradient-to-r from-transparent via-white/30 to-white/90" />
-            <span className="animate-scout-comet-pulse absolute right-0 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white" />
-          </div>
-        </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(clamped)}
+        className="flex h-2 w-full items-stretch gap-[3px]"
+      >
+        {Array.from({ length: PROGRESS_TICKS }, (_, i) => (
+          <span
+            key={i}
+            className={cn(
+              'min-w-0 flex-1 rounded-full transition-colors duration-200',
+              i < litTicks ? 'bg-[#FF6733]' : 'bg-white/[0.07]',
+              i === litTicks - 1 && clamped < 100 && 'animate-scout-tick-pulse',
+            )}
+          />
+        ))}
       </div>
 
       <p

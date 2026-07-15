@@ -177,15 +177,62 @@ def test_dismiss_wrong_user_returns_false(mock_sb):
 
 
 @patch("services.notification_service.supabase")
-def test_dismissed_application_ids(mock_sb):
+def test_dismissed_application_ids_latest_notification_wins(mock_sb):
+    # Rows arrive newest-first (query orders created_at desc). An app is only
+    # "dismissed" when its most recent notification is dismissed — a newer
+    # active notification (fresh failure after retry, new attention request)
+    # supersedes an older dismissal and un-hides the tracker card.
     chain = _chain_mock(
-        data=[{"application_id": "a1"}, {"application_id": "a2"}]
+        data=[
+            {"application_id": "a1", "dismissed_at": None},
+            {"application_id": "a1", "dismissed_at": "2026-07-01T00:00:00Z"},
+            {"application_id": "a2", "dismissed_at": "2026-07-02T00:00:00Z"},
+            {"application_id": "a2", "dismissed_at": None},
+        ]
     )
     mock_sb.table.return_value = chain
 
     ids = ns.dismissed_application_ids("u1")
 
-    assert ids == ["a1", "a2"]
+    # a1: newest is active → visible. a2: newest is dismissed → hidden.
+    assert ids == ["a2"]
+
+
+@patch("services.notification_service.supabase")
+def test_create_notification_dedupe_is_scoped_to_run(mock_sb):
+    # The duplicate check must filter on scout_run_id when one is provided, so
+    # an undismissed notification from a PRIOR run doesn't suppress the alert
+    # for a new run/retry of the same application.
+    existing = _chain_mock(data=[])
+    insert_chain = _chain_mock(
+        data=[
+            {
+                "id": "n2",
+                "user_id": "u1",
+                "type": "application_needs_attention",
+                "title": "Scout needs your answer",
+                "body": None,
+                "application_id": "a1",
+                "scout_run_id": "r2",
+                "read_at": None,
+                "dismissed_at": None,
+                "created_at": "2026-07-11T00:00:00Z",
+            }
+        ]
+    )
+    mock_sb.table.side_effect = [existing, insert_chain]
+
+    row = ns.create_notification(
+        "u1",
+        "application_needs_attention",
+        "Scout needs your answer",
+        application_id="a1",
+        scout_run_id="r2",
+    )
+
+    assert row is not None
+    existing.eq.assert_any_call("application_id", "a1")
+    existing.eq.assert_any_call("scout_run_id", "r2")
 
 
 def test_create_notification_rejects_invalid_type():

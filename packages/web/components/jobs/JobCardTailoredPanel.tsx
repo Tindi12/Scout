@@ -163,7 +163,7 @@ export function JobCardTailoredPanel({
       setStatus('error')
       setErrorMessage(messageFromLoadError(err))
     }
-  }, [company, hasDescription, isPro, jobId, onCached, resumeId])
+  }, [hasDescription, isPro, jobId, onCached, resumeId])
 
   useEffect(() => {
     if (!expanded) {

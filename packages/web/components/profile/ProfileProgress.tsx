@@ -1,8 +1,6 @@
 'use client'
 
-import { Check, Sparkles } from 'lucide-react'
-
-import { cn } from '@/lib/utils'
+import { Check } from 'lucide-react'
 
 interface ProfileProgressProps {
   percentage: number
@@ -95,23 +93,11 @@ export function ProfileProgress({
             <h2 className="font-headline text-lg font-medium tracking-tight text-white">
               Profile Strength
             </h2>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
-                unlocked
-                  ? 'border border-[#22c55e]/30 bg-[#22c55e]/10 text-[#22c55e]'
-                  : 'border border-[#FF6733]/30 bg-primary/10 text-[#FF6733]',
-              )}
-            >
-              {unlocked ? (
-                <>
-                  <Sparkles className="h-3 w-3" strokeWidth={2} />
-                  Scout Agent Unlocked
-                </>
-              ) : (
-                'Complete profile to unlock Scout'
-              )}
-            </span>
+            {!unlocked && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6733]/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-[#FF6733]">
+                Complete profile to unlock Scout
+              </span>
+            )}
           </div>
           <p className="text-sm text-[#888]">
             {fieldsComplete} of {fieldsTotal} fields complete
@@ -147,9 +133,11 @@ export function ProfileProgress({
       )}
 
       {unlocked && missingFieldLabels.length === 0 && (
-        <div className="mt-5 flex items-center gap-2 border-t border-white/[0.05] pt-4 text-xs text-[#666]">
-          <Check className="h-3.5 w-3.5 text-[#22c55e]" strokeWidth={2.5} />
-          Every required field is filled. Scout is ready to apply on your behalf.
+        <div className="mt-5 flex items-center gap-2 border-t border-white/[0.05] pt-4 text-xs text-[#999]">
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#22c55e]/15">
+            <Check className="h-3 w-3 text-[#22c55e]" strokeWidth={2.5} />
+          </span>
+          All required fields are complete — you can now apply to jobs.
         </div>
       )}
     </section>

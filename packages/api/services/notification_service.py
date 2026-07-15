@@ -15,6 +15,7 @@ NOTIFICATION_TYPES = frozenset({
     "application_needs_attention",
     "application_awaiting_code",
     "application_applied",
+    "application_response",
     "scout_run_finished",
 })
 
@@ -73,10 +74,15 @@ def create_notification(
         raise ValueError(f"invalid notification type: {notification_type}")
 
     try:
+        # Dedupe within a single run only: repeated same-type events for the same
+        # application in one run collapse into one notification, but a NEW run
+        # (retry, re-queue via /answer) must fire fresh — an old undismissed
+        # notification from a prior run used to suppress these silently, which is
+        # why needs_attention alerts appeared "finicky".
         existing = _active_notification_query(
             user_id,
             application_id=application_id,
-            scout_run_id=scout_run_id if not application_id else None,
+            scout_run_id=scout_run_id,
             notification_type=notification_type,
         ).limit(1).execute()
         if existing.data:
@@ -101,19 +107,91 @@ def create_notification(
 
 
 def dismissed_application_ids(user_id: str) -> list[str]:
+    """Application ids whose MOST RECENT notification is dismissed.
+
+    The tracker hides failed/needs_attention cards for these apps. A dismissal
+    must only stick until something new happens to the application: a fresh
+    failure after a retry or a new attention request creates a newer active
+    notification, which supersedes the old dismissal and un-hides the card.
+    The previous "any dismissed notification ever mentions this app" query
+    hid cards permanently, across notification types and across runs.
+    """
     result = (
         supabase.table("notifications")
-        .select("application_id")
+        .select("application_id, dismissed_at")
         .eq("user_id", user_id)
-        .not_.is_("dismissed_at", "null")
         .not_.is_("application_id", "null")
+        .order("created_at", desc=True)
         .execute()
     )
+    seen: set[str] = set()
     ids: list[str] = []
     for row in result.data or []:
-        if isinstance(row, dict) and row.get("application_id"):
-            ids.append(str(row["application_id"]))
+        if not isinstance(row, dict) or not row.get("application_id"):
+            continue
+        app_id = str(row["application_id"])
+        if app_id in seen:
+            continue
+        seen.add(app_id)
+        if row.get("dismissed_at"):
+            ids.append(app_id)
     return ids
+
+
+def latest_event_by_application(user_id: str) -> dict[str, dict[str, Any]]:
+    """Most recent notification per application_id: {application_id: {type, body, created_at}}.
+
+    Two tracker bugs traced back to the same root cause (2026-07-13 investigation):
+    applications rows are REUSED across a retry/re-queue (same id, scout_run_id and
+    status overwritten) while `created_at` stays frozen at the ORIGINAL creation time
+    — there is no per-attempt timestamp column. But every terminal transition
+    (applied/failed/needs_attention) already creates a notification row with its OWN
+    fresh created_at, keyed by the same application_id. This gives the tracker an
+    accurate "last meaningful change" timestamp for free, with no schema change:
+    prefer this over applications.created_at when displaying relative dates.
+    """
+    result = (
+        supabase.table("notifications")
+        .select("application_id, type, body, created_at")
+        .eq("user_id", user_id)
+        .not_.is_("application_id", "null")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    latest: dict[str, dict[str, Any]] = {}
+    for row in result.data or []:
+        if not isinstance(row, dict):
+            continue
+        app_id = row.get("application_id")
+        if not app_id or app_id in latest:
+            continue
+        latest[app_id] = row
+    return latest
+
+
+def latest_notification_body(
+    user_id: str, application_id: str, notification_type: str
+) -> str | None:
+    """Most recent body for one (application_id, notification_type) pair.
+
+    Used to serve a PRECOMPUTED failure summary (written at fail-time by
+    notify_application — see notification_helpers.py) instead of computing one live
+    on every hover of the outcome chip.
+    """
+    result = (
+        supabase.table("notifications")
+        .select("body")
+        .eq("user_id", user_id)
+        .eq("application_id", application_id)
+        .eq("type", notification_type)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = result.data or []
+    if rows and isinstance(rows[0], dict):
+        return rows[0].get("body")
+    return None
 
 
 def list_notifications(user_id: str, *, limit: int = 50) -> list[dict[str, Any]]:

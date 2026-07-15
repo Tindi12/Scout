@@ -100,11 +100,91 @@ _DEFAULT_TRACK_TOKENS: tuple[str, ...] = (
 )
 
 
+# How students actually type a discipline into the Explore search bar.
+_ROLE_QUERY_ALIASES: dict[str, tuple[str, ...]] = {
+    "swe": (
+        "swe", "software", "software engineering", "software engineer", "cs",
+        "sde", "developer", "dev", "frontend", "backend", "full stack",
+        "fullstack", "web",
+    ),
+    "ml": (
+        "ml", "ai", "machine learning", "artificial intelligence",
+        "data science", "data scientist", "deep learning",
+    ),
+    "chem_eng": (
+        "chem", "cheme", "chem e", "chem eng", "chemical",
+        "chemical engineering", "chemical engineer", "process engineering",
+    ),
+    "mech_eng": (
+        "mech", "mech e", "mech eng", "mecheng", "mechanical",
+        "mechanical engineering", "mechanical engineer",
+    ),
+    "elec_eng": (
+        "ee", "ece", "elec", "electrical", "electrical engineering",
+        "electrical engineer", "electronics", "embedded", "hardware",
+        "firmware",
+    ),
+    "civil_eng": ("civil", "civil engineering", "civil engineer", "structural"),
+    "aerospace_eng": (
+        "aero", "aerospace", "aerospace engineering", "aeronautical",
+        "avionics",
+    ),
+    "environmental_eng": (
+        "enviro", "environmental", "environmental engineering",
+        "sustainability",
+    ),
+    "nuclear_eng": ("nuclear", "nuclear engineering", "reactor"),
+    "bio_eng": (
+        "bme", "biomed", "biomedical", "bioengineering",
+        "biomedical engineering", "biotech",
+    ),
+    "industrial_eng": (
+        "ie", "industrial", "industrial engineering", "manufacturing",
+        "supply chain", "operations",
+    ),
+    "research": ("research", "researcher", "r&d", "lab"),
+}
+
+
 @lru_cache(maxsize=1)
 def load_roles_catalog() -> list[dict]:
     with open(_DATA_PATH, encoding="utf-8") as f:
         data = json.load(f)
     return data if isinstance(data, list) else []
+
+
+def role_label(role_id: str) -> str | None:
+    row = _role_row(role_id)
+    if not row:
+        return None
+    label = str(row.get("label") or "").strip()
+    return label or None
+
+
+def resolve_role_ids_for_query(query: str) -> list[str]:
+    """Map a free-text search ("cheme", "EE", "machine learning") to role ids.
+
+    Exact alias hits win; otherwise fall back to substring overlap so partial
+    queries ("chemic") still resolve. Unresolvable queries return [] and the
+    caller treats the raw text as the role label.
+    """
+    q = query.strip().lower()
+    if not q:
+        return []
+
+    for role_id, aliases in _ROLE_QUERY_ALIASES.items():
+        if q == role_id or q == role_id.replace("_", " ") or q in aliases:
+            return [role_id]
+
+    hits: list[str] = []
+    for role_id, aliases in _ROLE_QUERY_ALIASES.items():
+        for alias in aliases:
+            if len(alias) < 3 or len(q) < 3:
+                continue
+            if q in alias or alias in q:
+                hits.append(role_id)
+                break
+    return hits[:2]
 
 
 def _role_row(role_id: str) -> dict | None:

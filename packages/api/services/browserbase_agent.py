@@ -41,6 +41,8 @@ from core.redis_client import (
     verification_code_key,
 )
 
+from services.browser_session_policy import resolve_block_ads, resolve_portal
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -67,9 +69,9 @@ _POLL_INTERVAL = float(os.getenv("BROWSERBASE_AGENT_POLL_INTERVAL", "4"))
 # pre-submit check, verification codes fall back to the manual path).
 _PUBLIC_API_URL = os.getenv("SCOUT_PUBLIC_API_URL", "").strip().rstrip("/")
 
-# How long the worker keeps attempting the Composio fetch after the gate is hit, and
-# the cadence between attempts. Must match routes/apply_code.py's WAIT->TIMEOUT window
-# (same env var) so the agent and the worker give up together.
+# How long the worker keeps polling the Redis mailbox for the code after the gate is
+# hit, and the cadence between polls. Must match routes/apply_code.py's WAIT->TIMEOUT
+# window (same env var) so the agent and the worker give up together.
 _VERIFY_WINDOW = int(os.getenv("APPLY_VERIFY_TIMEOUT", "300"))
 _FETCH_INTERVAL = 15.0
 
@@ -113,7 +115,7 @@ STEP 5 — Submit:
 - Fill any remaining visible required fields and advance through every step of a multi-step flow.
 - FINAL CHECK before clicking Submit: if %controlUrl% is a non-empty URL, open it in a NEW tab (never navigate the form tab away), read the short text it shows, close that tab, and return to the form. If it said CANCEL, the candidate cancelled this application: do NOT submit — set outcome to "blocked", blocker to "cancelled", and finish. If it said OK — or the page failed to load — proceed normally.
 - Click the final Submit / Apply.
-- If a "possible spam" banner appears, wait ~15 seconds and click Submit once more. If it is flagged as spam again, STOP — do not keep retrying — and set blocker to "spam".
+- If a "possible spam" banner appears, STOP — do not wait and do not click Submit again. Set blocker to "spam".
 - If submission requires an emailed verification/security code, follow STEP 5a.
 - If a CAPTCHA blocks you and cannot be cleared, set blocker to "captcha".
 - If a required field cannot be answered from the profile or resume, set blocker to "missing_info".
@@ -290,6 +292,43 @@ def _self_identification_lines(user_data: dict) -> list[str]:
     return lines
 
 
+def _security_clearance_lines(user_data: dict) -> list[str]:
+    """Security-clearance answers from the profile. Eligibility-critical: an unanswered
+    profile section contributes only a safe "No active clearance" and stays silent on
+    willingness (mirrors services/browser_agent.py)."""
+    status = (user_data.get("security_clearance_status") or "").strip()
+    levels = [
+        str(level).strip()
+        for level in (user_data.get("security_clearances") or [])
+        if str(level).strip()
+    ]
+    held = ", ".join(levels)
+
+    if status == "active":
+        lines = [
+            f"- Security clearance: ACTIVE — {held}" if held
+            else "- Security clearance: ACTIVE (level not specified)",
+            "- Do you hold an active security clearance: Yes"
+            + (f" ({held})" if held else ""),
+        ]
+    elif status == "inactive":
+        lines = [
+            f"- Security clearance: previously held ({held}), currently inactive" if held
+            else "- Security clearance: previously held, currently inactive",
+            "- Do you hold an active security clearance: No"
+            + (f" (previously held: {held})" if held else " (previously held one)"),
+        ]
+    else:
+        lines = ["- Do you hold an active security clearance: No"]
+
+    if status:
+        willing = "Yes" if user_data.get("willing_to_obtain_clearance") or status == "active" else "No"
+        lines.append(
+            f"- Willing to obtain a security clearance / undergo a background investigation if required: {willing}"
+        )
+    return lines
+
+
 def resolve_apply_company(*, job_url: str | None, job_company: str | None) -> str:
     """Employer display name for answer placeholders. Prefer jobs.company; fall back to
     a Greenhouse board slug in the URL."""
@@ -363,7 +402,8 @@ def _interpret_run_result(status: str, result: dict | None, cause) -> dict:
                 "spam_blocked",
                 "The job site rejected the submission as possible spam",
                 "The job site flagged this application as possible spam and refused it. "
-                "Please submit it manually on the job page.",
+                "Please submit it manually on the job page — retrying with Scout is "
+                "unlikely to help and may reinforce the block.",
             )
         if blocker == "verification_code":
             return _needs_attention(
@@ -520,14 +560,21 @@ class BrowserbaseAgent:
         trailing.extend([
             f"- Work authorization question: {auth_answer}",
             f"- Requires visa sponsorship: {sponsorship}",
-            f"- Employer for this application: {company}",
         ])
+        trailing.extend(_security_clearance_lines(user_data))
+        trailing.append(f"- Employer for this application: {company}")
         if job_title:
             trailing.append(f"- Role for this application: {job_title}")
         trailing.extend(_self_identification_lines(user_data))
         trailing.extend([
-            "For any open-ended text questions use these answers (placeholders already resolved):",
-            answers_text if answers_text else "Use professional, concise answers based on the applicant's background.",
+            "For an open-ended text question that matches one of these pre-written answers, "
+            "use it (placeholders already resolved):",
+            answers_text if answers_text else "(no pre-written answers on file)",
+            "For open-ended questions NOT covered: write a CONCRETE answer that names at "
+            "least one real project, employer, or technology from the resume you downloaded, "
+            "and says what the candidate actually built or did (2-4 sentences). If the answer "
+            "would still read fine with the project or company swapped out, it is too vague — "
+            "rewrite it around the specifics. No boilerplate; never invent facts.",
         ])
         details.extend(trailing)
         return "\n".join(details)
@@ -556,10 +603,21 @@ class BrowserbaseAgent:
         lines.append(applicant_context)
         return "\n".join(lines)
 
-    def _build_browser_settings(self, _user_data: dict) -> dict:
-        if not BROWSERBASE_PROXIES:
-            return {}
-        return {"proxies": True}
+    def _build_browser_settings(
+        self,
+        _user_data: dict,
+        *,
+        portal: str | None = None,
+        job_url: str = "",
+    ) -> dict:
+        # Hosted Agents API uses camelCase browserSettings keys.
+        settings: dict = {
+            "solveCaptchas": True,
+            "blockAds": resolve_block_ads(portal=portal, job_url=job_url),
+        }
+        if BROWSERBASE_PROXIES:
+            settings["proxies"] = True
+        return settings
 
     def _poll(
         self,
@@ -733,8 +791,14 @@ class BrowserbaseAgent:
         resume_pdf: bytes,
         application_id: str | None = None,
         cover_letter_pdf: bytes | None = None,
+        # Accepted for engine-contract parity with browser_agent.apply but NOT
+        # delivered on the hosted path: the platform-side agent template only has
+        # resume/cover-letter variables. Transcript uploads need the default
+        # browser_use engine.
+        transcript_pdf: bytes | None = None,  # noqa: ARG002
         deadline_seconds: float = 870,
         control_token: str | None = None,
+        portal: str | None = None,
         on_gate=None,
         fetch_code=None,
         on_code=None,
@@ -744,7 +808,8 @@ class BrowserbaseAgent:
         %codeUrl% endpoints — the pre-submit cancel check and the verification-code
         poll-gate. on_gate/fetch_code/on_code are the task's verification callbacks
         (see _poll). All optional: without them behavior degrades to the pre-gate
-        engine (codes -> needs_attention via the manual path)."""
+        engine (codes -> needs_attention via the manual path). `portal` drives
+        Ashby-specific blockAds policy."""
         applicant_name = user_data.get("name")
         resume_name = resume_filename(applicant_name)
         cover_name = cover_letter_filename(applicant_name) if cover_letter_pdf else None
@@ -754,6 +819,8 @@ class BrowserbaseAgent:
         prefix = f"{user_data.get('id') or 'anon'}/{application_id or uuid.uuid4().hex}"
         resume_path = f"{prefix}/{resume_name}"
         object_paths = [resume_path]
+
+        resolved_portal = resolve_portal(portal=portal, job_url=job_url)
 
         # Deliver the resume (fatal on failure — there is nothing to submit without it).
         try:
@@ -818,7 +885,15 @@ class BrowserbaseAgent:
             task = self._build_run_task(
                 self._build_applicant_context(user_data), resume_name, cover_name
             )
-            browser_settings = self._build_browser_settings(user_data)
+            browser_settings = self._build_browser_settings(
+                user_data, portal=resolved_portal, job_url=job_url
+            )
+            logger.info(
+                "Hosted agent browser_settings for portal=%s: blockAds=%s proxies=%s",
+                resolved_portal,
+                browser_settings.get("blockAds"),
+                browser_settings.get("proxies"),
+            )
 
             run = get_client().run_agent(
                 task=task,

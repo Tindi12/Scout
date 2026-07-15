@@ -4,7 +4,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import sentry_sdk
 
@@ -21,9 +21,10 @@ from services.portal_detector import detect_portal
 from services.latex_generator import generate_resume_pdf, generate_cover_letter_pdf
 from services.resume_rewriter import resume_rewriter
 from services.cover_letter_writer import cover_letter_writer
-from core import composio_mail
+from core import agentmail_inbox
 from core.redis_client import (
     CONTROL_TOKEN_TTL,
+    GH_SHARED_INBOX_SCOPE,
     acquire_gh_verify_mutex,
     cancel_key,
     cancelled_token_key,
@@ -39,6 +40,8 @@ from core.concurrency import (
     new_slot_token,
     release_apply_slots,
 )
+from services.application_credits import fail_application_with_refund, refund_application_credits
+from services.application_failure_codes import encode_failure_message
 from services.browser_agent import browser_agent
 from services.browserbase_agent import browserbase_agent, resolve_apply_company
 
@@ -57,8 +60,9 @@ class NeedsAttentionException(Exception):
     CAPTCHA or spam block reported by the agent). The apply task converts this
     to a `needs_attention` status."""
 
-    def __init__(self, question: str):
+    def __init__(self, question: str, *, error_code: str | None = None):
         self.question = question
+        self.error_code = error_code
         super().__init__(f"Needs user attention: {question}")
 
 
@@ -293,6 +297,201 @@ def finalize_run_if_complete(scout_run_id: str) -> None:
     notify_scout_run_finished(scout_run_id)
 
 
+# ---------------------------------------------------------------------------
+# Stale-application reaper
+#
+# A hard worker death (OOM, deploy/SIGKILL, machine loss, or the Browserbase
+# session being killed out-of-band while the task hangs) skips BOTH the except
+# and finally blocks of apply_to_job_task — so the application row is stranded at
+# in_progress/awaiting_code (or never leaves queued) and its scout_run stays
+# 'running' forever. The tracker derives "active" from those non-terminal rows,
+# so the UI shows a dead run as perpetually "APPLYING". Nothing else ever closes
+# it. This periodic sweep (Celery beat) is the backstop that reconciles them.
+#
+# Thresholds are generous on purpose — they must clear the LONGEST legitimate
+# lifetime of each state so a still-working attempt is never reaped:
+#   - in_progress / awaiting_code: one attempt is bounded by the engine poll
+#     deadline (APPLY_PIPELINE_TIMEOUT=870s) < Celery hard time_limit (960s).
+#     updated_at only moves at status transitions, so a healthy attempt can sit
+#     ~14–16 min without a bump. Default 25 min clears that with margin.
+#   - queued: legitimately waits for a concurrency slot (re-queued every ~20s),
+#     a retry backoff (up to 180s), or acks_late redelivery after a worker death
+#     (Redis broker visibility_timeout, up to ~1h). Default 90 min clears all of
+#     those so we never reap a task that's about to be redelivered.
+REAP_ACTIVE_STALE_MINUTES = int(os.getenv("SCOUT_REAP_ACTIVE_MINUTES", "25"))
+REAP_QUEUED_STALE_MINUTES = int(os.getenv("SCOUT_REAP_QUEUED_MINUTES", "90"))
+# Cap the work one sweep does so a large backlog can't blow the task's runtime.
+REAP_BATCH_LIMIT = int(os.getenv("SCOUT_REAP_BATCH_LIMIT", "200"))
+
+_REAP_ACTIVE_STATES = ("in_progress", "awaiting_code")
+# User-facing failure class for a reaped row. failureShortLabel() maps
+# "browser_session_lost" -> "Interrupted" (tracker-utils.ts), which is exactly
+# how an abandoned run should read; the parenthetical stays server-side only.
+_REAP_ERROR_MESSAGE = (
+    "browser_session_lost: the run was interrupted before it finished "
+    "(the worker stopped or the browser session was lost)"
+)
+
+
+def _reap_stale_application(app: dict) -> bool:
+    """Terminally fail one stranded application, exactly once.
+
+    Conditionally flips the row to failed guarded on the SAME non-terminal status
+    we selected it in, so a worker that legitimately finished the attempt between
+    the sweep's select and this write always wins (its terminal state is left
+    untouched). Only the row this call actually transitions is refunded / counted
+    / notified. Returns True when this call performed the flip, else False.
+    """
+    application_id = app.get("id")
+    user_id = app.get("user_id")
+    status = app.get("status")
+    scout_run_id = app.get("scout_run_id")
+    if not application_id or not user_id or status is None:
+        return False
+
+    flipped = (
+        supabase.table("applications")
+        .update({"status": "failed", "error_message": _REAP_ERROR_MESSAGE})
+        .eq("id", application_id)
+        .eq("user_id", user_id)
+        .eq("status", status)  # lose the race to a real finisher -> no-op
+        .execute()
+    )
+    if not flipped.data:
+        return False
+
+    logger.warning(
+        "Reaped stranded application %s (was %s) — worker never finalized it",
+        application_id, status,
+    )
+    refund_application_credits(user_id)
+    if scout_run_id:
+        supabase.rpc(
+            "increment_scout_run_counter",
+            {"run_id": scout_run_id, "counter_name": "failed_count"},
+        ).execute()
+    notify_application(
+        user_id, application_id, "application_failed", scout_run_id=scout_run_id
+    )
+    return True
+
+
+def _finalize_lingering_runs() -> int:
+    """Close runs stuck non-terminal whose applications are ALL already terminal.
+
+    Covers the narrow gap where a worker died right AFTER writing the last app's
+    terminal status but BEFORE finalize_run_if_complete ran — every app is done,
+    yet the run still reads 'running'. finalize_run_if_complete is idempotent and
+    only acts when all apps are terminal, so calling it here is always safe.
+    """
+    runs = (
+        supabase.table("scout_runs")
+        .select("id")
+        .in_("status", ["pending", "running"])
+        .limit(REAP_BATCH_LIMIT)
+        .execute()
+    )
+    finalized = 0
+    for row in runs.data or []:
+        run_id = row.get("id") if isinstance(row, dict) else None
+        if not run_id:
+            continue
+        before = (
+            supabase.table("scout_runs")
+            .select("status")
+            .eq("id", run_id)
+            .maybe_single()
+            .execute()
+        )
+        finalize_run_if_complete(run_id)
+        after = (
+            supabase.table("scout_runs")
+            .select("status")
+            .eq("id", run_id)
+            .maybe_single()
+            .execute()
+        )
+        b = (before.data or {}).get("status") if before and before.data else None
+        a = (after.data or {}).get("status") if after and after.data else None
+        if b in ("pending", "running") and a in ("completed", "failed"):
+            finalized += 1
+    return finalized
+
+
+@celery_app.task(name="tasks.reap_stale_applications")
+def reap_stale_applications_task() -> dict:
+    """Periodic backstop: fail applications stranded by a hard worker death and
+    close the runs they were holding open. Idempotent and safe to run on any
+    cadence (and concurrently — every write is guarded)."""
+    now = datetime.now(timezone.utc)
+    active_cutoff = (now - timedelta(minutes=REAP_ACTIVE_STALE_MINUTES)).isoformat()
+    queued_cutoff = (now - timedelta(minutes=REAP_QUEUED_STALE_MINUTES)).isoformat()
+
+    stale: list[dict] = []
+    try:
+        active = (
+            supabase.table("applications")
+            .select("id, user_id, scout_run_id, status")
+            .in_("status", list(_REAP_ACTIVE_STATES))
+            .lt("updated_at", active_cutoff)
+            .limit(REAP_BATCH_LIMIT)
+            .execute()
+        )
+        stale.extend(active.data or [])
+        queued = (
+            supabase.table("applications")
+            .select("id, user_id, scout_run_id, status")
+            .eq("status", "queued")
+            .lt("updated_at", queued_cutoff)
+            .limit(REAP_BATCH_LIMIT)
+            .execute()
+        )
+        stale.extend(queued.data or [])
+    except Exception:
+        logger.exception("reap_stale_applications: query for stale rows failed")
+        return {"reaped": 0, "runs_finalized": 0, "error": "query_failed"}
+
+    affected_runs: set[str] = set()
+    reaped = 0
+    for app in stale:
+        if not isinstance(app, dict):
+            continue
+        try:
+            flipped = _reap_stale_application(app)
+        except Exception:
+            logger.exception(
+                "reap_stale_applications: failed to reap app %s", app.get("id")
+            )
+            continue
+        if flipped:
+            reaped += 1
+            run_id = app.get("scout_run_id")
+            if run_id:
+                affected_runs.add(run_id)
+
+    for run_id in affected_runs:
+        try:
+            finalize_run_if_complete(run_id)
+        except Exception:
+            logger.exception(
+                "reap_stale_applications: finalize failed for run %s", run_id
+            )
+
+    try:
+        runs_finalized = _finalize_lingering_runs()
+    except Exception:
+        logger.exception("reap_stale_applications: lingering-run finalize sweep failed")
+        runs_finalized = 0
+
+    if reaped or runs_finalized:
+        logger.info(
+            "reap_stale_applications: reaped %s stranded application(s), "
+            "finalized %s lingering run(s)",
+            reaped, runs_finalized,
+        )
+    return {"reaped": reaped, "runs_finalized": runs_finalized}
+
+
 @celery_app.task(name="tasks.apply_to_job", bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=900, time_limit=960)
 def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str, job_id: str) -> dict:
     SESSION_LOSS_BACKOFF_SECONDS = 180
@@ -346,6 +545,7 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
     slot_token = new_slot_token()
     # Set inside the try (portal-dependent) but released in the finally.
     gh_mutex_held = False
+    gh_shared_mutex_held = False
     # Per-ATTEMPT control token for the agent's mid-run channel (/apply-control and
     # /apply-code). Minted fresh each attempt so an abandoned attempt can be cancelled
     # without touching its retry.
@@ -433,6 +633,11 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #6. Detect portal from job.portal field
         portal = detect_portal(url=job_url, portal=job_data.get("portal", "unknown"))
 
+        # AgentMail shared-inbox OTP source: active for Greenhouse applies when the
+        # inbox is configured. Drives the mutex scope (6.1), the applicant email
+        # (6.2), and the code-source wiring (step 7).
+        agentmail_active = portal == "greenhouse" and agentmail_inbox.is_configured()
+
         # 6.1. GREENHOUSE VERIFICATION MUTEX — at most one Greenhouse apply in flight
         #      per user. Greenhouse's code gate emails an 8-char code with nothing
         #      binding it to a specific application; two parked applies would receive
@@ -441,13 +646,27 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #      hit the gate at submit). Contention re-queues a FRESH task, mirroring
         #      the slot-throttle above (never self.retry — that budget belongs to
         #      session-loss). Released in the finally.
+        #
+        #      SHARED-INBOX EXTENSION: with AgentMail, every user's code lands in ONE
+        #      shared address, so per-user serialization isn't enough — two users
+        #      parked at the gate would receive indistinguishable emails. Also take
+        #      the mutex under the global shared-inbox scope: at most one Greenhouse
+        #      apply platform-wide while codes route to the shared inbox.
         if portal == "greenhouse":
             if acquire_gh_verify_mutex(user_id, slot_token):
                 gh_mutex_held = True
-            else:
+            if gh_mutex_held and agentmail_active:
+                if acquire_gh_verify_mutex(GH_SHARED_INBOX_SCOPE, slot_token):
+                    gh_shared_mutex_held = True
+                else:
+                    release_gh_verify_mutex(user_id, slot_token)
+                    gh_mutex_held = False
+            if not gh_mutex_held:
                 logger.info(
-                    "Greenhouse verify mutex busy (user %s) — re-queueing app %s in %ss",
-                    user_id, application_id, SLOT_THROTTLE_BACKOFF_SECONDS,
+                    "Greenhouse verify mutex busy (user %s, shared-inbox %s) — "
+                    "re-queueing app %s in %ss",
+                    user_id, agentmail_active, application_id,
+                    SLOT_THROTTLE_BACKOFF_SECONDS,
                 )
                 supabase.table("applications").update({"status": "queued"}).eq(
                     "id", application_id
@@ -470,7 +689,34 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                 job_company=job_data.get("company"),
             ),
             "job_title": job_data.get("title") or user_data.get("job_title") or "",
+            # The submitted resume's JSON: _build_applicant_context digests it into
+            # the prompt so open-ended answers cite real projects/experience instead
+            # of abstract filler (the LLM never reads the uploaded PDF itself).
+            "resume_json": resume_to_use,
         }
+
+        # 6.2. SHARED-INBOX APPLICANT EMAIL — Greenhouse applies submit Scout's
+        #      AgentMail address as the applicant email so the verification code is
+        #      emailed to an inbox Scout can read (webhook → Redis mailbox). This
+        #      deliberately DIVERGES from the user's profile email for Greenhouse
+        #      only: the profile email stays untouched in the DB and in every other
+        #      portal's applies; the trade-off is that Greenhouse's own confirmation
+        #      /recruiter mail also lands in the shared inbox instead of the user's.
+        if agentmail_active:
+            user_data["email"] = agentmail_inbox.inbox_address()
+
+        # Audit trail: record the applicant email the form actually received (the
+        # relay address for Greenhouse, the user's real email everywhere else).
+        # Also what the webhook's forward-matching uses to find relay applies.
+        # Non-fatal on failure (e.g. submitted_email migration not applied yet).
+        try:
+            supabase.table("applications").update(
+                {"submitted_email": user_data.get("email")}
+            ).eq("id", application_id).execute()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "submitted_email audit write failed (app %s): %s", application_id, exc
+            )
 
         # 6.5. Cover letter (Pro/Scout+ + toggle on): reuse cache → generate → none.
         #      Pre-generated here so the PDF is ready when the form has a CL field;
@@ -495,6 +741,24 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
                     )
                     cover_letter_pdf = None
 
+        # 6.6. Transcript: uploaded once on the profile page (object in the 'resumes'
+        #      storage bucket, pointer on users.transcript_storage_path). Optional —
+        #      any failure here just drops it, and a form that REQUIRES a transcript
+        #      then fails fast as missing_required_document instead of burning a run.
+        transcript_pdf = None
+        transcript_storage_path = user_data.get("transcript_storage_path")
+        if transcript_storage_path:
+            try:
+                transcript_pdf = supabase.storage.from_("resumes").download(
+                    transcript_storage_path
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "Transcript download failed for app %s (continuing without): %s",
+                    application_id, e,
+                )
+                transcript_pdf = None
+
         #7. Apply via the selected engine (SCOUT_APPLY_ENGINE). Both engines run
         #   synchronously with the same signature/result contract and enforce the hard
         #   wall-clock budget internally — no asyncio.wait_for wrapper here.
@@ -505,11 +769,11 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #     /apply-control URL only (the platform has no server-side stop).
         #
         #   Verification codes (Greenhouse email gate): the first gate signal flips
-        #   this application to awaiting_code via _on_gate, then _fetch_code (Composio,
-        #   deterministic, read-only) delivers the code — in-process through the
-        #   request_verification_code tool (browser_use) or via the /apply-code Redis
-        #   mailbox the hosted agent polls. The manual CodeModal writes the same
-        #   mailbox either way.
+        #   this application to awaiting_code via _on_gate. The code then lands in the
+        #   Redis mailbox apply:code:{app_id} — pushed there by the AgentMail webhook
+        #   (shared relay inbox) or pasted by the user via the CodeModal — and the
+        #   agent's request_verification_code tool / the hosted agent's /apply-code
+        #   poll pick it up. Both sources converge on the same mailbox.
         try:
             get_redis().setex(
                 control_token_key(control_token), CONTROL_TOKEN_TTL, application_id
@@ -519,47 +783,42 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             # (no pre-submit check, codes go manual). Don't fail the apply over it.
             logger.warning("Could not register control token for app %s", application_id)
 
-        clerk_id = user_data.get("clerk_id") or ""
-        mail_provider = (user_data.get("mail_provider") or "").strip()
+        # Neutral status text either way — OTP mechanics never surface to the user.
+        gate_message = "Completing the site's email verification step…"
 
         def _on_gate(gate_ts: float) -> None:
-            """First code poll from the agent: park the app on awaiting_code so the
-            tracker shows the CODE NEEDED card (manual fallback stays live)."""
+            """First code poll from the agent: park the app on awaiting_code —
+            an INTERNAL state the AgentMail webhook's OTP matcher keys on. OTP
+            retrieval is fully agent-side: no notification, no CODE NEEDED card,
+            no user involvement (the tracker renders awaiting_code as a normal
+            verifying step). The manual /verification-code endpoint stays live
+            as a dormant escape hatch only."""
             supabase.table("applications").update({
                 "status": "awaiting_code",
                 "gate_hit_at": datetime.fromtimestamp(gate_ts, timezone.utc).isoformat(),
-                "error_message": (
-                    "The job site emailed a verification code to "
-                    f"{user_data.get('email') or 'your email'}. "
-                    + (
-                        "Scout is retrieving it automatically — you can also paste it "
-                        "here to finish faster."
-                        if mail_provider
-                        else "Paste it here so Scout can finish submitting."
-                    )
-                ),
+                "error_message": gate_message,
             }).eq("id", application_id).execute()
-            notify_application(
-                user_id,
-                application_id,
-                "application_awaiting_code",
-                scout_run_id=scout_run_id,
-            )
 
-        def _fetch_code(gate_ts: float) -> str | None:
-            """One deterministic Composio fetch attempt (poll loop provides the ~15s
-            cadence). None when auto-fetch isn't available — manual path still works."""
-            if not (composio_mail.is_configured() and clerk_id and mail_provider):
-                return None
-            return composio_mail.fetch_verification_code(clerk_id, mail_provider, gate_ts)
+        # Verification codes arrive by PUSH and PULL. Push: the AgentMail webhook
+        # writes the Redis mailbox apply:code:{app_id} (the manual CodeModal writes
+        # the same key). Pull: fetch_code_from_inbox reads the shared inbox over the
+        # AgentMail REST API from inside the relay's verify poll — the only path that
+        # works when the webhook can't reach this worker (local dev) or is down.
+        # Both claim the same consumed-message marker, so a code is served once.
+        fetch_code = (
+            (lambda gate_ts: agentmail_inbox.fetch_code_from_inbox(
+                gate_ts, application_id=application_id
+            ))
+            if agentmail_active and agentmail_inbox.is_pull_configured()
+            else None
+        )
 
         def _on_code(_code: str) -> None:
-            """Auto-fetch delivered the code — agent resumes; reflect it in the tracker
-            (the manual endpoint does this same flip itself)."""
-            supabase.table("applications").update({
-                "status": "in_progress",
-                "error_message": None,
-            }).eq("id", application_id).execute()
+            """Pull-path resume mirrors the webhook's status flip: back to
+            in_progress the moment the code is in hand, clearing the gate text."""
+            supabase.table("applications").update(
+                {"status": "in_progress", "error_message": None}
+            ).eq("id", application_id).execute()
 
         engine = browserbase_agent if _APPLY_ENGINE == "hosted" else browser_agent
         logger.info(
@@ -571,14 +830,33 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             resume_pdf=resume_pdf,
             application_id=application_id,
             cover_letter_pdf=cover_letter_pdf,
+            transcript_pdf=transcript_pdf,
             deadline_seconds=APPLY_PIPELINE_TIMEOUT,
             control_token=control_token,
+            portal=portal,
             on_gate=_on_gate,
-            fetch_code=_fetch_code,
+            fetch_code=fetch_code,
             on_code=_on_code,
         )
         if result.get("needs_attention"):
-            raise NeedsAttentionException(result.get("attention_question"))
+            # Keep diagnostics on Sentry before we drop the full engine result.
+            diagnostics = result.get("diagnostics")
+            if diagnostics:
+                try:
+                    with sentry_sdk.push_scope() as scope:
+                        scope.set_tag("portal", portal)
+                        scope.set_tag(
+                            "apply_blocker", result.get("error_code") or "needs_attention"
+                        )
+                        scope.set_context("apply_diagnostics", diagnostics)
+                        if result.get("session_id"):
+                            scope.set_tag("browserbase_session", result["session_id"])
+                except Exception:
+                    pass
+            raise NeedsAttentionException(
+                result.get("attention_question") or result.get("error") or "Needs attention",
+                error_code=result.get("error_code"),
+            )
         if not result.get("success"):
             error_code = result.get("error_code")
             error_message = result.get("error") or "Browser application failed"
@@ -607,10 +885,17 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         finalize_run_if_complete(scout_run_id)
 
     except NeedsAttentionException as e:
+        stored_message = encode_failure_message(e.question, e.error_code)
         supabase.table("applications").update({
             "status": "needs_attention",
-            "error_message": str(e)
+            "error_message": stored_message,
         }).eq("id", application_id).execute()
+        # A needs_attention outcome is also an incomplete attempt (Scout couldn't
+        # finish it) — refund exactly like fail_application_with_refund does for a
+        # true failure, so the retry that needs_attention cards now offer (see
+        # routes/applications.py _RETRYABLE_STATUSES) charges one fresh credit
+        # without double-charging the user for this same blocked attempt.
+        refund_application_credits(user_id)
         supabase.rpc("increment_scout_run_counter", {
             "run_id": scout_run_id,
             "counter_name": "needs_attention_count"
@@ -620,13 +905,14 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             application_id,
             "application_needs_attention",
             scout_run_id=scout_run_id,
-            body_override=str(e),
+            body_override=e.question,
         )
         finalize_run_if_complete(scout_run_id)
         return {
             "success": False,
             "needs_attention": True,
-            "question": str(e)
+            "question": e.question,
+            "error_code": e.error_code,
         }
 
     except Exception as e:
@@ -640,36 +926,49 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             finalize_run_if_complete(scout_run_id)
             return {"success": False, "cancelled": True, "application_id": application_id}
 
-        # Browser session loss is transient infra — retry with backoff WHILE retries
-        # remain. Once exhausted, record a terminal failure and finalize; otherwise the
-        # app sticks at 'queued' and the run never closes.
-        if err_text.startswith("browser_session_lost:"):
+        # Retryable failure classes:
+        # - browser_session_lost: transient infra (CDP stall, dead tab).
+        # - planner_deadlock: the loop watchdog aborted a stuck agent — a fresh
+        #   attempt (new session, new planner context) is the designed recovery.
+        # Retry with backoff WHILE retries remain. Once exhausted, record a terminal
+        # failure and finalize; otherwise the app sticks at 'queued' and the run
+        # never closes.
+        retryable_class = next(
+            (
+                c
+                for c in ("browser_session_lost", "planner_deadlock")
+                if err_text.startswith(f"{c}:")
+            ),
+            None,
+        )
+        if retryable_class:
             if self.request.retries < self.max_retries:
-                # Transient infra — don't capture every retry (noise). Leave a
+                # Transient — don't capture every retry (noise). Leave a
                 # breadcrumb so the eventual terminal event has the retry history.
                 sentry_sdk.add_breadcrumb(
                     category="apply",
                     level="warning",
-                    message="browser_session_lost; retrying",
+                    message=f"{retryable_class}; retrying",
                     data={"retries": self.request.retries, "application_id": application_id},
                 )
                 supabase.table("applications").update({
                     "status": "queued",
-                    "error_message": "Temporary browser session issue. Retrying...",
+                    "error_message": "Temporary issue during the application. Retrying...",
                 }).eq("id", application_id).execute()
                 supabase.table("scout_runs").update({"status": "running"}).eq("id", scout_run_id).execute()
                 raise self.retry(exc=e, countdown=SESSION_LOSS_BACKOFF_SECONDS)
             # Retries exhausted — this is now a terminal failure worth seeing in Sentry.
-            sentry_sdk.set_tag("apply_failure", "session_loss_exhausted")
+            sentry_sdk.set_tag("apply_failure", f"{retryable_class}_exhausted")
             sentry_sdk.capture_exception(e)
-            supabase.table("applications").update({
-                "status": "failed",
-                "error_message": f"browser_session_lost (gave up after {self.request.retries} retries): {err_text[:300]}",
-            }).eq("id", application_id).execute()
+            fail_application_with_refund(
+                application_id=application_id,
+                user_id=user_id,
+                error_message=f"{retryable_class} (gave up after {self.request.retries} retries): {err_text[:300]}",
+            )
             supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "failed_count"}).execute()
             notify_application(user_id, application_id, "application_failed", scout_run_id=scout_run_id)
             finalize_run_if_complete(scout_run_id)
-            return {"success": False, "error": "session_loss_exhausted", "application_id": application_id}
+            return {"success": False, "error": f"{retryable_class}_exhausted", "application_id": application_id}
 
         error_str = err_text.lower()
         if any(x in error_str for x in ("402", "payment required", "quota", "billing")):
@@ -679,10 +978,11 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             sentry_sdk.capture_message(
                 f"apply billing/quota limit hit: {err_text[:200]}", level="warning"
             )
-            supabase.table("applications").update({
-                "status": "failed",
-                "error_message": f"Service limit reached: {err_text[:200]}",
-            }).eq("id", application_id).execute()
+            fail_application_with_refund(
+                application_id=application_id,
+                user_id=user_id,
+                error_message=f"Service limit reached: {err_text[:200]}",
+            )
             supabase.rpc("increment_scout_run_counter", {
                 "run_id": scout_run_id,
                 "counter_name": "failed_count",
@@ -699,10 +999,11 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         # these agent failures are the most important errors to see in production.
         sentry_sdk.set_tag("apply_failure", "deterministic")
         sentry_sdk.capture_exception(e)
-        supabase.table("applications").update({
-            "status": "failed",
-            "error_message": err_text[:1000],
-        }).eq("id", application_id).execute()
+        fail_application_with_refund(
+            application_id=application_id,
+            user_id=user_id,
+            error_message=err_text[:1000],
+        )
         supabase.rpc("increment_scout_run_counter", {"run_id": scout_run_id, "counter_name": "failed_count"}).execute()
         notify_application(user_id, application_id, "application_failed", scout_run_id=scout_run_id)
         finalize_run_if_complete(scout_run_id)
@@ -716,6 +1017,8 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         release_apply_slots(user_id, slot_token)
         if gh_mutex_held:
             release_gh_verify_mutex(user_id, slot_token)
+        if gh_shared_mutex_held:
+            release_gh_verify_mutex(GH_SHARED_INBOX_SCOPE, slot_token)
         # Retire this attempt's mid-run channel: token mapping (the public routes 404
         # from here on), gate flag, and any undelivered code. TTLs backstop all three.
         try:

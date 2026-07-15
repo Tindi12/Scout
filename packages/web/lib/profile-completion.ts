@@ -20,6 +20,8 @@ export type HeardAboutUs =
   | 'career_fair'
   | 'other'
 
+export type SecurityClearanceStatus = 'none' | 'active' | 'inactive'
+
 /**
  * Shape of the profile data round-tripped between the page, the
  * server action, and the Supabase users row. Keys mirror DB columns.
@@ -42,6 +44,11 @@ export type ProfileData = {
   cpt_eligible: boolean
   opt_eligible: boolean
   requires_sponsorship: boolean | null
+
+  // Security clearance
+  security_clearance_status: SecurityClearanceStatus | null
+  security_clearances: string[]
+  willing_to_obtain_clearance: boolean
 
   // Education
   school: string | null

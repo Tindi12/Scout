@@ -2,14 +2,25 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
+import { BrandedLoader } from '@/components/branded-loader'
 import { scoutLogo } from '@/lib/scout-logo'
-import { SignIn } from '@clerk/nextjs'
+import { ClerkLoaded, ClerkLoading, SignIn } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
 
 export default function SignInPage() {
+  const pathname = usePathname()
+  // OAuth returns to /sign-in/sso-callback (this same catch-all route, so no
+  // loading.tsx fires). Cover Clerk's headless session transfer + redirect with
+  // the branded full-screen loader instead of its default bare spinner. <SignIn>
+  // stays mounted underneath to actually process the callback.
+  const isCallback = pathname?.includes('sso-callback')
+
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-[#000000] px-4 py-12 text-white sm:py-16">
+      {isCallback && <BrandedLoader label="Finishing sign in" />}
+
       <div className="relative mx-auto flex min-h-[calc(100vh-6rem)] max-w-md flex-col items-center justify-center">
         <Link
           href="/"
@@ -36,6 +47,10 @@ export default function SignInPage() {
 
         <div className="relative mt-8 w-full">
           <div className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] p-4 sm:p-5">
+            <ClerkLoading>
+              <BrandedLoader inline label="Loading" />
+            </ClerkLoading>
+            <ClerkLoaded>
             <SignIn
               routing="path"
               path="/sign-in"
@@ -58,6 +73,7 @@ export default function SignInPage() {
                 },
               }}
             />
+            </ClerkLoaded>
           </div>
         </div>
 

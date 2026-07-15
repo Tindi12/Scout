@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venvScriptspython.exe -c ' *)"
+      "Bash(.venvScriptspython.exe -c ' *)",
+      "Bash(uv run python -c ' *)"
     ]
   }
 }

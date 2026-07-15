@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 
 import { ProfilePromptOverlay } from '@/components/profile/ProfilePromptOverlay'
+import { NeedsAttentionInfo } from '@/components/dashboard/NeedsAttentionInfo'
 import { ResumeUpload } from '@/components/resume/ResumeUpload'
 import { Button } from '@/components/ui/button'
 import { isProfilePromptDismissed } from '@/lib/profile-prompt-dismiss'
@@ -67,15 +68,14 @@ type ScoutRunRow = {
     | null
 }
 
-const REPLY_STATUSES = new Set([
-  'phone_screen',
-  'interview',
-  'offer',
-  'reply',
-  'replied',
-])
-
 const ACTIVE_RUN_STATUSES = new Set(['running', 'in_progress', 'queued'])
+
+function isNeedsAttentionStatus(status: string | null | undefined): boolean {
+  // awaiting_code is agent-internal (Scout retrieves the emailed code itself)
+  // and deliberately NOT attention.
+  const s = (status ?? '').toLowerCase()
+  return s === 'needs_attention'
+}
 
 export default function DashboardPage() {
   const { user, isLoaded: clerkLoaded } = useUser()
@@ -329,8 +329,8 @@ export default function DashboardPage() {
 
   const applications = appsState.data ?? []
   const appliedCount = applications.length
-  const repliesCount = applications.filter((a) =>
-    REPLY_STATUSES.has((a.status ?? '').toLowerCase()),
+  const needsAttentionCount = applications.filter((a) =>
+    isNeedsAttentionStatus(a.status),
   ).length
 
   const strongFitsCount = 0 // job matching engine not wired yet
@@ -386,7 +386,7 @@ export default function DashboardPage() {
           previousScore={previousAnalysis?.score ?? null}
           delta={scoreDelta}
           applied={appliedCount}
-          replies={repliesCount}
+          needsAttention={needsAttentionCount}
           appsLoaded={appsState.status !== 'loading'}
           analysesLoaded={analysesState.status !== 'loading'}
         />
@@ -597,7 +597,7 @@ function StatGrid({
   previousScore,
   delta,
   applied,
-  replies,
+  needsAttention,
   appsLoaded,
   analysesLoaded,
 }: {
@@ -606,7 +606,7 @@ function StatGrid({
   previousScore: number | null
   delta: number | null
   applied: number
-  replies: number
+  needsAttention: number
   appsLoaded: boolean
   analysesLoaded: boolean
 }) {
@@ -643,13 +643,16 @@ function StatGrid({
         subtext={applied > 0 ? 'internships this session' : undefined}
       />
       <StatCard
-        label="Replies"
+        label="Needs Attention"
         loading={loading || !appsLoaded}
-        value={replies > 0 ? String(replies) : null}
-        emptyValue="—"
-        valueAccent
+        value={String(needsAttention)}
+        emptyValue="0"
+        valueAccent={needsAttention > 0}
+        headerTrailing={<NeedsAttentionInfo />}
         subtext={
-          replies > 0 ? 'responses received' : 'Replies appear here'
+          needsAttention > 0
+            ? 'verification codes & fixes'
+            : 'nothing pending right now'
         }
       />
     </section>
@@ -665,6 +668,7 @@ function StatCard({
   delta,
   subtext,
   valueAccent,
+  headerTrailing,
 }: {
   label: string
   loading: boolean
@@ -674,20 +678,24 @@ function StatCard({
   delta?: number | null
   subtext?: string
   valueAccent?: boolean
+  headerTrailing?: React.ReactNode
 }) {
   const isEmpty = !loading && (value === null || value === '')
 
   return (
     <div className="glass-card flex flex-col justify-between rounded-2xl p-5 md:p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="font-label text-[11px] font-medium uppercase tracking-[0.22em] text-[#666]">
           {label}
         </span>
-        {delta != null && delta > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 font-label text-[11px] font-semibold text-[#FF6733]">
-            <TrendingUp className="h-3 w-3" strokeWidth={2.25} />+{delta}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {delta != null && delta > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 font-label text-[11px] font-semibold text-[#FF6733]">
+              <TrendingUp className="h-3 w-3" strokeWidth={2.25} />+{delta}
+            </span>
+          ) : null}
+          {headerTrailing}
+        </div>
       </div>
 
       <div className="mt-4">

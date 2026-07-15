@@ -7,7 +7,10 @@ import {
   CreditCard,
   FileText,
   Loader2,
+  MapPin,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -62,6 +65,98 @@ const FILTERS: ReadonlyArray<{ key: FilterKey; label: string }> = [
   { key: 'visa', label: 'Visa Friendly' },
 ]
 
+const UNITED_STATES_LABEL = 'United States'
+
+// prettier-ignore
+const US_STATE_CODES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID',
+  'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS',
+  'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK',
+  'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV',
+  'WI', 'WY', 'DC', 'PR',
+])
+
+// prettier-ignore
+const US_STATE_NAMES = new Set([
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado',
+  'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho',
+  'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine',
+  'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi',
+  'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey',
+  'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio',
+  'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina',
+  'south dakota', 'tennessee', 'texas', 'utah', 'vermont', 'virginia',
+  'washington', 'west virginia', 'wisconsin', 'wyoming',
+  'district of columbia', 'puerto rico',
+])
+
+const US_MARKERS = new Set(['US', 'USA', 'UNITED STATES', 'US REMOTE', 'REMOTE US'])
+
+/**
+ * Job locations rarely say "United States" literally ("San Francisco, CA",
+ * "Remote - US", "Boston, MA, US"), so the pinned suggestion matches on
+ * state codes, state names, and US/USA markers instead of raw substrings.
+ */
+function isUsLocation(location: string): boolean {
+  if (!location) return false
+  if (location.toLowerCase().includes('united states')) return true
+  for (const segment of location.split(/[;|,/]|\s[-–]\s/)) {
+    const part = segment.trim().replace(/\./g, '')
+    if (!part) continue
+    if (US_MARKERS.has(part.toUpperCase())) return true
+    if (part.length === 2 && US_STATE_CODES.has(part.toUpperCase())) return true
+    if (US_STATE_NAMES.has(part.toLowerCase())) return true
+  }
+  return false
+}
+
+function jobMatchesLocation(job: JobMatch, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (q === 'united states' || q === 'usa' || q === 'us') {
+    return isUsLocation(job.location)
+  }
+  return (job.location ?? '').toLowerCase().includes(q)
+}
+
+/** One suggestion row for a filter search input. */
+type SearchSuggestion = {
+  label: string
+  /** Lowercase haystack the typed query is matched against (label + aliases). */
+  searchText: string
+  hint?: string
+}
+
+/**
+ * The engineering disciplines Scout supports (mirrors the onboarding role
+ * grid). Suggestions seed the search box — the actual matching happens
+ * server-side in /jobs/search against the whole jobs database.
+ */
+const ROLE_SUGGESTION_SOURCE: ReadonlyArray<{ label: string; aliases: string[] }> = [
+  {
+    label: 'Software Engineering',
+    aliases: ['swe', 'software', 'software engineer', 'cs', 'sde', 'dev', 'developer'],
+  },
+  { label: 'Machine Learning', aliases: ['ml', 'ai', 'artificial intelligence', 'data science'] },
+  { label: 'Chemical Engineering', aliases: ['chem', 'chem eng', 'cheme', 'chemical'] },
+  { label: 'Mechanical Engineering', aliases: ['mech', 'mech eng', 'me', 'mechanical'] },
+  { label: 'Electrical Engineering', aliases: ['ee', 'ece', 'elec', 'electrical'] },
+  { label: 'Civil Engineering', aliases: ['civil', 'ce'] },
+  { label: 'Aerospace Engineering', aliases: ['aero', 'aerospace'] },
+  { label: 'Environmental Engineering', aliases: ['enviro', 'environmental'] },
+  { label: 'Nuclear Engineering', aliases: ['nuclear'] },
+  { label: 'Biomedical Engineering', aliases: ['bme', 'bio', 'biomed', 'biomedical'] },
+  { label: 'Industrial Engineering', aliases: ['ie', 'industrial'] },
+  { label: 'Research', aliases: ['research', 'researcher', 'r&d'] },
+]
+
+const ROLE_SUGGESTIONS: SearchSuggestion[] = ROLE_SUGGESTION_SOURCE.map((o) => ({
+  label: o.label,
+  searchText: `${o.label} ${o.aliases.join(' ')}`.toLowerCase(),
+}))
+
+const SEARCH_DEBOUNCE_MS = 400
+
 export default function ExplorePage() {
   const { toast } = useToast()
   const { setBatch, requestPulse, credits } = useExploreBatch()
@@ -74,7 +169,15 @@ export default function ExplorePage() {
   const [jobs, setJobs] = useState<JobMatch[]>([])
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+
+  // Server-side role search over the whole jobs DB. null = no active search
+  // (the board shows the user's recommended matches).
+  const [searchResults, setSearchResults] = useState<JobMatch[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const searchSeqRef = useRef(0)
 
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
     () => new Set(),
@@ -256,12 +359,97 @@ export default function ExplorePage() {
     void loadMatches().finally(() => setRefreshing(false))
   }, [loadMatches, refreshing, status])
 
-  // Client-side filter
+  // Debounced role search against the whole jobs database. Clearing the box
+  // drops straight back to the recommended matches.
+  useEffect(() => {
+    const query = roleFilter.trim()
+    if (!query) {
+      searchSeqRef.current += 1
+      setSearchResults(null)
+      setSearching(false)
+      return
+    }
+
+    const seq = ++searchSeqRef.current
+    setSearching(true)
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch('/api/jobs/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, limit: 50 }),
+            cache: 'no-store',
+          })
+          if (searchSeqRef.current !== seq) return
+          if (!res.ok) {
+            setSearchResults([])
+            return
+          }
+          const data = (await res.json()) as JobMatch[]
+          const list = Array.isArray(data) ? data : []
+          list.sort((a, b) => (b.final_score ?? 0) - (a.final_score ?? 0))
+          setSearchResults(list)
+        } catch {
+          if (searchSeqRef.current === seq) setSearchResults([])
+        } finally {
+          if (searchSeqRef.current === seq) setSearching(false)
+        }
+      })()
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+  }, [roleFilter])
+
+  // What the board is currently built from: search results when a role
+  // search is active, otherwise the user's recommended matches.
+  const activeJobs = searchResults ?? jobs
+
+  // Smart location suggestions: unique locations from whatever the board is
+  // showing (search results or recommended matches), ranked by how often
+  // they appear, with United States always pinned first.
+  const locationSuggestions = useMemo<SearchSuggestion[]>(() => {
+    const counts = new Map<string, { label: string; count: number }>()
+    for (const job of activeJobs) {
+      for (const segment of (job.location ?? '').split(/[;|]/)) {
+        const label = segment.trim()
+        if (!label) continue
+        const key = label.toLowerCase()
+        if (key === 'united states' || key === 'usa' || key === 'us') continue
+        const entry = counts.get(key)
+        if (entry) entry.count += 1
+        else counts.set(key, { label, count: 1 })
+      }
+    }
+    const ranked = [...counts.values()]
+      .sort((a, b) => b.count - a.count)
+      .map((entry) => ({
+        label: entry.label,
+        searchText: entry.label.toLowerCase(),
+      }))
+    return [
+      {
+        label: UNITED_STATES_LABEL,
+        searchText: 'united states usa us',
+        hint: 'All US roles',
+      },
+      ...ranked.slice(0, 11),
+    ]
+  }, [activeJobs])
+
+  // Location + chips narrow the active set (search results or matches);
+  // the role search itself already decided what that set is.
   const filteredJobs = useMemo(() => {
-    if (filter === 'remote') return jobs.filter((j) => j.remote === true)
-    if (filter === 'visa') return jobs.filter((j) => j.visa_sponsorship === 'yes')
-    return jobs
-  }, [jobs, filter])
+    let list = activeJobs
+    if (filter === 'remote') list = list.filter((j) => j.remote === true)
+    else if (filter === 'visa') {
+      list = list.filter((j) => j.visa_sponsorship === 'yes')
+    }
+    if (locationFilter.trim()) {
+      list = list.filter((j) => jobMatchesLocation(j, locationFilter))
+    }
+    return list
+  }, [activeJobs, filter, locationFilter])
 
   const strongJobs = useMemo(
     () => filteredJobs.filter((j) => j.category === 'STRONG_FIT'),
@@ -352,9 +540,26 @@ export default function ExplorePage() {
     toast,
   ])
 
+  // Every job the user has seen this session (matches + all search results),
+  // so selections survive switching between searches and the match view.
+  const [jobCatalog, setJobCatalog] = useState<Map<string, JobMatch>>(
+    () => new Map(),
+  )
+  useEffect(() => {
+    setJobCatalog((prev) => {
+      const next = new Map(prev)
+      for (const job of jobs) next.set(job.id, job)
+      for (const job of searchResults ?? []) next.set(job.id, job)
+      return next
+    })
+  }, [jobs, searchResults])
+
   const selectedJobs = useMemo(
-    () => jobs.filter((j) => selectedJobIds.has(j.id)),
-    [jobs, selectedJobIds],
+    () =>
+      [...selectedJobIds]
+        .map((id) => jobCatalog.get(id))
+        .filter((j): j is JobMatch => Boolean(j)),
+    [selectedJobIds, jobCatalog],
   )
 
   const handleConfirmBatch = useCallback(() => {
@@ -443,7 +648,23 @@ export default function ExplorePage() {
           onRefresh={handleRefresh}
           filter={filter}
           onFilterChange={setFilter}
+          role={roleFilter}
+          onRoleChange={setRoleFilter}
+          searching={searching}
+          location={locationFilter}
+          onLocationChange={setLocationFilter}
+          locationSuggestions={locationSuggestions}
         />
+
+        {searchResults !== null && !searching ? (
+          <p className="-mt-2 px-1 font-body text-xs text-[#666]">
+            {searchResults.length === 0
+              ? `No internships in our database matched “${roleFilter.trim()}” — try a broader term.`
+              : `${searchResults.length} ${
+                  searchResults.length === 1 ? 'internship' : 'internships'
+                } from across our database for “${roleFilter.trim()}” — clear the search to see your recommended matches.`}
+          </p>
+        ) : null}
 
         <StatsBar
           loading={isLoading}
@@ -621,31 +842,42 @@ function Header({
   onRefresh,
   filter,
   onFilterChange,
+  role,
+  onRoleChange,
+  searching,
+  location,
+  onLocationChange,
+  locationSuggestions,
 }: {
   loading: boolean
   onRefresh: () => void
   filter: FilterKey
   onFilterChange: (key: FilterKey) => void
+  role: string
+  onRoleChange: (value: string) => void
+  searching: boolean
+  location: string
+  onLocationChange: (value: string) => void
+  locationSuggestions: SearchSuggestion[]
 }) {
   return (
-    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h1 className="font-headline text-3xl font-medium tracking-[-0.02em] text-white md:text-4xl">
-          Explore
-        </h1>
-        <p className="mt-1 font-body text-sm text-[#888]">
-          Jobs matched to your resume
-        </p>
-      </div>
+    <header className="flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-headline text-3xl font-medium tracking-[-0.02em] text-white md:text-4xl">
+            Explore
+          </h1>
+          <p className="mt-1 font-body text-sm text-[#888]">
+            Jobs matched to your resume
+          </p>
+        </div>
 
-      <div className="flex flex-col gap-3 md:items-end">
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={onRefresh}
           disabled={loading}
-          className="self-start md:self-auto"
         >
           <RefreshCw
             className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
@@ -653,8 +885,29 @@ function Header({
           />
           Refresh
         </Button>
+      </div>
 
-        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1">
+      <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+        <FilterSearchInput
+          icon={Search}
+          value={role}
+          onChange={onRoleChange}
+          suggestions={ROLE_SUGGESTIONS}
+          placeholder="Search all internships — SWE, chem eng, EE…"
+          ariaLabel="Search internships by role"
+          loading={searching}
+          className="lg:max-w-sm lg:flex-1"
+        />
+        <FilterSearchInput
+          icon={MapPin}
+          value={location}
+          onChange={onLocationChange}
+          suggestions={locationSuggestions}
+          placeholder="Filter by location"
+          ariaLabel="Filter by location"
+          className="lg:w-56"
+        />
+        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 lg:ml-auto">
           {FILTERS.map((f) => {
             const active = f.key === filter
             return (
@@ -674,6 +927,142 @@ function Header({
         </div>
       </div>
     </header>
+  )
+}
+
+/**
+ * Text filter with a suggestion dropdown, styled to match the Button system
+ * (rounded-md, white/15 border). Typing filters the board live; suggestions
+ * are shortcuts, not required.
+ */
+function FilterSearchInput({
+  icon: Icon,
+  value,
+  onChange,
+  suggestions,
+  placeholder,
+  ariaLabel,
+  loading = false,
+  className,
+}: {
+  icon: typeof Search
+  value: string
+  onChange: (value: string) => void
+  suggestions: SearchSuggestion[]
+  placeholder: string
+  ariaLabel: string
+  loading?: boolean
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(event: globalThis.MouseEvent) {
+      const target = event.target as Node | null
+      if (!containerRef.current || !target) return
+      if (!containerRef.current.contains(target)) setOpen(false)
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const query = value.trim().toLowerCase()
+  const visibleSuggestions = suggestions.filter(
+    (s) =>
+      s.label.toLowerCase() !== query &&
+      (!query || s.searchText.includes(query)),
+  )
+
+  return (
+    <div ref={containerRef} className={cn('relative', className)}>
+      {loading ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+        >
+          <Loader2
+            className="h-3.5 w-3.5 animate-spin text-[#FF6733]"
+            strokeWidth={2}
+          />
+        </span>
+      ) : (
+        <Icon
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#666]"
+          strokeWidth={2}
+        />
+      )}
+      <input
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        className="font-body h-8 w-full rounded-md border border-white/15 bg-transparent pl-8 pr-8 text-sm text-foreground transition-colors duration-150 placeholder:text-[#666] hover:border-white/25 focus:border-white/25 focus:bg-white/[0.05] focus:outline-none"
+      />
+      {value ? (
+        <button
+          type="button"
+          aria-label={`Clear ${ariaLabel.toLowerCase()}`}
+          onClick={() => {
+            onChange('')
+            setOpen(false)
+          }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-[#666] transition-colors hover:text-white"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      ) : null}
+
+      {open && visibleSuggestions.length > 0 ? (
+        <div
+          role="listbox"
+          aria-label={`${ariaLabel} suggestions`}
+          className="glass-card absolute left-0 top-full z-20 mt-2 max-h-72 w-full min-w-56 overflow-y-auto rounded-xl border border-white/[0.08] p-1 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+        >
+          {visibleSuggestions.map((suggestion) => (
+            <button
+              key={suggestion.label}
+              type="button"
+              role="option"
+              aria-selected={false}
+              onClick={() => {
+                onChange(suggestion.label)
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left font-body text-sm text-[#bdbdbd] transition-colors hover:bg-white/[0.05] hover:text-white"
+            >
+              <Icon
+                aria-hidden
+                className="h-3.5 w-3.5 shrink-0 text-[#555]"
+                strokeWidth={2}
+              />
+              <span className="truncate">{suggestion.label}</span>
+              {suggestion.hint ? (
+                <span className="ml-auto shrink-0 font-label text-[10px] uppercase tracking-[0.16em] text-[#666]">
+                  {suggestion.hint}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 

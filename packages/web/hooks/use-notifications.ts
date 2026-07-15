@@ -62,6 +62,12 @@ export function useNotifications() {
   }, [applyPayload, user?.id])
 
   useEffect(() => {
+    // Re-enter loading whenever the signed-in user changes (including Clerk
+    // resolving after mount): until the first payload for THIS user lands,
+    // dismissedApplicationIds is empty and must not be treated as truth —
+    // consumers gate their dismissal filtering on `loading`. The 15s poll
+    // calls refetch directly and never flips loading back.
+    if (user?.id) setLoading(true)
     void refetch()
     if (!user?.id) return
     const id = setInterval(() => void refetch(), POLL_MS)

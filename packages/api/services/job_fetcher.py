@@ -45,14 +45,20 @@ NO_SPONSORSHIP_PHRASES = [
     "security clearance required",
 ]
 
+# Internship/co-op only — do not keep bare new-grad / junior / seasonal titles.
+INTERNSHIP_PATTERNS = [
+    re.compile(r"\bintern(?:ship|ships)?\b", re.I),
+    re.compile(r"\bco[\s-]?op\b", re.I),
+    re.compile(r"\bstudent\s+intern(?:ship)?\b", re.I),
+    re.compile(r"\bundergraduate\s+intern(?:ship)?\b", re.I),
+    re.compile(r"\bgraduate\s+intern(?:ship)?\b", re.I),
+    re.compile(r"\bphd\s+intern(?:ship)?\b", re.I),
+]
+
+# Kept for backwards-compatible imports/tests that still reference these names.
 KEEP_KEYWORDS = [
-    "intern", "internship", "co-op", "coop",
-    "student", "entry level", "new grad", "junior",
-    "apprentice", "trainee", "graduate program",
-    "rotational", "early career", "campus",
-    "undergraduate", "phd intern", "research assistant",
-    "teaching assistant", "summer", "seasonal",
-    "graduate intern", "student worker",
+    "intern", "internship", "co-op", "coop", "co op",
+    "student intern", "undergraduate intern", "graduate intern", "phd intern",
 ]
 
 EXCLUDE_KEYWORDS = [
@@ -63,6 +69,24 @@ EXCLUDE_KEYWORDS = [
     "sr.", "sr ", " ii ", " iii ", " iv ",
     "distinguished", "fellow", "executive",
 ]
+
+# Target recruiting seasons: Spring / Summer / Fall 2027.
+TARGET_YEAR = 2027
+PAST_YEARS = (2024, 2025, 2026)
+SEASON_WORDS = r"(?:spring|summer|fall|autumn|winter)"
+# "Spring 2027", "Summer/Fall 2027", bare "2027", "Spring/Summer 2027"
+_TARGET_YEAR_RE = re.compile(
+    rf"\b(?:{SEASON_WORDS}(?:\s*/\s*{SEASON_WORDS})?\s+)?{TARGET_YEAR}\b",
+    re.I,
+)
+# Past academic seasons / years — exclude even if still labeled intern/co-op.
+_PAST_YEAR_RE = re.compile(
+    rf"\b(?:{SEASON_WORDS}(?:\s*/\s*{SEASON_WORDS})?\s+)?(?:{'|'.join(str(y) for y in PAST_YEARS)})\b",
+    re.I,
+)
+# No-year intern/co-op posts kept when freshly posted (volume over exact strings).
+NO_YEAR_MAX_AGE_DAYS = 120
+_DESC_SNIPPET_CHARS = 800
 
 ADZUNA_QUERIES = [
     "software engineering intern",
@@ -184,13 +208,101 @@ def is_remote(location: str) -> bool:
     return "remote" in loc or "anywhere" in loc
 
 
-def filter_internships(listings: list[dict]) -> list[dict]:
+def _listing_text(listing: dict) -> str:
+    title = listing.get("title") or ""
+    desc = (listing.get("description") or "")[:_DESC_SNIPPET_CHARS]
+    return f"{title}\n{desc}"
+
+
+def _has_internship_signal(text: str) -> bool:
+    return any(p.search(text) for p in INTERNSHIP_PATTERNS)
+
+
+def _has_exclude_title(title: str) -> bool:
+    title_lower = title.lower()
+    return any(e in title_lower for e in EXCLUDE_KEYWORDS)
+
+
+_RELATIVE_POSTED_RE = re.compile(
+    r"posted\s+(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago",
+    re.I,
+)
+
+
+def _parse_posted_at(value, *, now: datetime | None = None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    # Workday CXS often returns "Posted 12 Days Ago" instead of an ISO timestamp.
+    m = _RELATIVE_POSTED_RE.search(raw)
+    if not m:
+        return None
+    amount = int(m.group(1))
+    unit = m.group(2).lower()
+    ref = now or datetime.now(tz=timezone.utc)
+    delta = {
+        "second": timedelta(seconds=amount),
+        "minute": timedelta(minutes=amount),
+        "hour": timedelta(hours=amount),
+        "day": timedelta(days=amount),
+        "week": timedelta(weeks=amount),
+        "month": timedelta(days=30 * amount),
+        "year": timedelta(days=365 * amount),
+    }.get(unit)
+    if delta is None:
+        return None
+    return ref - delta
+
+
+def _posted_at_iso(value, *, now: datetime | None = None) -> str:
+    """Coerce any source posted_at into a timestamptz-safe ISO string."""
+    parsed = _parse_posted_at(value, now=now)
+    if parsed is not None:
+        return parsed.isoformat()
+    return (now or datetime.now(tz=timezone.utc)).isoformat()
+
+
+def internship_keep_reason(listing: dict, *, now: datetime | None = None) -> str | None:
+    """Return a short keep reason, or None if the listing should be dropped."""
+    title = listing.get("title") or ""
+    text = _listing_text(listing)
+
+    if _has_exclude_title(title):
+        return None
+    if not _has_internship_signal(text):
+        return None
+
+    # Past-year / past-season labels are stale even if still listed as intern/co-op.
+    if _PAST_YEAR_RE.search(text):
+        return None
+
+    if _TARGET_YEAR_RE.search(text):
+        return "target_year_2027"
+
+    ref = now or datetime.now(tz=timezone.utc)
+    posted_at = _parse_posted_at(listing.get("posted_at"), now=ref)
+    if posted_at is None:
+        return None
+    age = ref - posted_at.astimezone(timezone.utc)
+    if age <= timedelta(days=NO_YEAR_MAX_AGE_DAYS):
+        return "recent_no_year"
+    return None
+
+
+def filter_internships(listings: list[dict], *, now: datetime | None = None) -> list[dict]:
+    """Keep internship/co-op roles for Spring/Summer/Fall 2027 (+ recent no-year)."""
     results = []
     for listing in listings:
-        title = listing.get("title", "").lower()
-        has_keep = any(k in title for k in KEEP_KEYWORDS)
-        has_exclude = any(e in title for e in EXCLUDE_KEYWORDS)
-        if has_keep and not has_exclude:
+        if internship_keep_reason(listing, now=now):
             results.append(listing)
     return results
 
@@ -641,10 +753,11 @@ async def fetch_workday_jobs() -> list[dict]:
             await asyncio.sleep(0.2)
             subdomain = company.get("subdomain", "")
             version = company.get("wd_version", 1)
+            site = (company.get("site") or "careers").strip("/") or "careers"
             company_name = company.get("company", subdomain)
             url = (
                 f"https://{subdomain}.wd{version}.myworkdayjobs.com"
-                f"/wday/cxs/{subdomain}/careers/jobs"
+                f"/wday/cxs/{subdomain}/{site}/jobs"
             )
             body = {
                 "appliedFacets": {},
@@ -667,7 +780,13 @@ async def fetch_workday_jobs() -> list[dict]:
 
             for posting in postings:
                 external_path = posting.get("externalPath") or ""
-                job_url = f"https://{subdomain}.wd{version}.myworkdayjobs.com{external_path}"
+                if external_path.startswith("/"):
+                    job_url = f"https://{subdomain}.wd{version}.myworkdayjobs.com{external_path}"
+                else:
+                    job_url = (
+                        f"https://{subdomain}.wd{version}.myworkdayjobs.com"
+                        f"/{site}/{external_path.lstrip('/')}"
+                    )
                 location = posting.get("locationsText") or ""
                 remote_type = posting.get("remoteType") or ""
                 description = (posting.get("jobDescription") or "")[:2000]
@@ -681,7 +800,7 @@ async def fetch_workday_jobs() -> list[dict]:
                     "url": job_url,
                     "source": "workday",
                     "portal": "workday",
-                    "posted_at": posting.get("postedOn") or datetime.now(tz=timezone.utc).isoformat(),
+                    "posted_at": _posted_at_iso(posting.get("postedOn")),
                     "expires_at": get_expires_at(),
                     "visa_sponsorship": get_visa_status(company_name, description),
                 })
@@ -689,6 +808,388 @@ async def fetch_workday_jobs() -> list[dict]:
             logger.info("Workday %s: %d internships found", company_name, len(postings))
 
     logger.info("Workday: fetched %d listings", len(results))
+    return results
+
+
+# ── SmartRecruiters ───────────────────────────────────────────────────────────
+
+async def fetch_smartrecruiters_jobs() -> list[dict]:
+    path = DATA_DIR / "smartrecruiters_companies.json"
+    if not path.exists():
+        logger.warning("SmartRecruiters company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.25)
+            offset = 0
+            company_name = slug.replace("-", " ").title()
+            while True:
+                url = f"https://api.smartrecruiters.com/v1/companies/{slug}/postings"
+                try:
+                    resp = await client.get(
+                        url, params={"limit": 100, "offset": offset}
+                    )
+                    if resp.status_code == 404:
+                        break
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.error("SmartRecruiters error for %s: %s", slug, e)
+                    break
+
+                content = data.get("content") or []
+                if not content:
+                    break
+
+                for job in content:
+                    title = job.get("name") or ""
+                    loc = job.get("location") or {}
+                    location = (
+                        loc.get("fullLocation")
+                        or ", ".join(
+                            p
+                            for p in [
+                                loc.get("city"),
+                                loc.get("region"),
+                                loc.get("country"),
+                            ]
+                            if p
+                        )
+                        or ""
+                    )
+                    remote = bool(loc.get("remote"))
+                    job_id = job.get("id") or job.get("uuid") or ""
+                    posting_url = (
+                        f"https://jobs.smartrecruiters.com/{slug}/{job_id}"
+                        if job_id
+                        else ""
+                    )
+                    company_obj = job.get("company") or {}
+                    if isinstance(company_obj, dict) and company_obj.get("name"):
+                        company_name = company_obj["name"]
+                    results.append({
+                        "title": title,
+                        "company": company_name,
+                        "location": location,
+                        "remote": remote,
+                        "description": "",
+                        "skills_required": [],
+                        "url": posting_url,
+                        "source": "smartrecruiters",
+                        "portal": "smartrecruiters",
+                        "posted_at": _posted_at_iso(job.get("releasedDate")),
+                        "expires_at": get_expires_at(),
+                        "visa_sponsorship": get_visa_status(company_name, ""),
+                    })
+
+                total = data.get("totalFound") or 0
+                offset += len(content)
+                if offset >= total or len(content) < 100:
+                    break
+
+    logger.info("SmartRecruiters: fetched %d listings", len(results))
+    return results
+
+
+# ── Workable ──────────────────────────────────────────────────────────────────
+
+async def fetch_workable_jobs() -> list[dict]:
+    path = DATA_DIR / "workable_companies.json"
+    if not path.exists():
+        logger.warning("Workable company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.2)
+            url = f"https://apply.workable.com/api/v1/widget/accounts/{slug}"
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.error("Workable error for %s: %s", slug, e)
+                continue
+
+            company = data.get("name") or slug.replace("-", " ").title()
+            for job in data.get("jobs") or []:
+                city = job.get("city") or ""
+                state = job.get("state") or ""
+                country = job.get("country") or ""
+                location = ", ".join(p for p in [city, state, country] if p)
+                results.append({
+                    "title": job.get("title") or "",
+                    "company": company,
+                    "location": location,
+                    "remote": bool(job.get("telecommuting")),
+                    "description": "",
+                    "skills_required": [],
+                    "url": job.get("url") or job.get("shortlink") or job.get("application_url") or "",
+                    "source": "workable",
+                    "portal": "workable",
+                    "posted_at": _posted_at_iso(
+                        job.get("published_on") or job.get("created_at")
+                    ),
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": get_visa_status(company, ""),
+                })
+
+    logger.info("Workable: fetched %d listings", len(results))
+    return results
+
+
+# ── Recruitee ─────────────────────────────────────────────────────────────────
+
+async def fetch_recruitee_jobs() -> list[dict]:
+    path = DATA_DIR / "recruitee_companies.json"
+    if not path.exists():
+        logger.warning("Recruitee company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.2)
+            url = f"https://{slug}.recruitee.com/api/offers/"
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.error("Recruitee error for %s: %s", slug, e)
+                continue
+
+            company = slug.replace("-", " ").title()
+            for offer in data.get("offers") or []:
+                status = offer.get("status")
+                if status and status != "published":
+                    continue
+                city = offer.get("city") or ""
+                country = offer.get("country_code") or offer.get("country") or ""
+                location = ", ".join(p for p in [city, country] if p)
+                description = _strip_html(offer.get("description") or "")
+                results.append({
+                    "title": offer.get("title") or "",
+                    "company": company,
+                    "location": location,
+                    "remote": bool(offer.get("remote") or offer.get("on_site") is False),
+                    "description": description,
+                    "skills_required": extract_skills(description),
+                    "url": offer.get("careers_url") or offer.get("url") or "",
+                    "source": "recruitee",
+                    "portal": "recruitee",
+                    "posted_at": _posted_at_iso(offer.get("published_at") or offer.get("created_at")),
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": get_visa_status(company, description),
+                })
+
+    logger.info("Recruitee: fetched %d listings", len(results))
+    return results
+
+
+# ── BambooHR ──────────────────────────────────────────────────────────────────
+
+async def fetch_bamboohr_jobs() -> list[dict]:
+    path = DATA_DIR / "bamboohr_companies.json"
+    if not path.exists():
+        logger.warning("BambooHR company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(
+        timeout=30, headers={"Accept": "application/json"}
+    ) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.2)
+            url = f"https://{slug}.bamboohr.com/careers/list"
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 404:
+                    continue
+                if "application/json" not in (resp.headers.get("content-type") or ""):
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.error("BambooHR error for %s: %s", slug, e)
+                continue
+
+            company = slug.replace("-", " ").title()
+            for job in data.get("result") or []:
+                title = job.get("jobOpeningName") or ""
+                loc = job.get("location") or {}
+                if isinstance(loc, dict):
+                    location = ", ".join(
+                        p for p in [loc.get("city"), loc.get("state")] if p
+                    )
+                else:
+                    location = str(loc or "")
+                job_id = job.get("id")
+                job_url = (
+                    f"https://{slug}.bamboohr.com/careers/{job_id}"
+                    if job_id
+                    else ""
+                )
+                description = ""
+                posted_at = datetime.now(tz=timezone.utc).isoformat()
+                # Fetch description only for likely intern/co-op titles (list
+                # endpoint has no body — saves crawl time on permanent FT roles).
+                if job_id and _has_internship_signal(title):
+                    try:
+                        detail = await client.get(
+                            f"https://{slug}.bamboohr.com/careers/{job_id}/detail"
+                        )
+                        if detail.status_code == 200:
+                            jo = (detail.json().get("result") or {}).get("jobOpening") or {}
+                            description = _strip_html(jo.get("description") or "")
+                            posted_at = _posted_at_iso(jo.get("datePosted"))
+                            share = jo.get("jobOpeningShareUrl")
+                            if share:
+                                job_url = share
+                    except Exception:
+                        pass
+
+                results.append({
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "remote": bool(job.get("isRemote")),
+                    "description": description,
+                    "skills_required": extract_skills(description),
+                    "url": job_url,
+                    "source": "bamboohr",
+                    "portal": "bamboohr",
+                    "posted_at": posted_at,
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": get_visa_status(company, description),
+                })
+
+    logger.info("BambooHR: fetched %d listings", len(results))
+    return results
+
+
+# ── Teamtailor ────────────────────────────────────────────────────────────────
+
+async def fetch_teamtailor_jobs() -> list[dict]:
+    path = DATA_DIR / "teamtailor_companies.json"
+    if not path.exists():
+        logger.warning("Teamtailor company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.2)
+            url = f"https://{slug}.teamtailor.com/jobs.json"
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.error("Teamtailor error for %s: %s", slug, e)
+                continue
+
+            company = (
+                (data.get("title") or slug.replace("-", " ").title())
+                .replace(" Jobs", "")
+                .strip()
+            )
+            for item in data.get("items") or []:
+                description = _strip_html(item.get("content_html") or item.get("content_text") or "")
+                results.append({
+                    "title": item.get("title") or "",
+                    "company": company,
+                    "location": "",
+                    "remote": is_remote(description[:200]),
+                    "description": description,
+                    "skills_required": extract_skills(description),
+                    "url": item.get("url") or "",
+                    "source": "teamtailor",
+                    "portal": "teamtailor",
+                    "posted_at": _posted_at_iso(item.get("date_published")),
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": get_visa_status(company, description),
+                })
+
+    logger.info("Teamtailor: fetched %d listings", len(results))
+    return results
+
+
+# ── iCIMS ─────────────────────────────────────────────────────────────────────
+
+_ICIMS_JOB_LOC_RE = re.compile(
+    r"https://careers-([^/]+)\.icims\.com/jobs/(\d+)/([^/]+)/job",
+    re.I,
+)
+
+
+def _title_from_icims_slug(slug: str) -> str:
+    from urllib.parse import unquote
+
+    cleaned = unquote(slug or "").replace("-", " ").strip()
+    return cleaned.title() if cleaned else "Job Opening"
+
+
+async def fetch_icims_jobs() -> list[dict]:
+    """Discover openings from public iCIMS career-site sitemaps (title from URL slug)."""
+    path = DATA_DIR / "icims_companies.json"
+    if not path.exists():
+        logger.warning("iCIMS company list missing; skipping")
+        return []
+    slugs: list[str] = await run_in_threadpool(_load_json, path)
+    results: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for slug in slugs:
+            await asyncio.sleep(0.25)
+            sitemap_url = f"https://careers-{slug}.icims.com/sitemap.xml"
+            try:
+                resp = await client.get(sitemap_url)
+                if resp.status_code != 200:
+                    continue
+                text = resp.text
+            except Exception as e:
+                logger.error("iCIMS error for %s: %s", slug, e)
+                continue
+
+            company = slug.replace("-", " ").title()
+            seen_urls: set[str] = set()
+            for m in _ICIMS_JOB_LOC_RE.finditer(text):
+                job_url = m.group(0)
+                if job_url in seen_urls:
+                    continue
+                seen_urls.add(job_url)
+                title = _title_from_icims_slug(m.group(3))
+                results.append({
+                    "title": title,
+                    "company": company,
+                    "location": "",
+                    "remote": is_remote(title),
+                    "description": "",
+                    "skills_required": [],
+                    "url": job_url,
+                    "source": "icims",
+                    "portal": "icims",
+                    "posted_at": datetime.now(tz=timezone.utc).isoformat(),
+                    "expires_at": get_expires_at(),
+                    "visa_sponsorship": "unknown",
+                })
+
+    logger.info("iCIMS: fetched %d listings", len(results))
     return results
 
 
@@ -704,10 +1205,31 @@ async def fetch_all_jobs() -> list[dict]:
         fetch_muse_jobs(),
         fetch_usajobs_jobs(),
         fetch_workday_jobs(),
+        fetch_smartrecruiters_jobs(),
+        fetch_workable_jobs(),
+        fetch_recruitee_jobs(),
+        fetch_bamboohr_jobs(),
+        fetch_teamtailor_jobs(),
+        fetch_icims_jobs(),
         return_exceptions=True,
     )
 
-    source_names = ["adzuna", "greenhouse", "lever", "ashby", "jsearch", "muse", "usajobs", "workday"]
+    source_names = [
+        "adzuna",
+        "greenhouse",
+        "lever",
+        "ashby",
+        "jsearch",
+        "muse",
+        "usajobs",
+        "workday",
+        "smartrecruiters",
+        "workable",
+        "recruitee",
+        "bamboohr",
+        "teamtailor",
+        "icims",
+    ]
     all_jobs: list[dict] = []
 
     for name, batch in zip(source_names, raw_results):
@@ -723,6 +1245,9 @@ async def fetch_all_jobs() -> list[dict]:
     deduped: list[dict] = []
     for job in all_jobs:
         url = job.get("url", "")
+        # Guard timestamptz upsert — Workday (and any other source) may emit
+        # relative strings like "Posted 13 Days Ago".
+        job["posted_at"] = _posted_at_iso(job.get("posted_at"))
         if url and url not in seen:
             seen.add(url)
             deduped.append(job)

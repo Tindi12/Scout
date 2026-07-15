@@ -12,12 +12,12 @@ const TIER_LINES: Record<'pro' | 'scout_plus', { name: string; unlocked: string 
   pro: {
     name: 'Scout Pro',
     unlocked:
-      '200 applications every 30 days, the full Scout Agent applying on your behalf, and unlimited resume rewrites.',
+      '40 applications every 30 days, the full Scout Agent applying on your behalf, and unlimited resume rewrites.',
   },
   scout_plus: {
     name: 'Scout+',
     unlocked:
-      '600 applications every 30 days and priority on everything: runs, rewrites, support.',
+      '100 applications every 30 days and priority on everything: runs, rewrites, support.',
   },
 }
 

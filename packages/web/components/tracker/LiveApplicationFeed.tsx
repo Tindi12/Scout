@@ -13,10 +13,13 @@ import {
 
 import { PortalBadge } from './PortalBadge'
 import { ApplicationOutcomeChip } from './ApplicationOutcomeChip'
+import { RetryApplicationButton } from './RetryApplicationButton'
 import {
   detectPortalFromUrl,
   formatElapsed,
   formatRelativeTime,
+  isManualApplyRecommended,
+  isRetryableApplication,
   mergeRunApplications,
   sortRunApplications,
   STATUS_CONFIG,
@@ -59,24 +62,30 @@ function clearTimerStart(appId: string) {
   }
 }
 
+// Only needs_attention is dismissible from the LIVE feed. 'failed' was dropped
+// 2026-07-13: a card dismissed here (transient, "stop showing this in the
+// running-now view") stayed dismissed via the SAME server-persisted flag the
+// historical Kanban checks — but the Kanban never filters 'failed' by
+// dismissal (failed cards always show, with a Retry action), so the two views
+// disagreed. Concretely: retry a previously-dismissed failed application and
+// watch it fail again live, and the feed would drop the row (and the whole
+// section, if it's the only job in the run) instead of showing the failure —
+// "moving to failed causes the card to disappear" rather than moving into a
+// failed view. failed cards now always render here too, matching the Kanban.
 const DISMISSIBLE_STATUSES = new Set<AppStatus>([
-  'failed',
   'needs_attention',
-  'awaiting_code',
 ])
 
 type LiveApplicationFeedProps = {
   run: ScoutRun
   applicationRecords: ApplicationRecord[]
-  onAnswerClick: (app: ApplicationRecord) => void
-  onCodeClick: (app: ApplicationRecord) => void
+  onRetry?: (app: Pick<ApplicationRecord, 'id' | 'company'>) => Promise<void> | void
 }
 
 export function LiveApplicationFeed({
   run,
   applicationRecords,
-  onAnswerClick,
-  onCodeClick,
+  onRetry,
 }: LiveApplicationFeedProps) {
   const { isApplicationDismissed, dismissForApplication } =
     useNotificationsContext()
@@ -108,8 +117,7 @@ export function LiveApplicationFeed({
             >
               <FeedRow
                 app={app}
-                onAnswerClick={onAnswerClick}
-                onCodeClick={onCodeClick}
+                onRetry={onRetry}
                 records={applicationRecords}
                 onDismiss={
                   DISMISSIBLE_STATUSES.has(app.status)
@@ -127,14 +135,12 @@ export function LiveApplicationFeed({
 
 function FeedRow({
   app,
-  onAnswerClick,
-  onCodeClick,
+  onRetry,
   records,
   onDismiss,
 }: {
   app: EnrichedRunApplication
-  onAnswerClick: (app: ApplicationRecord) => void
-  onCodeClick: (app: ApplicationRecord) => void
+  onRetry?: (app: Pick<ApplicationRecord, 'id' | 'company'>) => Promise<void> | void
   records: ApplicationRecord[]
   onDismiss?: () => void
 }) {
@@ -149,19 +155,6 @@ function FeedRow({
   }, [app.status, app.id])
 
   const viewUrl = app.job_url || app.url || record?.job_url
-
-  // The records list can lag a poll cycle behind run status; never let that hide
-  // the time-sensitive code prompt — synthesize a record from the run app instead.
-  const recordForModal: ApplicationRecord = record ?? {
-    id: app.id,
-    job_id: app.job_id,
-    status: app.status,
-    company: app.company,
-    role: app.role,
-    job_url: app.job_url,
-    error_message: app.error_message,
-    applied_at: app.applied_at,
-  }
 
   return (
     <div className="flex flex-col gap-3 border-b border-white/[0.04] px-8 py-4 sm:flex-row sm:items-center sm:gap-4">
@@ -190,33 +183,43 @@ function FeedRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {app.status === 'awaiting_code' ? (
-          <button
-            type="button"
-            onClick={() => onCodeClick(recordForModal)}
-            className="font-label inline-flex h-7 items-center rounded-md border border-[#22d3ee]/30 bg-[#22d3ee]/10 px-3 text-[11px] font-semibold text-[#22d3ee] transition-colors duration-150 hover:bg-[#22d3ee]/20"
-          >
-            Enter Code
-          </button>
-        ) : null}
-        {app.status === 'needs_attention' && record ? (
-          <button
-            type="button"
-            onClick={() => onAnswerClick(record)}
-            className="font-label inline-flex h-7 items-center rounded-md border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 text-[11px] font-semibold text-[#f59e0b] transition-colors duration-150 hover:bg-[#f59e0b]/20"
-          >
-            Answer
-          </button>
+        {isRetryableApplication({
+          status: app.status,
+          failure_code: (app as ApplicationRecord).failure_code ?? record?.failure_code,
+          error_message: app.error_message ?? record?.error_message ?? null,
+        }) && onRetry ? (
+          <RetryApplicationButton
+            className="h-7 w-7"
+            onRetry={() => onRetry({ id: app.id, company: app.company })}
+          />
         ) : null}
         {viewUrl ? (
-          <a
-            href={viewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-label text-xs text-[#888] transition-colors hover:text-white"
-          >
-            View →
-          </a>
+          isManualApplyRecommended({
+            status: app.status,
+            failure_code:
+              (app as ApplicationRecord).failure_code ?? record?.failure_code,
+            error_message: app.error_message ?? record?.error_message ?? null,
+          }) ? (
+            // Spam/CAPTCHA block: automation is terminal here, but a human
+            // applying on the job page works — make that the primary action.
+            <a
+              href={viewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-label text-xs font-medium text-[#f59e0b] transition-colors hover:text-[#fbbf24]"
+            >
+              Apply manually →
+            </a>
+          ) : (
+            <a
+              href={viewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-label text-xs text-[#888] transition-colors hover:text-white"
+            >
+              View →
+            </a>
+          )
         ) : (
           <span className="font-label text-xs text-[#333]">View →</span>
         )}
@@ -287,13 +290,29 @@ function TimingColumn({ app }: { app: EnrichedRunApplication }) {
     return <span className="font-mono text-xs text-[#444]">Waiting...</span>
   }
   if (app.status === 'needs_attention') {
-    return <span className="font-mono text-xs text-[#f59e0b]">Input required</span>
+    // Informational only (2026-07-13: needs_attention no longer asks the user to
+    // type an answer) — same chip 'failed' uses above, showing the ALREADY
+    // user-safe message directly with no fetch.
+    return (
+      <div className="flex justify-end">
+        <ApplicationOutcomeChip
+          app={{
+            id: app.id,
+            status: app.status,
+            error_message: app.error_message,
+            company: app.company,
+            role: app.role,
+          }}
+          className="mt-0"
+        />
+      </div>
+    )
   }
+  // awaiting_code: Scout retrieves the emailed code itself — render as an
+  // active verifying step, never a user prompt.
   if (app.status === 'awaiting_code') {
     return (
-      <span className="font-mono text-xs text-[#22d3ee]">
-        Check your email for a code
-      </span>
+      <span className="font-mono text-xs text-[#22d3ee]">Verifying…</span>
     )
   }
   return null

@@ -135,7 +135,6 @@ def test_farewell_failure_does_not_stop_deletion(monkeypatch):
         "name": "Alex Doe",
         "stripe_customer_id": None,
         "stripe_subscription_id": None,
-        "composio_account_id": None,
     }
     monkeypatch.setattr(deletion, "_fetch_deletion_row", lambda clerk_id: row)
     monkeypatch.setattr(deletion, "_purge_bucket_prefix", lambda b, p: deletion.SKIPPED)
@@ -166,7 +165,6 @@ def test_farewell_not_sent_on_aborted_run(monkeypatch):
         "name": "Alex Doe",
         "stripe_customer_id": "cus_1",
         "stripe_subscription_id": "sub_1",
-        "composio_account_id": None,
     }
     monkeypatch.setattr(deletion, "_fetch_deletion_row", lambda clerk_id: row)
     monkeypatch.setattr(deletion, "_purge_bucket_prefix", lambda b, p: deletion.SKIPPED)

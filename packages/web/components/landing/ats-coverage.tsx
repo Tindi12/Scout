@@ -1,16 +1,22 @@
 import { ATS_PROVIDERS, type AtsProvider } from '@/lib/ats-logos'
+import { cn } from '@/lib/utils'
 
 function AtsTile({ ats }: { ats: AtsProvider }) {
   return (
     <div className="glass-card group relative flex h-28 items-center justify-center overflow-hidden rounded-2xl p-6 transition-all duration-300 hover:bg-white/[0.04]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={ats.logoUrl}
-        alt={ats.name}
-        loading="lazy"
-        draggable={false}
-        className="relative h-8 w-auto max-w-[75%] select-none object-contain opacity-80 transition-opacity duration-300 group-hover:opacity-100"
-      />
+      <div className="flex h-12 w-full items-center justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={ats.logoUrl}
+          alt={ats.name}
+          loading="lazy"
+          draggable={false}
+          className={cn(
+            'relative mx-auto block h-8 w-auto max-w-[75%] select-none object-contain opacity-80 transition-opacity duration-300 group-hover:opacity-100',
+            ats.imgClassName,
+          )}
+        />
+      </div>
     </div>
   )
 }

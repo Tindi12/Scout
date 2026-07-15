@@ -3,21 +3,19 @@ Account-deletion orchestrator — the single place a user's data is erased every
 
 Order is the whole design: external systems are cleaned up BEFORE the local users row
 is deleted, because that row holds the ids the cleanup needs (Stripe customer /
-subscription, Composio connected account, the storage prefixes). Clerk deletion is
-deliberately NOT here — CLERK_SECRET_KEY lives only in the Next.js environment, so the
-web proxy route deletes the Clerk user LAST, after this orchestrator reports success.
-That also preserves the authenticated session for retries if anything here fails.
+subscription, the storage prefixes). Clerk deletion is deliberately NOT here —
+CLERK_SECRET_KEY lives only in the Next.js environment, so the web proxy route deletes
+the Clerk user LAST, after this orchestrator reports success. That also preserves the
+authenticated session for retries if anything here fails.
 
 Contract:
 - Idempotent: re-running for a partially (or fully) deleted user completes cleanly;
   "record already gone" is a skip, never a failure.
 - No silent partial failures: billing/storage failures ABORT before the users row is
   deleted (the ids survive for a retry) and AccountDeletionError carries the per-step
-  report of exactly what completed. Composio mail disconnect is best-effort (same as
-  DELETE /user/mail-connection): a remote 500 must not block deletion — dropping the
-  users row removes our only reference to the connection id.
-- Logs and Sentry events carry ids and step names only — never resume content, the
-  usajobs_password (plaintext or ciphertext), or OAuth tokens.
+  report of exactly what completed.
+- Logs and Sentry events carry ids and step names only — never resume content or the
+  usajobs_password (plaintext or ciphertext).
 """
 from __future__ import annotations
 
@@ -26,7 +24,7 @@ import logging
 import sentry_sdk
 from stripe import InvalidRequestError, StripeError
 
-from core import composio_mail, newsletter
+from core import newsletter
 from core.apply_storage import BUCKET as APPLY_ARTIFACTS_BUCKET
 from core.email import EMAIL_FAREWELL, first_name_from, send_email
 from core.stripe_client import stripe_client
@@ -46,7 +44,6 @@ FAILED = "failed"
 STEPS = (
     "stripe_subscription",
     "stripe_customer",
-    "composio_mail",
     "newsletter_contact",
     "storage_resumes",
     "storage_apply_artifacts",
@@ -69,10 +66,7 @@ def _fetch_deletion_row(clerk_id: str) -> dict | None:
     # still reach an address that is about to stop existing locally.
     res = (
         supabase.table("users")
-        .select(
-            "id, email, name, stripe_customer_id, stripe_subscription_id,"
-            " composio_account_id"
-        )
+        .select("id, email, name, stripe_customer_id, stripe_subscription_id")
         .eq("clerk_id", clerk_id)
         .maybe_single()
         .execute()
@@ -112,30 +106,6 @@ def _delete_stripe_customer(customer_id: str | None) -> str:
         if _stripe_already_gone(exc):
             return SKIPPED
         raise
-
-
-def _disconnect_composio(account_id: str | None) -> str:
-    if not account_id:
-        return SKIPPED
-    if not composio_mail.is_configured():
-        # Feature off on this deployment — there is no live token to revoke here.
-        return SKIPPED
-    try:
-        composio_mail.disconnect(account_id)
-        return DELETED
-    except Exception as exc:  # noqa: BLE001 — SDK raises provider-specific types
-        if "404" in str(exc) or "not found" in str(exc).lower():
-            return SKIPPED
-        # Composio occasionally 500s on delete (ConnectedAccount_InternalServerError).
-        # Blocking account deletion would strand the user with no self-serve exit; the
-        # users row is the only local linkage and is removed in the database step.
-        logger.warning(
-            "Composio disconnect failed for %s… (proceeding with account deletion): %s",
-            (account_id or "")[:12],
-            exc,
-        )
-        sentry_sdk.capture_exception(exc)
-        return SKIPPED
 
 
 def _remove_newsletter_contact(email: str | None) -> str:
@@ -196,10 +166,10 @@ def _delete_users_row(clerk_id: str) -> str:
 
 
 def delete_account_data(clerk_id: str) -> dict:
-    """Erase everything Scout holds for `clerk_id`: Stripe → Composio → Storage → DB
-    (children removed by ON DELETE CASCADE, including the encrypted usajobs_password
-    on the row itself). Returns {"ok", "already_deleted", "steps"}; raises
-    AccountDeletionError before touching the DB row if any external step truly fails.
+    """Erase everything Scout holds for `clerk_id`: Stripe → Storage → DB (children
+    removed by ON DELETE CASCADE, including the encrypted usajobs_password on the row
+    itself). Returns {"ok", "already_deleted", "steps"}; raises AccountDeletionError
+    before touching the DB row if any external step truly fails.
     """
     steps: dict[str, str] = {name: SKIPPED for name in STEPS}
 
@@ -224,7 +194,6 @@ def delete_account_data(clerk_id: str) -> dict:
 
     ok = _run("stripe_subscription", _cancel_stripe_subscription, row.get("stripe_subscription_id"))
     ok &= _run("stripe_customer", _delete_stripe_customer, row.get("stripe_customer_id"))
-    ok &= _run("composio_mail", _disconnect_composio, row.get("composio_account_id"))
     ok &= _run("newsletter_contact", _remove_newsletter_contact, row.get("email"))
     ok &= _run("storage_resumes", _purge_bucket_prefix, RESUMES_BUCKET, clerk_id)
     ok &= _run(

@@ -1,5 +1,6 @@
 import os
 from celery import Celery
+from celery.schedules import schedule
 from dotenv import load_dotenv
 
 from core.observability import init_sentry
@@ -46,3 +47,18 @@ celery_app.conf.update(
     task_max_retries=2,         # retry failed applications twice
     task_default_retry_delay=30 # wait 30s before retry
 )
+
+# Periodic reconciliation. tasks.reap_stale_applications fails applications that a
+# hard worker death (OOM/deploy/SIGKILL/lost Browserbase session) stranded in a
+# non-terminal state and closes the scout_runs they held open — without it those
+# rows read as "APPLYING" on the tracker forever. Runs on Celery beat, so the
+# worker must be started with beat embedded (`celery ... worker -B`) OR a single
+# separate `celery ... beat` process. IMPORTANT: run beat on EXACTLY ONE instance
+# — the task is idempotent, but multiple beats mean duplicate scheduling churn.
+REAP_INTERVAL_SECONDS = int(os.getenv("SCOUT_REAP_INTERVAL_SECONDS", "300"))
+celery_app.conf.beat_schedule = {
+    "reap-stale-applications": {
+        "task": "tasks.reap_stale_applications",
+        "schedule": schedule(run_every=REAP_INTERVAL_SECONDS),
+    },
+}

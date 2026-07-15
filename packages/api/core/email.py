@@ -43,6 +43,16 @@ EMAIL_UPGRADE_PRO = "upgrade_pro"
 EMAIL_UPGRADE_SCOUT_PLUS = "upgrade_scout_plus"
 EMAIL_FAREWELL = "farewell"
 EMAIL_NEWSLETTER_CONFIRM = "newsletter_confirm"
+# Recruiter-reply forward (AgentMail shared inbox → user's real email). Not in
+# _SUBJECTS/send_email: subject and body are per-message, and idempotency is per
+# MESSAGE (Redis apply:forward:{message_id}), not per (user, type) — so it has its
+# own sender below rather than a claim_email_send row.
+EMAIL_RECRUITER_FORWARD = "recruiter_forward"
+# OTP heads-up (AgentMail inbox classified a verification-code email): pure
+# reassurance, no button, never carries the code. Repeatable per application, so —
+# like the forward — deduped by the caller (Redis, per application), not
+# claim_email_send.
+EMAIL_OTP_NOTICE = "otp_notice"
 
 _SUBJECTS = {
     EMAIL_WELCOME: "Welcome to Scout: here's your first move",
@@ -108,6 +118,127 @@ def try_send_welcome_email(
         first_name=first_name,
         user_id=user_id,
     )
+
+
+def send_recruiter_forward_email(
+    *,
+    to: str | None,
+    user_id: str | None,
+    first_name: str | None,
+    company: str | None,
+    recruiter_from: str,
+    reply_to: str,
+    message_text: str,
+) -> bool:
+    """Forward a recruiter's message from the shared AgentMail inbox to the user's
+    real address. Reply-To is the RECRUITER — the user hitting reply talks to them
+    directly; Scout is out of the loop from that point.
+
+    Same contract as send_email: NEVER raises, Sentry-logs failures, and logs carry
+    user id only — never addresses or message content. The forwarded body is
+    HTML-escaped before it touches the template (recruiter content is untrusted)."""
+    try:
+        if not to or not to.strip():
+            logger.warning("Skipping recruiter forward: no recipient (user=%s)", user_id)
+            return False
+        if not is_configured():
+            logger.debug("RESEND_API_KEY unset — skipping recruiter forward")
+            return False
+
+        html_template = _load_template(EMAIL_RECRUITER_FORWARD, "html")
+        text_template = _load_template(EMAIL_RECRUITER_FORWARD, "txt")
+        if not html_template or not text_template:
+            logger.error("Recruiter-forward templates missing")
+            return False
+
+        company_label = (company or "").strip() or "an employer"
+        body = (message_text or "").strip()[:20000]
+        variables = {
+            "first_name": first_name_from(first_name),
+            "company": company_label,
+            "sender_line": recruiter_from.strip(),
+            "cta_url": _cta_url(),
+        }
+        # Escaped-token substitution first, then the message body: escaped with real
+        # line breaks for HTML, raw for plain text.
+        html_body = _substitute(html_template, variables, escape=True).replace(
+            "{{message_body}}", html.escape(body, quote=True).replace("\n", "<br />")
+        )
+        text_body = _substitute(text_template, variables, escape=False).replace(
+            "{{message_body}}", body
+        )
+
+        import resend  # deferred: only pay the import when a send actually happens
+
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send(
+            {
+                "from": FROM_ADDRESS,
+                "to": [to.strip()],
+                "reply_to": reply_to.strip() or REPLY_TO,
+                "subject": f"{company_label} responded to your application",
+                "html": html_body,
+                "text": text_body,
+            }
+        )
+        logger.info("Sent %s email (user=%s)", EMAIL_RECRUITER_FORWARD, user_id)
+        return True
+    except Exception as exc:  # noqa: BLE001 — email must never break the caller
+        sentry_sdk.set_tag("email_type", EMAIL_RECRUITER_FORWARD)
+        sentry_sdk.capture_exception(exc)
+        logger.error("Failed to send recruiter forward (user=%s): %s", user_id, exc)
+        return False
+
+
+def send_otp_notice_email(
+    *,
+    to: str | None,
+    user_id: str | None,
+    first_name: str | None,
+    company: str | None,
+) -> bool:
+    """Tell the user a verification-code email arrived and Scout's agent is
+    handling it — ignore any related mail. Deliberately no CTA button and no code
+    content. Same contract as send_email: NEVER raises, logs carry user id only."""
+    try:
+        if not to or not to.strip():
+            logger.warning("Skipping OTP notice: no recipient (user=%s)", user_id)
+            return False
+        if not is_configured():
+            logger.debug("RESEND_API_KEY unset — skipping OTP notice")
+            return False
+
+        html_template = _load_template(EMAIL_OTP_NOTICE, "html")
+        text_template = _load_template(EMAIL_OTP_NOTICE, "txt")
+        if not html_template or not text_template:
+            logger.error("OTP-notice templates missing")
+            return False
+
+        variables = {
+            "first_name": first_name_from(first_name),
+            "company": (company or "").strip() or "The employer",
+        }
+
+        import resend  # deferred: only pay the import when a send actually happens
+
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        resend.Emails.send(
+            {
+                "from": FROM_ADDRESS,
+                "to": [to.strip()],
+                "reply_to": REPLY_TO,
+                "subject": "Scout is handling a quick verification step",
+                "html": _substitute(html_template, variables, escape=True),
+                "text": _substitute(text_template, variables, escape=False),
+            }
+        )
+        logger.info("Sent %s email (user=%s)", EMAIL_OTP_NOTICE, user_id)
+        return True
+    except Exception as exc:  # noqa: BLE001 — email must never break the caller
+        sentry_sdk.set_tag("email_type", EMAIL_OTP_NOTICE)
+        sentry_sdk.capture_exception(exc)
+        logger.error("Failed to send OTP notice (user=%s): %s", user_id, exc)
+        return False
 
 
 def claim_email_send(user_id: str, email_type: str) -> bool:

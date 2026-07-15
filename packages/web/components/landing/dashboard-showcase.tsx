@@ -1,16 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import Image from 'next/image'
 import {
   Activity,
-  AlignLeft,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   BarChart3,
   Bell,
   Bot,
-  Briefcase,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -19,10 +18,10 @@ import {
   Compass,
   FileText,
   Info,
-  KeyRound,
   LayoutDashboard,
   Loader2,
   MapPin,
+  Plus,
   RefreshCw,
   Settings,
   Sprout,
@@ -55,13 +54,14 @@ const SLIDES: {
   render: () => ReactElement
 }[] = [
   { nav: 'Dashboard', crumb: ['SCOUT', 'DASHBOARD'], render: () => <DashboardSlide /> },
-  { nav: 'Jobs', crumb: ['SCOUT', 'EXPLORE'], render: () => <ExploreSlide /> },
-  { nav: 'Tracker', crumb: ['SCOUT', 'TRACKER'], render: () => <TrackerSlide /> },
   {
     nav: 'Resume',
     crumb: ['SCOUT', 'RESUME', 'ANALYSIS'],
     render: () => <ResumeSlide />,
   },
+  { nav: 'Jobs', crumb: ['SCOUT', 'EXPLORE'], render: () => <ExploreSlide /> },
+  { nav: 'Tracker', crumb: ['SCOUT', 'TRACKER'], render: () => <TrackerSlide /> },
+  { nav: 'Copilot', crumb: ['SCOUT', 'COPILOT'], render: () => <CopilotSlide /> },
 ]
 
 export function LandingDashboardShowcase() {
@@ -242,14 +242,14 @@ function Sidebar({ active }: { active: NavLabel }) {
             <Info className="h-2.5 w-2.5 text-[#555]" strokeWidth={2} />
           </div>
           <div className="mt-1 font-headline text-[18px] font-semibold leading-none tracking-tight">
-            <span className="text-[#FF6733]">589</span>
-            <span className="text-[#555]"> / 600</span>
+            <span className="text-[#FF6733]">93</span>
+            <span className="text-[#555]"> / 100</span>
           </div>
           <p className="mt-1 font-body text-[7px] text-[#555]">
             remaining this billing period
           </p>
           <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full rounded-full bg-primary" style={{ width: '98%' }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: '93%' }} />
           </div>
         </div>
 
@@ -322,9 +322,24 @@ function DashboardSlide() {
       </header>
 
       <section className="grid grid-cols-3 gap-2.5">
-        <DashStat label="Scout Score" value="90" subtext="vs. 55 before Scout" />
-        <DashStat label="Applied" value="36" />
-        <DashStat label="Replies" value="30" subtext="responses received" />
+        <DashStat
+          label="Scout Score"
+          value="90"
+          delta={35}
+          subtext="vs. 55 before Scout"
+        />
+        <DashStat label="Applied" value="36" subtext="internships this session" />
+        <DashStat
+          label="Needs Attention"
+          value="2"
+          valueAccent
+          headerTrailing={
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[#555]">
+              <Info className="h-3 w-3" strokeWidth={1.75} />
+            </span>
+          }
+          subtext="verification codes & fixes"
+        />
       </section>
 
       <section className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
@@ -348,7 +363,7 @@ function DashboardSlide() {
       </section>
 
       <section className="grid flex-1 grid-cols-2 gap-2.5">
-        <div className="flex flex-col gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+        <div className="flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF6733]/10">
             <Bot className="h-3.5 w-3.5 text-[#FF6733]" strokeWidth={1.75} />
           </span>
@@ -358,7 +373,7 @@ function DashboardSlide() {
           <p className="font-body text-[11px] leading-snug text-[#999]">
             Your resume, your roles, your gaps — Scout knows it all.
           </p>
-          <div className="mt-auto flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 font-body text-[11px] text-[#666]">
+          <div className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 font-body text-[11px] text-[#666]">
             <span>Am I ready for Stripe?</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
           </div>
@@ -389,17 +404,38 @@ function DashStat({
   label,
   value,
   subtext,
+  delta,
+  valueAccent,
+  headerTrailing,
 }: {
   label: string
   value: string
   subtext?: string
+  delta?: number
+  valueAccent?: boolean
+  headerTrailing?: ReactNode
 }) {
   return (
-    <div className="flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
-      <span className="font-label text-[9px] font-medium uppercase tracking-[0.2em] text-[#666]">
-        {label}
-      </span>
-      <div className="mt-1.5 font-headline text-[24px] font-medium leading-none tracking-[-0.03em] text-white">
+    <div className="flex flex-col justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="font-label text-[9px] font-medium uppercase tracking-[0.2em] text-[#666]">
+          {label}
+        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {delta != null && delta > 0 ? (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 font-label text-[8px] font-semibold text-[#FF6733]">
+              <TrendingUp className="h-2.5 w-2.5" strokeWidth={2.25} />+{delta}
+            </span>
+          ) : null}
+          {headerTrailing}
+        </div>
+      </div>
+      <div
+        className={cn(
+          'mt-1.5 font-headline text-[24px] font-medium leading-none tracking-[-0.03em]',
+          valueAccent ? 'text-[#FF6733]' : 'text-white',
+        )}
+      >
         {value}
       </div>
       <span className="mt-1.5 font-body text-[10px] text-[#666]">
@@ -944,141 +980,439 @@ function RunStat({
 
 /* ---------------------------------- Resume ---------------------------------- */
 
-const RESUME_BREAKDOWN = [
-  { label: 'Experience Quality', value: 21, icon: Briefcase },
-  { label: 'Metrics & Impact', value: 23, icon: TrendingUp },
-  { label: 'Structure', value: 21, icon: AlignLeft },
-  { label: 'Keywords', value: 20, icon: KeyRound },
+const RESUME_SCORE = 76
+const RESUME_BALANCE = [
+  { category: 'Structure', value: 92 },
+  { category: 'Metrics', value: 38 },
+  { category: 'Keywords', value: 44 },
+  { category: 'Experience', value: 86 },
 ] as const
 
 const RESUME_FINDINGS = [
   {
-    tag: 'RABUOR_DESCRIPTION',
+    tag: 'missing metrics',
     issue:
-      "The 'RateMyRoommate' project uses the generic 'Full-Stack Development' tag rather than specific framework names.",
-    fix: 'Explicitly list the specific stack (e.g., PostgreSQL, Node.js) used for the platform.',
+      "First bullet of 'RateMyRoommate' project does not quantify scale (users, sessions, or data volume).",
+    fix: "Quantify the scale of authentication or database records (e.g., 'supporting 100+ active user sessions').",
   },
   {
-    tag: 'MISSING_METRICS',
+    tag: 'vague description',
     issue:
-      "The 'RateMyRoommate' bullet regarding 'performance optimization' lacks specific before/after telemetry.",
-    fix: "Add a metric like 'improved page load times by 200ms' or 'reduced database query latency by 30%'.",
+      "Emerging Scholars Program description is too abstract for a software role ('interdisciplinary problem-solving').",
+    fix: 'Specify the exact STEM tools, programming scripts, or data analysis methods used during the research.',
   },
   {
-    tag: 'RABUOR_DESCRIPTION',
+    tag: 'weak verb',
     issue:
-      "The 'Emerging Scholars Program' bullet on 'applying interdisciplinary problem-solving' is generic.",
-    fix: 'Replace with a specific technical accomplishment or tool used within the research context.',
+      "Bullet regarding 'Focusing on…' uses a weak gerund instead of a strong engineering verb.",
+    fix: "Replace with a strong verb like 'Streamlined' or 'Engineered' to lead the accomplishment.",
   },
 ] as const
 
-function ResumeSlide() {
-  const score = 85
-  const radius = 52
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference * (1 - score / 100)
+function polar(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180
+  // Round so SSR and client SVG attrs match (avoids hydration float noise).
+  return {
+    x: Math.round((cx + r * Math.cos(rad)) * 100) / 100,
+    y: Math.round((cy + r * Math.sin(rad)) * 100) / 100,
+  }
+}
+
+/** Scaled-down twin of ScoreGauge — same 270° tick ring + dashed guide. */
+function ShowcaseScoreGauge({ score, size = 148 }: { score: number; size?: number }) {
+  const START = 135
+  const SWEEP = 270
+  const SEGMENTS = 44
+  const cx = size / 2
+  const cy = size / 2
+  const tickOuter = size / 2 - 2
+  const tickLen = size * 0.075
+  const tickInner = tickOuter - tickLen
+  const dashRadius = Math.round((tickInner - 8) * 100) / 100
+  const lit = Math.round((score / 100) * SEGMENTS)
+  const numberSize = Math.max(28, Math.round(size * 0.24))
+
+  const ticks = Array.from({ length: SEGMENTS }, (_, i) => {
+    const angle = START + (SWEEP / (SEGMENTS - 1)) * i
+    return {
+      from: polar(cx, cy, tickInner, angle),
+      to: polar(cx, cy, tickOuter, angle),
+      lit: i < lit,
+    }
+  })
+
+  const zero = polar(cx, cy, tickInner - 3, START - 14)
+  const hundred = polar(cx, cy, tickInner - 3, START + SWEEP + 14)
 
   return (
-    <div className="grid h-full grid-cols-[260px_1fr] gap-5 px-6 pt-4">
-      <div className="flex flex-col items-center">
-        <span className="mb-2 mr-auto inline-flex items-center gap-1 font-label text-[9px] text-[#888]">
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden
+        className="overflow-visible"
+      >
+        {ticks.map((t, i) => (
+          <line
+            key={i}
+            x1={t.from.x}
+            y1={t.from.y}
+            x2={t.to.x}
+            y2={t.to.y}
+            stroke={t.lit ? '#FF6733' : 'rgba(255,255,255,0.09)'}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+          />
+        ))}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={dashRadius}
+          fill="none"
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth={1}
+          strokeDasharray="1 5"
+        />
+        <text
+          x={zero.x}
+          y={zero.y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#555"
+          fontSize={8}
+          fontFamily="ui-monospace, monospace"
+        >
+          0
+        </text>
+        <text
+          x={hundred.x}
+          y={hundred.y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#555"
+          fontSize={8}
+          fontFamily="ui-monospace, monospace"
+        >
+          100
+        </text>
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6">
+        <span className="whitespace-nowrap font-label text-[6px] font-semibold uppercase tracking-[0.14em] text-[#555]">
+          Scout Analysis
+        </span>
+        <span
+          className="mt-0.5 font-headline font-extrabold leading-none tabular-nums text-white"
+          style={{ fontSize: numberSize }}
+        >
+          {score}
+        </span>
+        <span className="mt-0.5 font-body text-[9px] leading-none text-[#555]">/ 100</span>
+        <span className="mt-1 font-label text-[8px] font-semibold uppercase tracking-[0.2em] text-[#FF6733]">
+          Strong
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Scaled-down twin of BalanceRadar — 4-axis diamond with brand fill. */
+function ShowcaseBalanceRadar({ height = 132 }: { height?: number }) {
+  const size = height
+  const cx = size / 2
+  const cy = size / 2
+  const maxR = size * 0.32
+  const levels = [0.25, 0.5, 0.75, 1]
+
+  const points = RESUME_BALANCE.map((d, i) => {
+    const angle = -90 + i * 90
+    return polar(cx, cy, (d.value / 100) * maxR, angle)
+  })
+  const poly = points.map((p) => `${p.x},${p.y}`).join(' ')
+
+  const labelPos = RESUME_BALANCE.map((d, i) => {
+    const angle = -90 + i * 90
+    const offset = i === 0 ? maxR + 12 : i === 2 ? maxR + 11 : maxR + 18
+    return { ...d, ...polar(cx, cy, offset, angle), angle: i }
+  })
+
+  return (
+    <div className="w-full" style={{ height }}>
+      <svg
+        width="100%"
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="mx-auto block overflow-visible"
+      >
+        {levels.map((lvl) => {
+          const r = maxR * lvl
+          const diamond = [0, 1, 2, 3]
+            .map((i) => {
+              const p = polar(cx, cy, r, -90 + i * 90)
+              return `${p.x},${p.y}`
+            })
+            .join(' ')
+          return (
+            <polygon
+              key={lvl}
+              points={diamond}
+              fill="none"
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth={1}
+            />
+          )
+        })}
+        {[0, 1, 2, 3].map((i) => {
+          const p = polar(cx, cy, maxR, -90 + i * 90)
+          return (
+            <line
+              key={i}
+              x1={cx}
+              y1={cy}
+              x2={p.x}
+              y2={p.y}
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth={1}
+            />
+          )
+        })}
+        <polygon
+          points={poly}
+          fill="rgba(255,103,51,0.12)"
+          stroke="#FF6733"
+          strokeWidth={2}
+        />
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={2.5} fill="#FF6733" />
+        ))}
+        {labelPos.map((l) => (
+          <text
+            key={l.category}
+            x={l.x}
+            y={l.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#8a8a8a"
+            fontSize={9}
+            fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
+          >
+            {l.category}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function ShowcaseScoutMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+      aria-hidden
+      className={className}
+    >
+      <path d="M4.55 6.9 A6.9 6.9 0 0 1 17.45 6.9 L4.55 6.9 Z" />
+      <path d="M4.55 11.3 A6.9 6.9 0 0 0 17.45 11.3 L4.55 11.3 Z" />
+      <rect x="7.4" y="7.7" width="12.2" height="2.8" rx="1.4" />
+      <circle cx="3.6" cy="9.1" r="1.7" />
+      <path d="M9.5 21.4 L21.6 13.9 L17.2 21.9 L15.3 19.6 L13.4 21.9 Z" />
+    </svg>
+  )
+}
+
+function ResumeSlide() {
+  return (
+    <div className="flex h-full flex-col px-5 pb-3 pt-3">
+      {/* Top bar: back link + orange glass role pill */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 font-body text-[11px] text-[#888]">
           <ArrowLeft className="h-3 w-3" strokeWidth={2} />
           Dashboard
         </span>
-
-        <div className="relative h-[136px] w-[136px]">
-          <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              fill="none"
-              stroke="rgba(255,255,255,0.07)"
-              strokeWidth="7"
-            />
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              fill="none"
-              stroke="#FF6733"
-              strokeWidth="7"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-headline text-[40px] font-semibold leading-none text-white">
-              {score}
-            </span>
-            <span className="font-body text-[10px] text-[#666]">/ 100</span>
-            <span className="mt-0.5 font-label text-[9px] font-semibold uppercase tracking-[0.16em] text-[#FF6733]">
-              Strong
-            </span>
-          </div>
-        </div>
-
-        <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-label text-[10px] text-[#bbb]">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-3 py-1 font-body text-[11px] text-[#FF6733]">
           Analyzed for: Software Engineering
-          <ChevronDown className="h-3 w-3 text-[#777]" strokeWidth={2} />
+          <ChevronDown className="h-3 w-3 text-[#FF6733]" strokeWidth={2} />
         </span>
-
-        <div className="mt-5 w-full">
-          <p className="mb-2.5 font-label text-[9px] font-semibold uppercase tracking-[0.2em] text-[#888]">
-            Score Breakdown
-          </p>
-          <div className="space-y-2.5">
-            {RESUME_BREAKDOWN.map(({ label, value, icon: Icon }) => (
-              <div key={label} className="space-y-1">
-                <div className="flex items-center gap-2 font-label text-[10px]">
-                  <Icon className="h-3 w-3 text-[#888]" strokeWidth={1.75} />
-                  <span className="text-[#ccc]">{label}</span>
-                  <span className="ml-auto text-[#666]">{value} / 25</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-emerald-400"
-                    style={{ width: `${(value / 25) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
-      <div className="flex flex-col gap-2.5 overflow-hidden">
-        <div>
-          <p className="font-label text-[9px] font-semibold uppercase tracking-[0.22em] text-[#FF6733]">
-            What Scout found
-          </p>
-          <p className="font-body text-[10px] text-[#666]">3 issues detected</p>
-        </div>
-        {RESUME_FINDINGS.map((f) => (
-          <div
-            key={f.issue}
-            className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
-          >
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 font-label text-[8px] font-semibold uppercase tracking-[0.16em] text-[#FF6733]">
-                ● Suggestion
-              </span>
-              <span className="font-mono text-[7px] uppercase tracking-wider text-[#555]">
-                {f.tag}
-              </span>
-            </div>
-            <p className="mt-1.5 font-body text-[11px] leading-snug text-[#ddd]">
-              {f.issue}
-            </p>
-            <p className="mt-2 font-label text-[7px] font-semibold uppercase tracking-[0.16em] text-[#666]">
-              How to fix
-            </p>
-            <div className="mt-1 rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 font-body text-[10px] leading-snug text-[#999]">
-              {f.fix}
+      {/* md:grid-cols-[340px_1fr] scaled into showcase frame */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,268px)_minmax(0,1fr)] gap-5 overflow-hidden">
+        <aside className="flex min-h-0 flex-col self-start">
+          <div className="flex flex-col items-center rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]">
+            <ShowcaseScoreGauge score={RESUME_SCORE} size={148} />
+            <div className="mt-3 w-full border-t border-white/[0.06] pt-3">
+              <p className="font-label text-[8px] font-semibold uppercase tracking-[0.24em] text-[#666]">
+                Resume Balance
+              </p>
+              <ShowcaseBalanceRadar height={128} />
             </div>
           </div>
-        ))}
+        </aside>
+
+        <section className="flex min-h-0 flex-col gap-2.5 overflow-hidden">
+          <header className="flex flex-col gap-0.5">
+            <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#FF6733]">
+              What Scout Found
+            </p>
+            <p className="font-body text-[11px] text-[#888]">4 issues detected</p>
+          </header>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
+            {RESUME_FINDINGS.map((f) => (
+              <article
+                key={f.tag}
+                className="rounded-xl border border-green-500/40 bg-white/[0.04] px-3.5 py-2.5 backdrop-blur-md"
+              >
+                <header className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-green-400">
+                    <ShowcaseScoutMark className="h-3.5 w-3.5" />
+                    <span className="font-label text-[9px] font-semibold uppercase tracking-[0.18em]">
+                      Applied
+                    </span>
+                  </span>
+                  <span className="truncate font-mono text-[8px] uppercase tracking-[0.16em] text-[#555]">
+                    {f.tag}
+                  </span>
+                </header>
+                <p className="mt-2 font-body text-[11px] font-medium leading-snug text-white">
+                  {f.issue}
+                </p>
+                <div className="mt-2 rounded-lg border border-white/[0.08] bg-black/30 px-2.5 py-2">
+                  <p className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#666]">
+                    How Scout will fix it
+                  </p>
+                  <p className="mt-1 font-body text-[10px] leading-snug text-[#cfcfcf]">
+                    {f.fix}
+                  </p>
+                </div>
+                <footer className="mt-2 inline-flex items-center gap-1.5 font-body text-[10px] text-green-400">
+                  <Check className="h-3 w-3" strokeWidth={2.5} />
+                  Fixed in your refactored resume
+                </footer>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------------------------- Copilot ---------------------------------- */
+
+const COPILOT_CHATS = [
+  { snippet: "Am I ready for Stripe?", time: '2m', active: true },
+  { snippet: "How's my pipeline looking?", time: '1h', active: false },
+  { snippet: 'Why is my resume scoring low?', time: '3h', active: false },
+] as const
+
+function CopilotSlide() {
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Conversation sidebar — mirrors ConversationSidebar */}
+      <aside className="flex w-[168px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0a0a]">
+        <div className="border-b border-white/[0.06] p-2">
+          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 font-label text-[10px] font-medium text-white">
+            <Plus className="h-3 w-3" strokeWidth={2} />
+            New chat
+          </span>
+        </div>
+        <ul className="space-y-1 p-1.5">
+          {COPILOT_CHATS.map((c) => (
+            <li key={c.snippet}>
+              <div
+                className={cn(
+                  'flex flex-col gap-0.5 rounded-lg border px-2 py-1.5',
+                  c.active
+                    ? 'border-[#FF6733]/40 bg-[#FF6733]/10'
+                    : 'border-transparent',
+                )}
+              >
+                <span
+                  className={cn(
+                    'line-clamp-1 font-label text-[10px] font-medium',
+                    c.active ? 'text-white' : 'text-[#bbb]',
+                  )}
+                >
+                  {c.snippet}
+                </span>
+                <span className="font-label text-[8px] text-[#555]">{c.time}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Chat pane */}
+      <div className="flex min-w-0 flex-1 flex-col bg-[#080808]">
+        <div className="min-h-0 flex-1 space-y-3 overflow-hidden px-4 py-3">
+          {/* User bubble */}
+          <div className="flex justify-end">
+            <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
+              Am I ready for Stripe?
+            </div>
+          </div>
+
+          {/* Assistant bubble */}
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
+              <Image
+                src={scoutLogo}
+                alt=""
+                width={12}
+                height={12}
+                draggable={false}
+                className="h-3 w-3 object-contain"
+              />
+            </span>
+            <div className="max-w-[82%] space-y-1.5 rounded-2xl rounded-tl-sm border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                Almost — your resume is at{' '}
+                <span className="font-semibold text-white">90</span>, and you already
+                have strong fits at Stripe-adjacent roles.
+              </p>
+              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                Two gaps before you apply:
+              </p>
+              <ul className="space-y-0.5 pl-3 font-body text-[10px] leading-snug text-[#bbb]">
+                <li className="list-disc">
+                  Add a metrics bullet on RateMyRoommate (scale / latency).
+                </li>
+                <li className="list-disc">
+                  Clear the 2 items in Needs Attention first.
+                </li>
+              </ul>
+              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                Want me to queue Stripe SWE Intern once those are fixed?
+              </p>
+            </div>
+          </div>
+
+          {/* Follow-up user */}
+          <div className="flex justify-end">
+            <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
+              Yes — and what should I apply to next?
+            </div>
+          </div>
+        </div>
+
+        {/* Input — mirrors ChatInput */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1.5">
+            <span className="flex-1 px-2 py-1 font-body text-[11px] text-[#555]">
+              Ask Scout anything…
+            </span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )

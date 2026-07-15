@@ -21,3 +21,7 @@ dist
 
 Scout Dev Doc.pdf
 prompt.txt
+
+# Celery beat (embedded scheduler state written by `worker -B`)
+celerybeat-schedule*
+celerybeat.pid

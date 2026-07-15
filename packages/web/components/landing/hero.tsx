@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { LandingDashboardShowcase } from '@/components/landing/dashboard-showcase'
 import { HeroApplyAnimation } from '@/components/landing/hero-apply-animation'
+import { LandingHashLink } from '@/components/landing/landing-hash-link'
 import { TypingHeadline } from '@/components/landing/typing-headline'
 import { Button } from '@/components/ui/button'
 
@@ -10,7 +11,7 @@ export function Hero() {
   return (
     // No opaque background on the section — the page-level LandingRails
     // overlay sits at -z-10 and must show through on both sides of the hero.
-    <section id="top" className="px-6 pb-32 pt-40 lg:px-12 lg:pt-48">
+    <section id="top" className="px-6 pb-32 pt-28 lg:px-12 lg:pt-32">
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
         {/* Apply animation sits where the old stats pill used to be. */}
         <div className="mb-8">
@@ -33,7 +34,7 @@ export function Hero() {
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <Link href="#about">See how it works</Link>
+            <LandingHashLink href="#about">See how it works</LandingHashLink>
           </Button>
         </div>
 
