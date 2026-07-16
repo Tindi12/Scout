@@ -24,13 +24,14 @@ from services.cover_letter_writer import cover_letter_writer
 from core import agentmail_inbox
 from core.redis_client import (
     CONTROL_TOKEN_TTL,
-    GH_SHARED_INBOX_SCOPE,
+    GH_INBOX_ASSIGNMENT_TTL,
     acquire_gh_verify_mutex,
     cancel_key,
     cancelled_token_key,
     control_token_key,
     gate_key,
     get_redis,
+    gh_inbox_assignment_key,
     release_gh_verify_mutex,
     verification_code_key,
 )
@@ -545,7 +546,9 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
     slot_token = new_slot_token()
     # Set inside the try (portal-dependent) but released in the finally.
     gh_mutex_held = False
-    gh_shared_mutex_held = False
+    # The AgentMail pool inbox this apply claimed (its address doubles as the
+    # applicant email for the run); None until acquired, released in the finally.
+    gh_assigned_inbox = None
     # Per-ATTEMPT control token for the agent's mid-run channel (/apply-control and
     # /apply-code). Minted fresh each attempt so an abandoned attempt can be cancelled
     # without touching its retry.
@@ -647,23 +650,24 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         #      the slot-throttle above (never self.retry — that budget belongs to
         #      session-loss). Released in the finally.
         #
-        #      SHARED-INBOX EXTENSION: with AgentMail, every user's code lands in ONE
-        #      shared address, so per-user serialization isn't enough — two users
-        #      parked at the gate would receive indistinguishable emails. Also take
-        #      the mutex under the global shared-inbox scope: at most one Greenhouse
-        #      apply platform-wide while codes route to the shared inbox.
+        #      INBOX-POOL EXTENSION: with AgentMail, codes land in a small POOL of
+        #      relay addresses, so per-user serialization isn't enough — two users
+        #      parked at the gate on the SAME address would receive
+        #      indistinguishable emails. Also claim a pool inbox (per-inbox mutex):
+        #      the claimed address becomes this apply's applicant email, and up to
+        #      len(pool) Greenhouse applies proceed concurrently platform-wide,
+        #      one per inbox. All inboxes busy → re-queue, same as mutex busy.
         if portal == "greenhouse":
             if acquire_gh_verify_mutex(user_id, slot_token):
                 gh_mutex_held = True
             if gh_mutex_held and agentmail_active:
-                if acquire_gh_verify_mutex(GH_SHARED_INBOX_SCOPE, slot_token):
-                    gh_shared_mutex_held = True
-                else:
+                gh_assigned_inbox = agentmail_inbox.acquire_pool_inbox(slot_token)
+                if not gh_assigned_inbox:
                     release_gh_verify_mutex(user_id, slot_token)
                     gh_mutex_held = False
             if not gh_mutex_held:
                 logger.info(
-                    "Greenhouse verify mutex busy (user %s, shared-inbox %s) — "
+                    "Greenhouse verify mutex busy (user %s, inbox pool %s) — "
                     "re-queueing app %s in %ss",
                     user_id, agentmail_active, application_id,
                     SLOT_THROTTLE_BACKOFF_SECONDS,
@@ -695,15 +699,29 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
             "resume_json": resume_to_use,
         }
 
-        # 6.2. SHARED-INBOX APPLICANT EMAIL — Greenhouse applies submit Scout's
-        #      AgentMail address as the applicant email so the verification code is
-        #      emailed to an inbox Scout can read (webhook → Redis mailbox). This
+        # 6.2. POOL-INBOX APPLICANT EMAIL — Greenhouse applies submit the CLAIMED
+        #      pool inbox's address as the applicant email so the verification code
+        #      is emailed to an inbox Scout can read (webhook → Redis mailbox). This
         #      deliberately DIVERGES from the user's profile email for Greenhouse
         #      only: the profile email stays untouched in the DB and in every other
         #      portal's applies; the trade-off is that Greenhouse's own confirmation
-        #      /recruiter mail also lands in the shared inbox instead of the user's.
-        if agentmail_active:
-            user_data["email"] = agentmail_inbox.inbox_address()
+        #      /recruiter mail also lands in the relay inbox instead of the user's.
+        #      The Redis assignment record is what lets the browser agent's relay
+        #      claim the RIGHT per-inbox parked-OTP slot mid-run.
+        if agentmail_active and gh_assigned_inbox:
+            user_data["email"] = gh_assigned_inbox
+            try:
+                get_redis().setex(
+                    gh_inbox_assignment_key(application_id),
+                    GH_INBOX_ASSIGNMENT_TTL,
+                    gh_assigned_inbox,
+                )
+            except Exception:  # noqa: BLE001
+                # Without the record the parked-slot claim is skipped; the mailbox
+                # push and the pull path still deliver the code.
+                logger.warning(
+                    "inbox assignment write failed (app %s)", application_id
+                )
 
         # Audit trail: record the applicant email the form actually received (the
         # relay address for Greenhouse, the user's real email everywhere else).
@@ -801,13 +819,14 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
 
         # Verification codes arrive by PUSH and PULL. Push: the AgentMail webhook
         # writes the Redis mailbox apply:code:{app_id} (the manual CodeModal writes
-        # the same key). Pull: fetch_code_from_inbox reads the shared inbox over the
-        # AgentMail REST API from inside the relay's verify poll — the only path that
-        # works when the webhook can't reach this worker (local dev) or is down.
-        # Both claim the same consumed-message marker, so a code is served once.
+        # the same key). Pull: fetch_code_from_inbox reads this apply's ASSIGNED
+        # pool inbox over the AgentMail REST API from inside the relay's verify
+        # poll — the only path that works when the webhook can't reach this worker
+        # (local dev) or is down. Both claim the same consumed-message marker, so
+        # a code is served once.
         fetch_code = (
             (lambda gate_ts: agentmail_inbox.fetch_code_from_inbox(
-                gate_ts, application_id=application_id
+                gate_ts, application_id=application_id, inbox=gh_assigned_inbox
             ))
             if agentmail_active and agentmail_inbox.is_pull_configured()
             else None
@@ -1017,16 +1036,18 @@ def apply_to_job_task(self, scout_run_id: str, application_id: str, user_id: str
         release_apply_slots(user_id, slot_token)
         if gh_mutex_held:
             release_gh_verify_mutex(user_id, slot_token)
-        if gh_shared_mutex_held:
-            release_gh_verify_mutex(GH_SHARED_INBOX_SCOPE, slot_token)
+        if gh_assigned_inbox:
+            agentmail_inbox.release_pool_inbox(gh_assigned_inbox, slot_token)
         # Retire this attempt's mid-run channel: token mapping (the public routes 404
-        # from here on), gate flag, and any undelivered code. TTLs backstop all three.
+        # from here on), gate flag, any undelivered code, and the pool-inbox
+        # assignment record. TTLs backstop all four.
         try:
             get_redis().delete(
                 control_token_key(control_token),
                 cancelled_token_key(control_token),
                 gate_key(application_id),
                 verification_code_key(application_id),
+                gh_inbox_assignment_key(application_id),
             )
         except Exception:
             pass

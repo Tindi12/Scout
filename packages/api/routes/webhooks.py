@@ -1,7 +1,9 @@
 """
 Inbound-webhook receivers for third-party push sources.
 
-POST /webhooks/agentmail — AgentMail `message.received` for the shared apply inbox.
+POST /webhooks/agentmail — AgentMail `message.received` for the apply inbox POOL
+(one webhook endpoint serves every pool inbox; the payload's inbox_id routes the
+message to the right per-inbox context).
 AgentMail delivers through Svix (same signing scheme as the Clerk webhook): the
 signature is verified against AGENTMAIL_WEBHOOK_SECRET before anything is parsed,
 and unsigned/mis-signed requests are rejected. Classification (OTP consume vs

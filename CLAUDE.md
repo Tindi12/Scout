@@ -18,8 +18,10 @@ supabase/         → README only; schema on Supabase (scout-dev), not repo SQL 
 - Database: Supabase (PostgreSQL + pgvector + RLS)
 - Queue: Celery + Redis
 - Job sources: Adzuna + JSearch (RapidAPI) — see services/job_fetcher.py
-- Email: Resend (transactional, via core/email.py); AgentMail runs the shared inbox
-  that relays ATS verification codes mid-apply (core/agentmail_inbox.py)
+- Email: Resend (transactional, via core/email.py); AgentMail runs a POOL of 3
+  inboxes (AGENTMAIL_INBOX_IDS) that relay ATS verification codes mid-apply with
+  per-inbox locking — up to 3 concurrent Greenhouse verifications
+  (core/agentmail_inbox.py)
 - Observability: Sentry (core/observability.py) + PostHog (core/analytics.py)
 - Browser automation: browser-use on Browserbase SESSIONS (services/browser_agent.py,
   default engine — uncapped, billed in browser-minutes). The hosted Browserbase Agents

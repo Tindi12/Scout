@@ -14,8 +14,13 @@ import { Pricing } from '@/components/landing/pricing'
 import { LandingRails, SectionFrame } from '@/components/landing/section-frame'
 import { Stats } from '@/components/landing/stats'
 import { UniversityBelt } from '@/components/landing/university-belt'
+import { getPlatformStats } from '@/lib/landing-stats'
 
-export default function Page() {
+export const revalidate = 60
+
+export default async function Page() {
+  const stats = await getPlatformStats()
+
   return (
     <>
       <Suspense fallback={null}>
@@ -37,7 +42,7 @@ export default function Page() {
           <AtsCoverage />
         </SectionFrame>
         <SectionFrame>
-          <Stats />
+          <Stats stats={stats} />
         </SectionFrame>
         <SectionFrame>
           <Pricing />

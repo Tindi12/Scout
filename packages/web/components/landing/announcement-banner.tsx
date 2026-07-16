@@ -24,7 +24,7 @@ export function AnnouncementBanner() {
           <span className="text-white">Scout is now in Beta!</span>
           <span className="text-[#A1A1AA]">
             {' '}
-            AI-powered applications are improving every week.
+            Our AI-powered applications are improving every week.
           </span>
         </p>
 

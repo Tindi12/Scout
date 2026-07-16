@@ -1,14 +1,20 @@
 """
-AgentMail SHARED-inbox handling: OTP source for the Greenhouse verification
+AgentMail inbox-POOL handling: OTP source for the Greenhouse verification
 poll-gate, plus recruiter-reply forwarding for everything else.
 
 Greenhouse applies (and ONLY Greenhouse — every other portal submits the user's
-real email) list the shared AgentMail address (AGENTMAIL_INBOX_ID) as the applicant
-email. AgentMail's `message.received` webhook (routes/webhooks.py) hands each
-inbound message here, and it is CLASSIFIED:
+real email) list a POOL AgentMail address as the applicant email. The pool
+(AGENTMAIL_INBOX_IDS, comma-separated; falls back to the legacy single
+AGENTMAIL_INBOX_ID) carries a PER-INBOX verify mutex: each apply claims whichever
+inbox is currently free (acquire_pool_inbox), submits THAT address, and releases
+it when the run ends — so up to len(pool) Greenhouse verifications run
+concurrently, one per inbox, instead of one platform-wide. AgentMail's
+`message.received` webhook (routes/webhooks.py) hands each inbound message here
+with the receiving inbox resolved from the payload, and it is CLASSIFIED:
 
-  (b) OTP — sender is Greenhouse, an application is parked in awaiting_code whose
-      gate predates the email, and the content yields an 8-char code. The code is
+  (b) OTP — sender is Greenhouse, an application ASSIGNED TO THE RECEIVING INBOX
+      (applications.submitted_email) is parked in awaiting_code with a gate that
+      predates the email, and the content yields an 8-char code. The code is
       written to the SAME Redis mailbox apply:code:{application_id} the manual
       CodeModal writes — the /apply-code route and the in-process relay are
       untouched. The OTP email itself is never forwarded; the user instead gets
@@ -20,11 +26,12 @@ inbound message here, and it is CLASSIFIED:
       sends the code email seconds after Submit, routinely BEFORE the agent's first
       code poll stamps the gate — so "no awaiting application" usually means the
       email won the race, not that it's a human message. The code is parked in the
-      shared slot apply:ghotp:parked (one slot is safe: the shared-inbox verify
-      mutex allows at most one Greenhouse apply platform-wide at the code stage)
-      for the relay poll to claim. OTP-shaped mail is NEVER forwarded — the code
-      is Scout's problem. The user only gets the same short heads-up as (b),
-      when company matching attributes the apply confidently.
+      RECEIVING INBOX's slot apply:ghotp:parked:{inbox} (one slot per inbox is
+      safe: the per-inbox verify mutex allows at most one Greenhouse apply per
+      inbox at the code stage) for the relay poll to claim. OTP-shaped mail is
+      NEVER forwarded — the code is Scout's problem. The user only gets the same
+      short heads-up as (b), when company matching attributes the apply
+      confidently.
   (c) HUMAN MESSAGE — anything else (recruiter reply, interview request, status
       update). Forwarded to the matched user's REAL email via the existing Resend
       system with Reply-To set to the original sender, plus an in-app notification
@@ -35,17 +42,21 @@ inbound message here, and it is CLASSIFIED:
       (cross-user misdelivery is worse than a miss — and the in-app path can't
       help there either).
 
-ONE inbox serves every user (free tier), so attribution is metadata + timing:
-  - OTP: the shared-inbox extension of the Greenhouse verify mutex
-    (tasks/job_tasks.py, GH_SHARED_INBOX_SCOPE) keeps at most ONE application
-    platform-wide at the gate; company-name matching breaks residual ties.
-  - Forward: applications.submitted_email records which applies used the relay;
-    company/sender-domain matching picks the application, newest first.
+A small POOL of inboxes serves every user (free-tier inbox cap), so attribution
+is inbox identity + metadata + timing:
+  - OTP: the per-inbox verify mutex (acquire_pool_inbox, taken in
+    tasks/job_tasks.py) keeps at most ONE application at the gate PER INBOX, and
+    applications.submitted_email records which inbox an apply claimed — matching
+    is scoped to the receiving inbox; company-name matching breaks residual ties.
+  - Forward: applications.submitted_email records which inbox each relay apply
+    used; matching is scoped to the receiving inbox, then company/sender-domain
+    picks the application, newest first.
 
-Delivery is push (this webhook) PLUS pull: fetch_code_from_inbox reads the inbox
-directly over the AgentMail REST API from inside the relay's verify poll, covering
-workers the webhook cannot reach (local dev) and webhook outages. Both paths claim
-the same consumed-message marker, so a code is served exactly once.
+Delivery is push (this webhook) PLUS pull: fetch_code_from_inbox reads the
+application's ASSIGNED inbox directly over the AgentMail REST API from inside the
+relay's verify poll, covering workers the webhook cannot reach (local dev) and
+webhook outages. Both paths claim the same consumed-message marker, so a code is
+served exactly once.
 
 Idempotency: OTP consumption claims apply:code:consumed:{message_id}; forwarding
 claims apply:forward:{message_id} — a webhook redelivery can neither re-serve a
@@ -76,12 +87,15 @@ from core.redis_client import (
     OTP_NOTICE_TTL,
     PENDING_OTP_TTL,
     VERIFICATION_CODE_TTL,
+    acquire_gh_verify_mutex,
     code_consumed_key,
     forwarded_message_key,
     gate_key,
     get_redis,
+    gh_inbox_scope,
     otp_notice_key,
     pending_otp_key,
+    release_gh_verify_mutex,
     verification_code_key,
 )
 from core.supabase_client import supabase
@@ -184,20 +198,63 @@ def _parse_epoch(value) -> float | None:
 _FORWARD_MATCH_LIMIT = 200
 
 
+def inbox_pool() -> list[str]:
+    """The pool of relay inbox addresses (an AgentMail inbox_id IS the address),
+    lowercased, order-preserving, deduped. AGENTMAIL_INBOX_IDS (comma-separated)
+    is authoritative; the legacy single AGENTMAIL_INBOX_ID is the fallback so a
+    deploy that predates the pool keeps working unchanged."""
+    raw = os.getenv("AGENTMAIL_INBOX_IDS", "").strip() or os.getenv(
+        "AGENTMAIL_INBOX_ID", ""
+    )
+    seen: list[str] = []
+    for part in raw.split(","):
+        addr = part.strip().lower()
+        if addr and addr not in seen:
+            seen.append(addr)
+    return seen
+
+
 def inbox_address() -> str:
-    """The shared inbox address (AgentMail inbox_id IS the address), lowercased."""
-    return os.getenv("AGENTMAIL_INBOX_ID", "").strip().lower()
+    """The pool's first inbox address — the legacy default for callers that need
+    ONE address (never used for assignment; applies claim via acquire_pool_inbox)."""
+    pool = inbox_pool()
+    return pool[0] if pool else ""
 
 
 def is_configured() -> bool:
     """Worker-side gate: the applicant-email override + push delivery need only the
-    inbox address (the webhook secret is checked where the webhook lives)."""
-    return bool(inbox_address())
+    inbox pool (the webhook secret is checked where the webhook lives)."""
+    return bool(inbox_pool())
 
 
 def is_pull_configured() -> bool:
     """The direct-API pull path additionally needs the AgentMail API key."""
-    return bool(inbox_address() and os.getenv("AGENTMAIL_API_KEY", "").strip())
+    return bool(inbox_pool() and os.getenv("AGENTMAIL_API_KEY", "").strip())
+
+
+# ── Per-inbox verify locking ───────────────────────────────────────────────────────
+# Each pool inbox carries its own mutex (apply:ghverify:inbox:{address}); an apply
+# claims the first free inbox and submits that address as the applicant email. Up
+# to len(pool) Greenhouse verifications proceed concurrently — a 4th waits exactly
+# like the old global mutex (the caller re-queues on None).
+
+
+def acquire_pool_inbox(token: str) -> str | None:
+    """Claim the first currently-free inbox in the pool for this apply attempt.
+    Returns the claimed address, or None when every inbox is locked (caller
+    re-queues). Inherits acquire_gh_verify_mutex's fail-open posture: on Redis
+    errors the first inbox is granted — losing serialization briefly beats
+    wedging the apply pipeline."""
+    for addr in inbox_pool():
+        if acquire_gh_verify_mutex(gh_inbox_scope(addr), token):
+            return addr
+    return None
+
+
+def release_pool_inbox(inbox: str, token: str) -> None:
+    """Release one claimed inbox (compare-and-delete on the token, so a crashed
+    attempt can never free an inbox a later attempt now holds)."""
+    release_gh_verify_mutex(gh_inbox_scope(inbox), token)
 
 
 def _is_greenhouse_sender(addr: str) -> bool:
@@ -223,13 +280,19 @@ def _gate_ts(app: dict) -> float | None:
 # ── (b) OTP consumption ────────────────────────────────────────────────────────────
 
 
-def _match_awaiting_application(msg_ts: float, subject: str, text: str) -> dict | None:
+def _match_awaiting_application(
+    msg_ts: float, subject: str, text: str, inbox: str
+) -> dict | None:
     """The application this OTP belongs to, or None when nothing (or more than one
-    thing) qualifies. Qualifying = awaiting_code AND gated BEFORE the email arrived."""
+    thing) qualifies. Qualifying = ASSIGNED TO THE RECEIVING INBOX (submitted_email
+    is stamped with the claimed pool address at apply time) AND awaiting_code AND
+    gated BEFORE the email arrived. The per-inbox mutex makes >1 candidate a race
+    artifact (mutex fail-open, TTL expiry) rather than the normal case."""
     rows = (
         supabase.table("applications")
         .select("id, user_id, job_id, gate_hit_at")
         .eq("status", "awaiting_code")
+        .eq("submitted_email", inbox)
         .not_.is_("gate_hit_at", "null")
         .execute()
         .data
@@ -246,7 +309,7 @@ def _match_awaiting_application(msg_ts: float, subject: str, text: str) -> dict 
     if not candidates:
         return None
 
-    # Shared-inbox race (mutex fail-open, TTL expiry): try the company name in the
+    # Per-inbox race (mutex fail-open, TTL expiry): try the company name in the
     # email against each candidate's job. Only a UNIQUE hit is trusted.
     job_ids = [a["job_id"] for a in candidates if a.get("job_id")]
     companies: dict[str, str] = {}
@@ -276,7 +339,7 @@ def _match_awaiting_application(msg_ts: float, subject: str, text: str) -> dict 
 
 def _try_consume_otp(
     *, msg_id: str, log_id: str, sender: str, msg_ts: float | None,
-    subject: str, text: str,
+    subject: str, text: str, inbox: str,
 ) -> str | None:
     """Attempt classification (b). Returns the application id the code was delivered
     to, "duplicate" when this message id already served a code (handled — do NOT
@@ -288,7 +351,7 @@ def _try_consume_otp(
         # forward path, which at worst hands the user the code by email.
         return None
 
-    app = _match_awaiting_application(msg_ts, subject, text)
+    app = _match_awaiting_application(msg_ts, subject, text, inbox)
     if not app:
         return None
 
@@ -378,8 +441,8 @@ def _send_otp_notice(
             logger.warning("OTP notice: user lookup failed (app %s): %s", application_id, exc)
 
         real_email = (user_row or {}).get("email") or ""
-        if real_email.strip().lower() == inbox_address():
-            return  # never mail the relay inbox itself
+        if real_email.strip().lower() in inbox_pool():
+            return  # never mail a relay inbox itself
 
         from core.email import first_name_from, send_otp_notice_email
 
@@ -436,12 +499,13 @@ def _otp_shaped_code(subject: str, text: str) -> str | None:
 
 def _park_otp(
     *, msg_id: str, log_id: str, sender: str, msg_ts: float | None, code: str,
-    subject: str = "", text: str = "",
+    inbox: str, subject: str = "", text: str = "",
 ) -> None:
     """Classification (b2): an OTP-shaped email that matched no awaiting
     application — almost always the submit→gate race (Greenhouse's code email
-    beats the agent's first poll). Park the code in the shared slot for the
-    relay to claim. Best-effort: a Redis blip just lets the parked code expire
+    beats the agent's first poll). Park the code in the RECEIVING INBOX's slot
+    for the relay to claim (the agent looks up its assigned inbox and reads the
+    same slot). Best-effort: a Redis blip just lets the parked code expire
     unclaimed; the mail is suppressed from the user either way."""
     r = get_redis()
     if msg_id:
@@ -453,21 +517,22 @@ def _park_otp(
             pass
     try:
         r.setex(
-            pending_otp_key(),
+            pending_otp_key(inbox),
             PENDING_OTP_TTL,
             json.dumps({"code": code, "ts": msg_ts or time.time()}),
         )
         logger.info(
-            "AgentMail classified message %s… as OTP (no gate yet) → parked (sender %s)",
-            log_id, sender,
+            "AgentMail classified message %s… as OTP (no gate yet) → parked for "
+            "inbox %s (sender %s)",
+            log_id, inbox, sender,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("AgentMail OTP park failed for message %s…: %s", log_id, exc)
 
     # Heads-up to the user whose apply this is. No gate stamp yet, so attribute
-    # the same way forwards do (company match against relay applies) — a unique
-    # hit sends the notice, anything ambiguous stays silent.
-    app = _match_forward_target(sender, subject, text)
+    # the same way forwards do (company match against this inbox's relay applies)
+    # — a unique hit sends the notice, anything ambiguous stays silent.
+    app = _match_forward_target(sender, subject, text, inbox)
     if app:
         _send_otp_notice(
             application_id=app["id"],
@@ -492,20 +557,25 @@ _PULL_LIST_LIMIT = 10  # newest messages scanned per poll
 _PULL_GATE_SKEW = 300.0  # seconds
 
 
-def fetch_code_from_inbox(gate_ts: float, application_id: str | None = None) -> str | None:
-    """Pull the newest Greenhouse OTP for the application currently at the gate.
+def fetch_code_from_inbox(
+    gate_ts: float,
+    application_id: str | None = None,
+    inbox: str | None = None,
+) -> str | None:
+    """Pull the newest Greenhouse OTP for the application currently at the gate,
+    from the application's ASSIGNED pool inbox.
 
     Safe to bind to a single application without the webhook's awaiting_code
-    matching: the shared-inbox verify mutex allows at most ONE Greenhouse apply
-    platform-wide at the code stage, so any fresh Greenhouse OTP in the inbox
-    belongs to the caller. Freshness = message timestamp within _PULL_GATE_SKEW
-    of the gate stamp or later. Idempotency: claims the same
+    matching: the per-inbox verify mutex allows at most ONE Greenhouse apply at
+    the code stage per inbox, so any fresh Greenhouse OTP in the caller's
+    assigned inbox belongs to the caller. Freshness = message timestamp within
+    _PULL_GATE_SKEW of the gate stamp or later. Idempotency: claims the same
     apply:code:consumed:{message_id} marker the webhook claims, so push and pull
     can never both serve one email. Returns the code or None; never raises.
     PII posture matches the webhook path: bodies are searched in memory only.
     """
     api_key = os.getenv("AGENTMAIL_API_KEY", "").strip()
-    inbox = inbox_address()
+    inbox = (inbox or "").strip().lower() or inbox_address()
     if not api_key or not inbox:
         return None
 
@@ -615,22 +685,26 @@ def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
 
-def _match_forward_target(sender: str, subject: str, text: str) -> dict | None:
+def _match_forward_target(
+    sender: str, subject: str, text: str, inbox: str
+) -> dict | None:
     """The application (and thus user) a human message belongs to.
 
-    Candidates are applies that used the relay address (applications.submitted_email
-    — falls back to Greenhouse-URL applies while that migration is fresh), newest
-    first. A company-name hit (in the sender's address/display, subject, or body)
-    picks the newest matching apply; with no company signal, the message is only
-    attributed when every candidate belongs to ONE user — never guessed across
-    users, because misdelivering recruiter mail is worse than dropping it."""
+    Candidates are applies that used the RECEIVING inbox's address as applicant
+    email (applications.submitted_email — replies land at the address that was
+    submitted; falls back to Greenhouse-URL applies while that migration is
+    fresh), newest first. A company-name hit (in the sender's address/display,
+    subject, or body) picks the newest matching apply; with no company signal,
+    the message is only attributed when every candidate belongs to ONE user —
+    never guessed across users, because misdelivering recruiter mail is worse
+    than dropping it."""
     fields = "id, user_id, company, role, created_at"
     rows: list[dict] = []
     try:
         rows = (
             supabase.table("applications")
             .select(fields)
-            .eq("submitted_email", inbox_address())
+            .eq("submitted_email", inbox)
             .order("created_at", desc=True)
             .limit(_FORWARD_MATCH_LIMIT)
             .execute()
@@ -678,13 +752,13 @@ def _match_forward_target(sender: str, subject: str, text: str) -> dict | None:
 
 def _forward_human_message(
     *, msg_id: str, log_id: str, sender: str, sender_raw: str,
-    subject: str, text: str,
+    subject: str, text: str, inbox: str,
 ) -> str | None:
     """Classification (c): forward to the matched user's real email (Reply-To = the
     recruiter) and surface in-app. Returns the application id, or None on no-match/
     duplicate. Send failures are non-fatal — the in-app notification is created
     FIRST, so nothing is lost when Resend is down."""
-    app = _match_forward_target(sender, subject, text)
+    app = _match_forward_target(sender, subject, text, inbox)
     if not app:
         logger.info(
             "AgentMail message %s… (sender %s): human message but no attributable "
@@ -741,7 +815,7 @@ def _forward_human_message(
         logger.warning("AgentMail forward: user lookup failed (app %s): %s", application_id, exc)
 
     real_email = (user_row or {}).get("email") or ""
-    if real_email.strip().lower() == inbox_address():
+    if real_email.strip().lower() in inbox_pool():
         real_email = ""  # never forward the relay back to itself
 
     from core.email import first_name_from, send_recruiter_forward_email
@@ -778,14 +852,22 @@ def handle_inbound_message(message: dict) -> str:
     msg_ts = _parse_epoch(message.get("timestamp"))
     log_id = msg_id[:24]
 
-    # Hard recipient pin: only mail addressed to the configured shared inbox may
-    # drive anything (AgentMail scopes webhooks per inbox, but config can drift).
-    to_field = message.get("to") or []
-    if isinstance(to_field, str):
-        to_field = [to_field]
-    recipients = {a.lower() for _, a in getaddresses([str(t) for t in to_field]) if a}
-    if recipients and inbox_address() not in recipients:
-        logger.info("AgentMail message %s…: not addressed to the apply inbox — skipped", log_id)
+    # Resolve WHICH pool inbox received this message — every downstream step
+    # (awaiting-app match, parked-OTP slot, forward match) is scoped to it.
+    # AgentMail stamps inbox_id on the payload (authoritative); the To: header is
+    # the fallback for older payload shapes. Hard recipient pin: mail that
+    # resolves to no pool inbox drives nothing (AgentMail scopes webhooks per
+    # inbox, but config can drift).
+    pool = inbox_pool()
+    inbox = str(message.get("inbox_id") or "").strip().lower()
+    if inbox not in pool:
+        to_field = message.get("to") or []
+        if isinstance(to_field, str):
+            to_field = [to_field]
+        recipients = {a.lower() for _, a in getaddresses([str(t) for t in to_field]) if a}
+        inbox = next((a for a in pool if a in recipients), "")
+    if not inbox:
+        logger.info("AgentMail message %s…: not addressed to an apply inbox — skipped", log_id)
         return "skipped:wrong_recipient"
 
     # A message id that already served a code must short-circuit BEFORE
@@ -814,7 +896,7 @@ def handle_inbound_message(message: dict) -> str:
 
     otp_result = _try_consume_otp(
         msg_id=msg_id, log_id=log_id, sender=sender, msg_ts=msg_ts,
-        subject=subject, text=text,
+        subject=subject, text=text, inbox=inbox,
     )
     if otp_result == "duplicate":
         return "otp:duplicate"
@@ -829,12 +911,12 @@ def handle_inbound_message(message: dict) -> str:
         if code:
             _park_otp(
                 msg_id=msg_id, log_id=log_id, sender=sender, msg_ts=msg_ts, code=code,
-                subject=subject, text=text,
+                inbox=inbox, subject=subject, text=text,
             )
             return "otp:parked"
 
     forwarded_to = _forward_human_message(
         msg_id=msg_id, log_id=log_id, sender=sender, sender_raw=sender_raw,
-        subject=subject, text=text,
+        subject=subject, text=text, inbox=inbox,
     )
     return f"forwarded:{forwarded_to}" if forwarded_to else "skipped:no_match"

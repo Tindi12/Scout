@@ -11,21 +11,24 @@ import {
   Bell,
   Bot,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleDashed,
   CircleSlash,
   Compass,
+  ExternalLink,
   FileText,
   Info,
   LayoutDashboard,
-  Loader2,
   MapPin,
   Plus,
   RefreshCw,
+  Search,
   Settings,
-  Sprout,
   TrendingUp,
+  Upload,
   User,
 } from 'lucide-react'
 
@@ -36,21 +39,31 @@ const DESIGN_W = 1024
 const DESIGN_H = 541
 const SLIDE_INTERVAL_MS = 5000
 
-const NAV = [
+const PRIMARY_NAV = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Resume', icon: FileText },
   { label: 'Jobs', icon: Compass },
   { label: 'Tracker', icon: Activity },
   { label: 'Copilot', icon: Bot },
-  { label: 'Profile', icon: User },
-  { label: 'Analytics', icon: BarChart3 },
 ] as const
 
-type NavLabel = (typeof NAV)[number]['label']
+const SCOUT_PLUS_NAV = { label: 'Analytics', icon: BarChart3 } as const
+
+const FOOTER_NAV = [
+  { label: 'Profile', icon: User },
+  { label: 'Settings', icon: Settings },
+] as const
+
+type NavLabel =
+  | (typeof PRIMARY_NAV)[number]['label']
+  | (typeof SCOUT_PLUS_NAV)['label']
+  | (typeof FOOTER_NAV)[number]['label']
 
 const SLIDES: {
   nav: NavLabel
   crumb: string[]
+  /** Explore auto-selects Strong Fits — Send Scout turns active with a count. */
+  sendScoutCount?: number
   render: () => ReactElement
 }[] = [
   { nav: 'Dashboard', crumb: ['SCOUT', 'DASHBOARD'], render: () => <DashboardSlide /> },
@@ -59,7 +72,12 @@ const SLIDES: {
     crumb: ['SCOUT', 'RESUME', 'ANALYSIS'],
     render: () => <ResumeSlide />,
   },
-  { nav: 'Jobs', crumb: ['SCOUT', 'EXPLORE'], render: () => <ExploreSlide /> },
+  {
+    nav: 'Jobs',
+    crumb: ['SCOUT', 'EXPLORE'],
+    sendScoutCount: 15,
+    render: () => <ExploreSlide />,
+  },
   { nav: 'Tracker', crumb: ['SCOUT', 'TRACKER'], render: () => <TrackerSlide /> },
   { nav: 'Copilot', crumb: ['SCOUT', 'COPILOT'], render: () => <CopilotSlide /> },
 ]
@@ -88,6 +106,7 @@ export function LandingDashboardShowcase() {
   }, [index])
 
   const activeNav = SLIDES[index].nav
+  const sendScoutCount = SLIDES[index].sendScoutCount
 
   return (
     <div className="select-none">
@@ -109,7 +128,7 @@ export function LandingDashboardShowcase() {
             <Sidebar active={activeNav} />
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <Topbar crumb={SLIDES[index].crumb} />
+              <Topbar crumb={SLIDES[index].crumb} sendScoutCount={sendScoutCount} />
               <div className="relative flex-1 overflow-hidden">
                 <div
                   className="flex h-full transition-transform duration-700 ease-in-out"
@@ -171,10 +190,38 @@ export function LandingDashboardShowcase() {
 
 /* ---------------------------------- Sidebar ---------------------------------- */
 
+function ShowcaseNavItem({
+  label,
+  icon: Icon,
+  active,
+}: {
+  label: string
+  icon: (typeof PRIMARY_NAV)[number]['icon']
+  active: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'mx-1.5 flex items-center gap-2 rounded-md px-2 py-[7px] text-[11px] transition-colors duration-300',
+        active ? 'bg-[#1c1c1c] text-white' : 'text-[#888]',
+      )}
+    >
+      <Icon
+        className={cn(
+          'h-3.5 w-3.5 shrink-0 transition-colors duration-300',
+          active ? 'text-[#FF6733]' : 'text-[#888]',
+        )}
+        strokeWidth={1.75}
+      />
+      <span className="font-label font-medium">{label}</span>
+    </div>
+  )
+}
+
 function Sidebar({ active }: { active: NavLabel }) {
   return (
-    <aside className="flex w-[150px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0c0c0c]">
-      <div className="flex items-center gap-2 px-4 py-[14px]">
+    <aside className="flex w-[150px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0a0a]">
+      <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
         <Image
           src={scoutLogo}
           alt=""
@@ -188,72 +235,70 @@ function Sidebar({ active }: { active: NavLabel }) {
         </span>
       </div>
 
-      <div className="mx-2.5 mb-3 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
-        {/* Generic default avatar — user's initial in a muted circle. */}
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.09] font-label text-[10px] font-semibold text-white/70">
+      <div className="mx-2 mb-3 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#FF6733]/15 font-label text-[10px] font-medium text-[#FF6733]">
           A
         </span>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate font-label text-[11px] font-medium text-white">
             Austin
           </div>
-          <span className="font-label text-[8px] font-semibold uppercase tracking-wider text-[#FF6733]">
+          {/* Mirrors PlanBadge for scout_plus — gold, not orange text */}
+          <span className="mt-0.5 inline-flex items-center rounded-md border border-[#F5C542]/25 bg-[#F5C542]/[0.06] px-1.5 py-px font-label text-[7px] font-semibold uppercase tracking-[0.12em] text-[#D4AF37]">
             Scout+
           </span>
         </div>
         <ChevronDown className="h-3 w-3 shrink-0 text-[#555]" strokeWidth={2} />
       </div>
 
-      <nav className="flex-1 space-y-px px-2">
-        {NAV.map(({ label, icon: Icon }) => {
-          const isActive = label === active
-          return (
-            <div
-              key={label}
-              className={cn(
-                'flex items-center gap-2.5 rounded-md py-[7px] pl-2.5 text-[11px] transition-colors duration-300',
-                isActive ? 'bg-white/[0.05] text-white' : 'text-[#777]',
-              )}
-            >
-              <Icon
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0 transition-colors duration-300',
-                  isActive ? 'text-[#FF6733]' : 'text-[#666]',
-                )}
-                strokeWidth={1.75}
-              />
-              <span className="font-label font-medium">{label}</span>
-            </div>
-          )
-        })}
+      <nav className="flex-1 space-y-px py-1">
+        {PRIMARY_NAV.map((item) => (
+          <ShowcaseNavItem
+            key={item.label}
+            label={item.label}
+            icon={item.icon}
+            active={item.label === active}
+          />
+        ))}
+        <ShowcaseNavItem
+          label={SCOUT_PLUS_NAV.label}
+          icon={SCOUT_PLUS_NAV.icon}
+          active={SCOUT_PLUS_NAV.label === active}
+        />
       </nav>
 
-      <div className="space-y-2.5 px-2 pb-3">
-        <div className="flex items-center gap-2.5 py-[7px] pl-2.5 text-[11px] text-[#777]">
-          <Settings className="h-3.5 w-3.5 shrink-0 text-[#666]" strokeWidth={1.75} />
-          <span className="font-label font-medium">Settings</span>
+      <div className="space-y-2 pb-3 pt-1">
+        <div aria-hidden className="mx-4 h-px bg-white/[0.07]" />
+
+        <div className="space-y-px">
+          {FOOTER_NAV.map((item) => (
+            <ShowcaseNavItem
+              key={item.label}
+              label={item.label}
+              icon={item.icon}
+              active={item.label === active}
+            />
+          ))}
         </div>
 
-        <div className="mx-0.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
-          <div className="flex items-center justify-between">
-            <span className="font-label text-[7px] font-semibold uppercase tracking-[0.14em] text-[#666]">
-              Application Credits
+        <div className="mx-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+          <div className="flex items-center gap-1">
+            <span className="min-w-0 flex-1 whitespace-nowrap font-mono text-[7px] uppercase tracking-[0.1em] text-[#666]">
+              Application credits
             </span>
-            <Info className="h-2.5 w-2.5 text-[#555]" strokeWidth={2} />
+            <Info className="h-2.5 w-2.5 shrink-0 text-[#555]" strokeWidth={2} />
           </div>
-          <div className="mt-1 font-headline text-[18px] font-semibold leading-none tracking-tight">
+          <div className="mt-1 font-headline text-[18px] font-medium leading-none tracking-tight">
             <span className="text-[#FF6733]">93</span>
-            <span className="text-[#555]"> / 100</span>
+            <span className="text-[#444]"> / </span>
+            <span className="text-[#888]">100</span>
           </div>
-          <p className="mt-1 font-body text-[7px] text-[#555]">
+          <p className="mt-1 font-body text-[7px] leading-snug text-[#555]">
             remaining this billing period
           </p>
-          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full rounded-full bg-primary" style={{ width: '93%' }} />
-          </div>
         </div>
 
-        <p className="text-center font-label text-[7px] tracking-wider text-[#333]">
+        <p className="text-center font-label text-[7px] uppercase tracking-[0.2em] text-[#333]">
           v1.0
         </p>
       </div>
@@ -261,40 +306,59 @@ function Sidebar({ active }: { active: NavLabel }) {
   )
 }
 
-function Topbar({ crumb }: { crumb: string[] }) {
+function Topbar({
+  crumb,
+  sendScoutCount,
+}: {
+  crumb: string[]
+  sendScoutCount?: number
+}) {
+  const sendActive = sendScoutCount != null && sendScoutCount > 0
+
   return (
-    <div className="flex h-[34px] shrink-0 items-center justify-between border-b border-white/[0.06] px-5">
-      <ol className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em]">
+    <div className="flex h-[34px] shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#080808]/80 px-5">
+      <ol className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-[#444]">
         {crumb.map((part, i) => (
           <li key={part} className="flex items-center gap-1">
             {i > 0 ? <span className="text-[#2a2a2a]">/</span> : null}
-            <span
-              className={cn(
-                i === 0
-                  ? 'text-[#777]'
-                  : i === crumb.length - 1
-                    ? 'text-[#555]'
-                    : 'text-[#444]',
-              )}
-            >
+            <span className={i === crumb.length - 1 ? 'text-[#666]' : 'text-[#444]'}>
               {part}
             </span>
           </li>
         ))}
       </ol>
-      <div className="flex items-center gap-2.5">
-        <Bell className="h-3.5 w-3.5 text-[#666]" strokeWidth={1.75} />
-        <span className="inline-flex items-center gap-1 rounded-md border border-primary/70 bg-primary px-2 py-1 font-label text-[9px] font-semibold text-white">
-          <Image
-            src={scoutLogo}
-            alt=""
-            width={10}
-            height={10}
-            draggable={false}
-            className="h-2.5 w-auto object-contain"
-          />
-          Send Scout
+      <div className="flex items-center gap-2">
+        {/* NotificationBell chrome — bordered button, subtle unread dot */}
+        <span className="relative inline-flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.02] text-[#888]">
+          <Bell className="h-3 w-3" strokeWidth={1.75} />
+          <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
         </span>
+        {sendActive ? (
+          <span className="relative inline-flex items-center gap-1 rounded-md border border-primary/70 bg-[hsl(var(--brand-hover))] px-2 py-1 font-label text-[9px] font-semibold text-white">
+            <Image
+              src={scoutLogo}
+              alt=""
+              width={10}
+              height={10}
+              draggable={false}
+              className="h-2.5 w-auto object-contain"
+            />
+            Send Scout ({sendScoutCount})
+            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-white" />
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 font-label text-[9px] font-semibold text-[#666] saturate-[0.25]">
+            <Image
+              src={scoutLogo}
+              alt=""
+              width={10}
+              height={10}
+              draggable={false}
+              className="h-2.5 w-auto object-contain opacity-35 grayscale"
+            />
+            Send Scout
+          </span>
+        )}
       </div>
     </div>
   )
@@ -311,7 +375,7 @@ const QUICK_ACTIONS = [
 
 function DashboardSlide() {
   return (
-    <div className="flex h-full flex-col gap-3 p-5">
+    <div className="flex h-full flex-col gap-3 px-5 pt-5 pb-3">
       <header className="space-y-0.5">
         <p className="font-label text-[9px] font-medium uppercase tracking-[0.22em] text-[#666]">
           Welcome back
@@ -356,13 +420,19 @@ function DashboardSlide() {
             </p>
           </div>
         </div>
-        <span className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/70 bg-primary px-3 font-label text-[10px] font-semibold text-primary-foreground">
-          View analysis
-          <ArrowRight className="h-3 w-3" strokeWidth={2} />
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="inline-flex h-7 items-center gap-1 rounded-md border border-white/[0.1] bg-transparent px-2.5 font-label text-[10px] font-medium text-white">
+            <Upload className="h-3 w-3" strokeWidth={2} />
+            Upload new
+          </span>
+          <span className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/70 bg-primary px-2.5 font-label text-[10px] font-semibold text-primary-foreground">
+            View analysis
+            <ArrowRight className="h-3 w-3" strokeWidth={2} />
+          </span>
+        </div>
       </section>
 
-      <section className="grid flex-1 grid-cols-2 gap-2.5">
+      <section className="grid grid-cols-2 items-start gap-2.5">
         <div className="flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF6733]/10">
             <Bot className="h-3.5 w-3.5 text-[#FF6733]" strokeWidth={1.75} />
@@ -389,7 +459,10 @@ function DashboardSlide() {
                 key={label}
                 className="flex items-center justify-between gap-2 border-b border-white/[0.04] py-2 font-body text-xs text-[#999] last:border-0"
               >
-                {label}
+                <span className="inline-flex items-center gap-1.5">
+                  <CircleDashed className="h-3 w-3 text-[#444]" strokeWidth={2} />
+                  {label}
+                </span>
                 <ArrowRight className="h-3 w-3 text-[#444]" strokeWidth={2} />
               </li>
             ))}
@@ -453,12 +526,30 @@ type JobCard = {
   location: string
   tags: string[]
   match: number
-  greenhouse?: boolean
+  portal: 'greenhouse' | 'lever' | 'ashby' | 'direct'
   sponsors?: boolean
-  direct?: boolean
+  remote?: boolean
+  selected?: boolean
+  tailored?: boolean
 }
 
 type FitTone = 'green' | 'orange' | 'muted'
+
+const PORTAL_PILL: Record<
+  JobCard['portal'],
+  { label: string; classes: string }
+> = {
+  greenhouse: { label: 'Greenhouse', classes: 'bg-[#22c55e]/10 text-[#22c55e]' },
+  lever: { label: 'Lever', classes: 'bg-[#3b82f6]/10 text-[#3b82f6]' },
+  ashby: { label: 'Ashby', classes: 'bg-purple-500/10 text-purple-400' },
+  direct: { label: 'Direct', classes: 'bg-white/5 text-[#888]' },
+}
+
+const MATCH_PILL: Record<FitTone, string> = {
+  green: 'bg-[#22c55e]/10 text-[#22c55e]',
+  orange: 'bg-primary/10 text-[#FF6733]',
+  muted: 'bg-white/5 text-[#888]',
+}
 
 const EXPLORE_COLUMNS: {
   label: string
@@ -467,7 +558,7 @@ const EXPLORE_COLUMNS: {
   jobs: JobCard[]
 }[] = [
   {
-    label: 'Strong fit',
+    label: 'Strong Fit',
     tone: 'green',
     count: 15,
     jobs: [
@@ -477,8 +568,10 @@ const EXPLORE_COLUMNS: {
         location: 'Toronto, Ontario, Canada',
         tags: ['AWS', 'CAD', 'Excel'],
         match: 88,
-        greenhouse: true,
+        portal: 'greenhouse',
         sponsors: true,
+        selected: true,
+        tailored: true,
       },
       {
         company: 'Endou Corporation',
@@ -486,12 +579,14 @@ const EXPLORE_COLUMNS: {
         location: 'Saratoga, Santa Clara County',
         tags: ['Remote eligible'],
         match: 87,
-        direct: true,
+        portal: 'direct',
+        remote: true,
+        selected: true,
       },
     ],
   },
   {
-    label: 'Good fit',
+    label: 'Good Fit',
     tone: 'orange',
     count: 20,
     jobs: [
@@ -501,7 +596,7 @@ const EXPLORE_COLUMNS: {
         location: 'Toronto, Ontario',
         tags: ['Python', 'C++'],
         match: 63,
-        greenhouse: true,
+        portal: 'greenhouse',
         sponsors: true,
       },
       {
@@ -510,7 +605,7 @@ const EXPLORE_COLUMNS: {
         location: 'Kirkland, Washington, United States',
         tags: ['Machine Learning', 'Excel'],
         match: 53,
-        greenhouse: true,
+        portal: 'ashby',
       },
     ],
   },
@@ -525,16 +620,16 @@ const EXPLORE_COLUMNS: {
         location: 'Belgrade, Serbia',
         tags: ['Python'],
         match: 50,
-        greenhouse: true,
+        portal: 'greenhouse',
         sponsors: true,
       },
       {
         company: 'Tenstorrent University',
         title: 'IP Product Operations Intern',
-        location: 'Canada +1 more',
+        location: 'Canada',
         tags: ['AWS'],
         match: 50,
-        greenhouse: true,
+        portal: 'lever',
         sponsors: true,
       },
     ],
@@ -554,43 +649,63 @@ const FIT_DOT: Record<FitTone, string> = {
 
 function ExploreSlide() {
   return (
-    <div className="flex h-full flex-col gap-3 px-6 pt-5">
-      <div className="flex items-start justify-between">
+    <div className="flex h-full flex-col gap-2.5 px-5 pt-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-headline text-[26px] font-medium tracking-[-0.02em] text-white">
+          <h2 className="font-headline text-[22px] font-medium tracking-[-0.02em] text-white">
             Explore
           </h2>
-          <p className="font-body text-[11px] text-[#666]">
+          <p className="font-body text-[10px] text-[#666]">
             Jobs matched to your resume
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] px-2.5 py-1 font-label text-[10px] font-medium text-[#bbb]">
-            <RefreshCw className="h-3 w-3" strokeWidth={2} />
-            Refresh
+        <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-transparent px-2 py-1 font-label text-[9px] font-medium text-[#bbb]">
+          <RefreshCw className="h-2.5 w-2.5" strokeWidth={2} />
+          Refresh
+        </span>
+      </div>
+
+      {/* Search row + filter chips — mirrors Explore header */}
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#555]"
+            strokeWidth={2}
+          />
+          <span className="flex h-7 w-full items-center rounded-md border border-white/15 bg-transparent pl-7 pr-2 font-body text-[10px] text-[#666]">
+            Search all internships — SWE, chem eng, EE…
           </span>
-          <div className="flex items-center gap-1.5">
-            {['All', 'Remote Only', 'Visa Friendly'].map((f, i) => (
-              <span
-                key={f}
-                className={cn(
-                  'rounded-full px-2.5 py-1 font-label text-[10px] font-medium',
-                  i === 0
-                    ? 'rounded-md border border-primary/70 bg-primary text-primary-foreground'
-                    : 'rounded-md border border-white/[0.08] text-[#888]',
-                )}
-              >
-                {f}
-              </span>
-            ))}
-          </div>
+        </div>
+        <div className="relative w-[28%]">
+          <MapPin
+            className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#555]"
+            strokeWidth={2}
+          />
+          <span className="flex h-7 w-full items-center rounded-md border border-white/15 bg-transparent pl-7 pr-2 font-body text-[10px] text-[#666]">
+            Filter by location
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {['All', 'Remote Only', 'Visa Friendly'].map((f, i) => (
+            <span
+              key={f}
+              className={cn(
+                'rounded-md px-2 py-1 font-label text-[9px] font-medium',
+                i === 0
+                  ? 'border border-primary/70 bg-primary text-primary-foreground'
+                  : 'border border-white/[0.08] text-[#888]',
+              )}
+            >
+              {f}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div className="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.015] py-3">
+      <div className="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.015] py-2">
         {[
-          { n: '15', label: 'Strong fits', tone: 'green' as FitTone },
-          { n: '20', label: 'Good fits', tone: 'orange' as FitTone },
+          { n: '15', label: 'Strong Fits', tone: 'green' as FitTone },
+          { n: '20', label: 'Good Fits', tone: 'orange' as FitTone },
           { n: '15', label: 'Stretch', tone: 'muted' as FitTone },
         ].map((t, i) => (
           <div
@@ -601,11 +716,11 @@ function ExploreSlide() {
             )}
           >
             <span
-              className={cn('font-headline text-base font-semibold', FIT_TEXT[t.tone])}
+              className={cn('font-headline text-sm font-semibold', FIT_TEXT[t.tone])}
             >
               {t.n}
             </span>
-            <span className="font-label text-[10px] uppercase tracking-[0.16em] text-[#777]">
+            <span className="font-label text-[9px] uppercase tracking-[0.16em] text-[#777]">
               {t.label}
             </span>
           </div>
@@ -615,13 +730,13 @@ function ExploreSlide() {
       <div className="flex items-center justify-between">
         <span className="font-label text-[9px] text-[#666]">15 jobs selected</span>
         <span className="font-label text-[9px] text-[#666]">
-          Select all &nbsp; Deselect all
+          Select all &nbsp;|&nbsp; Deselect all
         </span>
       </div>
 
-      <div className="grid flex-1 grid-cols-3 gap-3 overflow-hidden">
+      <div className="grid flex-1 grid-cols-3 gap-2.5 overflow-hidden">
         {EXPLORE_COLUMNS.map((col) => (
-          <div key={col.label} className="flex min-w-0 flex-col gap-2">
+          <div key={col.label} className="flex min-w-0 flex-col gap-1.5">
             <div className="flex items-center gap-1.5">
               <span className={cn('h-1.5 w-1.5 rounded-full', FIT_DOT[col.tone])} />
               <span className="font-label text-[9px] font-semibold uppercase tracking-[0.16em] text-[#888]">
@@ -642,35 +757,38 @@ function ExploreSlide() {
 }
 
 function ExploreCard({ job, tone }: { job: JobCard; tone: FitTone }) {
-  const strong = tone === 'green'
+  const portal = PORTAL_PILL[job.portal]
   return (
     <div
       className={cn(
-        'flex flex-col gap-1 rounded-lg border p-2',
-        strong
-          ? 'border-[#FF6733]/30 bg-[#FF6733]/[0.05]'
+        'flex flex-col gap-1 rounded-xl border p-2',
+        job.selected
+          ? 'border-[#FF6733]/60 bg-primary/[0.04]'
           : 'border-white/[0.06] bg-white/[0.02]',
       )}
     >
       <div className="flex items-start justify-between gap-1.5">
-        <span className="truncate font-label text-[7px] font-medium uppercase tracking-[0.14em] text-[#666]">
+        <span className="truncate font-mono text-[7px] uppercase tracking-wider text-[#888]">
           {job.company}
         </span>
         <div className="flex shrink-0 items-center gap-1">
+          {job.tailored ? (
+            <span className="rounded-full bg-primary/10 px-1 py-px font-label text-[7px] font-semibold uppercase tracking-wider text-[#FF6733]">
+              Tailored
+            </span>
+          ) : null}
           <span
             className={cn(
-              'rounded-full px-1.5 py-px font-label text-[8px] font-semibold',
-              tone === 'muted'
-                ? 'bg-white/[0.06] text-[#999]'
-                : 'bg-emerald-500/15 text-emerald-400',
+              'rounded-full px-1.5 py-px font-label text-[8px] font-semibold uppercase tracking-wider',
+              MATCH_PILL[tone],
             )}
           >
-            {job.match}% MATCH
+            {job.match}% match
           </span>
           <span
             className={cn(
               'flex h-3.5 w-3.5 items-center justify-center rounded-full',
-              strong
+              job.selected
                 ? 'bg-primary text-primary-foreground'
                 : 'border border-white/15 text-transparent',
             )}
@@ -684,48 +802,46 @@ function ExploreCard({ job, tone }: { job: JobCard; tone: FitTone }) {
         {job.title}
       </h4>
 
-      <p className="flex items-center gap-1 font-body text-[8px] text-[#666]">
-        <MapPin className="h-2.5 w-2.5 shrink-0" strokeWidth={2} />
-        <span className="truncate">{job.location}</span>
-      </p>
+      <div className="flex items-center gap-1.5">
+        <p className="flex min-w-0 flex-1 items-center gap-1 font-body text-[8px] text-[#666]">
+          <MapPin className="h-2.5 w-2.5 shrink-0" strokeWidth={2} />
+          <span className="truncate">{job.location}</span>
+        </p>
+        {job.remote ? (
+          <span className="shrink-0 rounded-full bg-[#22c55e]/10 px-1.5 py-px font-label text-[7px] font-medium text-[#22c55e]">
+            Remote
+          </span>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap gap-1">
         {job.tags.map((t) => (
           <span
             key={t}
-            className="rounded border border-white/[0.08] px-1.5 py-px font-label text-[8px] text-[#999]"
+            className="rounded-full bg-primary/10 px-1.5 py-px font-label text-[8px] text-[#FF6733]"
           >
             {t}
           </span>
         ))}
       </div>
 
-      <div className="flex items-center gap-2.5 font-label text-[8px] font-medium">
-        {job.greenhouse ? (
-          <span className="inline-flex items-center gap-0.5 text-emerald-400">
-            <Sprout className="h-2.5 w-2.5" strokeWidth={2} />
-            Greenhouse
-          </span>
-        ) : null}
-        {job.direct ? (
-          <span className="inline-flex items-center gap-0.5 text-emerald-400">
-            <Sprout className="h-2.5 w-2.5" strokeWidth={2} />
-            Direct
-          </span>
-        ) : null}
+      <div className="flex items-center gap-1.5">
+        <span
+          className={cn(
+            'inline-flex items-center gap-0.5 rounded-full px-1.5 py-px font-label text-[8px] font-medium',
+            portal.classes,
+          )}
+        >
+          <ExternalLink className="h-2 w-2" strokeWidth={2} />
+          {portal.label}
+        </span>
         {job.sponsors ? (
-          <span className="inline-flex items-center gap-0.5 text-emerald-400/80">
-            <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
-            Sponsors visa
-          </span>
+          <span className="font-label text-[8px] text-[#22c55e]">✓ Sponsors visas</span>
         ) : null}
       </div>
 
       <div className="mt-0.5 flex items-center justify-between border-t border-white/[0.06] pt-1.5">
-        <span className="inline-flex items-center gap-0.5 font-label text-[8px] text-[#777]">
-          View job
-          <ArrowRight className="h-2.5 w-2.5" strokeWidth={2} />
-        </span>
+        <span className="font-label text-[8px] text-[#777]">View job →</span>
         <span className="inline-flex items-center gap-0.5 font-label text-[8px] uppercase tracking-wider text-[#666]">
           Tailored resume
           <ChevronDown className="h-2.5 w-2.5" strokeWidth={2} />
@@ -738,17 +854,27 @@ function ExploreCard({ job, tone }: { job: JobCard; tone: FitTone }) {
 /* ---------------------------------- Tracker ---------------------------------- */
 
 type TrackerTone = 'muted' | 'orange' | 'green' | 'red' | 'amber'
+type TrackerPortal = 'greenhouse' | 'lever' | 'ashby' | 'workday'
 type TrackerCard = {
   company: string
   role: string
-  tag: string
+  portal: TrackerPortal
   time?: string
-  note?: string
-  noteTone?: 'muted' | 'red'
-  inProgress?: boolean
-  attention?: boolean
-  /** Mini version of the tracker's "Cancelled by you" outcome chip. */
+  /** Applied successfully chip */
+  appliedOk?: boolean
+  /** Live APPLYING state with elapsed timer */
+  applying?: boolean
+  /** Cancelled-by-you outcome chip */
   cancelled?: boolean
+  /** Informational attention message (not "Answer Required") */
+  attentionMsg?: string
+}
+
+const TRACKER_PORTAL: Record<TrackerPortal, { label: string; classes: string }> = {
+  greenhouse: { label: 'Greenhouse', classes: 'bg-[#22c55e]/10 text-[#22c55e]' },
+  lever: { label: 'Lever', classes: 'bg-[#3b82f6]/10 text-[#3b82f6]' },
+  ashby: { label: 'Ashby', classes: 'bg-purple-500/10 text-purple-400' },
+  workday: { label: 'Workday', classes: 'bg-white/[0.06] text-[#888]' },
 }
 
 const TRACKER_COLUMNS: {
@@ -757,144 +883,238 @@ const TRACKER_COLUMNS: {
   cards: TrackerCard[]
 }[] = [
   {
-    label: 'Queued',
+    label: 'QUEUED',
     tone: 'muted',
     cards: [
-      { company: 'Verkada', role: 'Technical Support Engineering Intern', tag: 'VK', time: '3h ago' },
-      { company: 'Rocketlab', role: 'Practical Engineering Intern Fall 2026', tag: 'GH', time: '1d ago' },
-      { company: 'Astranis', role: 'Member of Technical Staff', tag: 'AS', time: '4d ago' },
+      {
+        company: 'Verkada',
+        role: 'Technical Support Engineering Intern',
+        portal: 'greenhouse',
+        time: '3h ago',
+      },
+      {
+        company: 'Rocket Lab',
+        role: 'Practical Engineering Intern Fall 2026',
+        portal: 'greenhouse',
+        time: '1d ago',
+      },
     ],
   },
   {
-    label: 'In progress',
+    label: 'IN PROGRESS',
     tone: 'orange',
     cards: [
       {
         company: 'Microsoft',
         role: 'Software Engineer Intern',
-        tag: 'WD',
-        note: 'Tailoring résumé…',
-        noteTone: 'muted',
-        inProgress: true,
+        portal: 'workday',
+        applying: true,
       },
     ],
   },
   {
-    label: 'Applied',
+    label: 'APPLIED',
     tone: 'green',
     cards: [
-      { company: 'Google', role: 'Software Engineer Intern', tag: 'GH', time: '2d ago' },
-      { company: 'Tesla', role: 'Firmware Engineering Intern', tag: 'LV', time: '4d ago' },
-      { company: 'Cisco', role: 'Network Software Intern', tag: 'AS', time: '2d ago' },
+      {
+        company: 'Google',
+        role: 'Software Engineer Intern',
+        portal: 'greenhouse',
+        time: '2d ago',
+        appliedOk: true,
+      },
+      {
+        company: 'Tesla',
+        role: 'Firmware Engineering Intern',
+        portal: 'lever',
+        time: '4d ago',
+        appliedOk: true,
+      },
     ],
   },
   {
-    label: 'Failed',
+    label: 'FAILED',
     tone: 'red',
     cards: [
       {
         company: 'Intel',
         role: 'Hardware Engineering Intern',
-        tag: 'GH',
+        portal: 'greenhouse',
         time: '2d ago',
         cancelled: true,
       },
     ],
   },
   {
-    label: 'Attention',
+    label: 'ATTENTION',
     tone: 'amber',
     cards: [
       {
-        company: 'Qualcomm',
-        role: 'Embedded Systems Intern',
-        tag: 'VK',
+        company: 'Uncountable',
+        role: 'Software Engineering Intern',
+        portal: 'ashby',
         time: '4d ago',
-        attention: true,
+        attentionMsg: 'This Ashby form flagged the application as possible spam.',
       },
     ],
   },
 ]
 
 const TRACKER_TOP: Record<TrackerTone, string> = {
-  muted: 'bg-[#555]',
+  muted: 'bg-[#444]',
   orange: 'bg-[#FF6733]',
-  green: 'bg-emerald-400',
-  red: 'bg-red-400',
-  amber: 'bg-amber-400',
+  green: 'bg-[#22c55e]',
+  red: 'bg-[#ef4444]',
+  amber: 'bg-[#f59e0b]',
 }
 const TRACKER_DOT: Record<TrackerTone, string> = {
+  muted: 'bg-[#444]',
+  orange: 'bg-[#FF6733]',
+  green: 'bg-[#22c55e]',
+  red: 'bg-[#ef4444]',
+  amber: 'bg-[#f59e0b]',
+}
+const TRACKER_LABEL: Record<TrackerTone, string> = {
   muted: 'text-[#666]',
   orange: 'text-[#FF6733]',
-  green: 'text-emerald-400',
-  red: 'text-red-400',
-  amber: 'text-amber-400',
+  green: 'text-[#22c55e]',
+  red: 'text-[#ef4444]',
+  amber: 'text-[#f59e0b]',
 }
+
+const LIVE_FEED = [
+  {
+    status: 'APPLIED',
+    color: '#22c55e',
+    company: 'NVIDIA',
+    role: 'GPU Software Engineer Intern',
+    portal: 'greenhouse' as TrackerPortal,
+    timing: 'Applied 2d ago',
+  },
+  {
+    status: 'APPLYING',
+    color: '#FF6733',
+    company: 'Microsoft',
+    role: 'Software Engineer Intern',
+    portal: 'workday' as TrackerPortal,
+    timing: '1m 24s',
+  },
+  {
+    status: 'ATTENTION',
+    color: '#f59e0b',
+    company: 'Uncountable',
+    role: 'Software Engineering Intern',
+    portal: 'ashby' as TrackerPortal,
+    timing: 'Needs review',
+  },
+] as const
 
 function TrackerSlide() {
   return (
-    <div className="flex h-full flex-col px-6 pt-5">
-      <div className="flex items-start justify-between">
+    <div className="flex h-full flex-col">
+      {/* MissionControlHeader twin */}
+      <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-4">
         <div>
-          <p className="font-label text-[8px] font-semibold uppercase tracking-[0.22em] text-[#666]">
-            Scout Agent
+          <p className="font-mono text-[8px] uppercase tracking-[0.3em] text-[#444]">
+            SCOUT AGENT
           </p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <h2 className="font-headline text-[24px] font-medium tracking-[-0.02em] text-white">
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+            <h2 className="font-headline text-[20px] font-medium tracking-[-0.02em] text-white">
               Run complete
             </h2>
           </div>
-          <p className="mt-0.5 font-body text-[10px] text-[#666]">
+          <p className="mt-1 font-mono text-[9px] text-[#555]">
             Started 2d ago · 7 applications
           </p>
         </div>
-        <div className="flex items-start gap-6 pr-1">
-          <RunStat value="3" label="Applied" tone="text-emerald-400" />
-          <RunStat value="1" label="Failed" tone="text-red-400" />
-          <RunStat value="1" label="Attention" tone="text-amber-400" />
+        <div className="flex items-start gap-5 pr-1">
+          <RunStat value="36" label="APPLIED" tone="text-[#22c55e]" />
+          <RunStat value="4" label="FAILED" tone="text-[#ef4444]" />
+          <RunStat value="2" label="ATTENTION" tone="text-[#f59e0b]" />
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
-        <span className="inline-flex items-center gap-1 font-label text-[8px] font-semibold uppercase tracking-[0.16em] text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          Applied
-        </span>
-        <div className="min-w-0">
-          <span className="font-label text-[11px] font-medium text-white">
-            NVIDIA
-          </span>
-          <span className="ml-2 font-body text-[10px] text-[#777]">
-            GPU Software Engineer Intern
-          </span>
-        </div>
-        <span className="rounded bg-white/[0.06] px-1.5 py-px font-label text-[8px] text-[#999]">
-          GH
-        </span>
-        <span className="ml-auto font-label text-[9px] text-emerald-400/80">
-          Applied 2d ago
-        </span>
-        <span className="inline-flex items-center gap-0.5 font-label text-[9px] text-[#777]">
-          View
-          <ArrowRight className="h-2.5 w-2.5" strokeWidth={2} />
+      {/* Progress bar under a completed run */}
+      <div className="h-0.5 w-full bg-white/[0.04]">
+        <div className="h-full w-full bg-gradient-to-r from-[#FF6733] to-[#22c55e]" />
+      </div>
+
+      {/* LiveApplicationFeed rows */}
+      <div className="border-b border-white/[0.04]">
+        {LIVE_FEED.map((row) => {
+          const portal = TRACKER_PORTAL[row.portal]
+          return (
+            <div
+              key={row.company + row.status}
+              className="flex items-center gap-3 border-b border-white/[0.04] px-5 py-1.5 last:border-0"
+            >
+              <div className="flex w-[72px] shrink-0 items-center gap-1.5">
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: row.color }}
+                />
+                <span
+                  className="font-mono text-[8px] tracking-wider"
+                  style={{ color: row.color }}
+                >
+                  {row.status}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-label text-[10px] font-medium text-white">
+                  {row.company}
+                </p>
+                <div className="mt-px flex items-center gap-1.5">
+                  <p className="truncate font-body text-[8px] text-[#555]">{row.role}</p>
+                  <span
+                    className={cn(
+                      'inline-flex shrink-0 items-center rounded px-1 py-px font-label text-[7px] font-medium',
+                      portal.classes,
+                    )}
+                  >
+                    {portal.label}
+                  </span>
+                </div>
+              </div>
+              <span className="shrink-0 font-label text-[8px] text-[#666]">{row.timing}</span>
+              <span className="inline-flex shrink-0 items-center gap-0.5 font-label text-[8px] text-[#777]">
+                View
+                <ArrowRight className="h-2 w-2" strokeWidth={2} />
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center justify-between px-5 pt-2.5">
+        <p className="font-mono text-[8px] uppercase tracking-[0.3em] text-[#444]">
+          APPLICATION HISTORY
+        </p>
+        <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-1.5 py-px font-mono text-[8px] text-[#555]">
+          7
         </span>
       </div>
 
-      <p className="mt-4 font-label text-[8px] font-semibold uppercase tracking-[0.22em] text-[#555]">
-        Application History
-      </p>
-
-      <div className="mt-2 grid flex-1 grid-cols-5 gap-2 overflow-hidden">
+      <div className="mt-1.5 grid flex-1 grid-cols-5 gap-1.5 overflow-hidden px-5 pb-2">
         {TRACKER_COLUMNS.map((col) => (
           <div key={col.label} className="flex min-w-0 flex-col">
             <div className={cn('h-0.5 w-full rounded-full', TRACKER_TOP[col.tone])} />
-            <div className="mt-1.5 mb-2 flex items-center gap-1">
-              <span className={cn('font-label text-[8px]', TRACKER_DOT[col.tone])}>●</span>
-              <span className="truncate font-label text-[8px] font-semibold uppercase tracking-[0.1em] text-[#888]">
+            <div className="mt-1.5 mb-1.5 flex items-center gap-1">
+              <span
+                className={cn('h-1.5 w-1.5 rounded-full', TRACKER_DOT[col.tone])}
+              />
+              <span
+                className={cn(
+                  'truncate font-mono text-[7px] uppercase tracking-wider',
+                  TRACKER_LABEL[col.tone],
+                )}
+              >
                 {col.label}
               </span>
-              <ChevronDown className="ml-auto h-2.5 w-2.5 text-[#555]" strokeWidth={2} />
+              <span className="ml-auto font-mono text-[7px] text-[#444]">
+                {col.cards.length}
+              </span>
             </div>
             <div className="flex flex-col gap-1.5">
               {col.cards.map((card) => (
@@ -909,50 +1129,50 @@ function TrackerSlide() {
 }
 
 function TrackerCardView({ card }: { card: TrackerCard }) {
+  const portal = TRACKER_PORTAL[card.portal]
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-2">
+    <div className="flex flex-col gap-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-1.5">
       <span className="truncate font-label text-[10px] font-medium text-white">
         {card.company}
       </span>
       <span className="line-clamp-2 font-body text-[8px] leading-tight text-[#777]">
         {card.role}
       </span>
-      {card.note ? (
-        card.inProgress ? (
-          <span className="inline-flex items-center gap-1 font-body text-[8px] italic text-[#888]">
-            <Loader2 className="h-2.5 w-2.5 animate-spin text-[#FF6733]" strokeWidth={2} />
-            {card.note}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              'truncate font-mono text-[7px]',
-              card.noteTone === 'red' ? 'text-red-400/80' : 'text-[#666]',
-            )}
-          >
-            {card.note}
-          </span>
-        )
+      <span
+        className={cn(
+          'inline-flex w-fit items-center rounded px-1 py-px font-label text-[7px] font-medium',
+          portal.classes,
+        )}
+      >
+        {portal.label}
+      </span>
+      {card.applying ? (
+        <span className="inline-flex items-center gap-1 font-mono text-[8px] text-[#FF6733]">
+          <span className="h-1 w-1 animate-pulse rounded-full bg-[#FF6733]" />
+          APPLYING · 1m 24s
+        </span>
+      ) : null}
+      {card.appliedOk ? (
+        <span className="inline-flex items-center gap-1 font-label text-[7px] font-medium text-[#22c55e]">
+          <CheckCircle2 className="h-2.5 w-2.5 shrink-0" strokeWidth={2} />
+          Applied successfully
+        </span>
       ) : null}
       {card.cancelled ? (
-        <span className="inline-flex w-fit items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-label text-[7px] font-medium text-[#999]">
+        <span className="inline-flex w-fit items-center gap-1 rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-label text-[7px] font-medium text-[#888]">
           <CircleSlash className="h-2 w-2 shrink-0" strokeWidth={2} />
           Cancelled by you
         </span>
       ) : null}
-      {card.attention ? (
-        <span className="rounded bg-amber-400/15 px-1.5 py-0.5 text-center font-label text-[8px] font-semibold text-amber-400">
-          Answer Required
+      {card.attentionMsg ? (
+        <span className="flex items-start gap-1 font-label text-[7px] leading-snug text-[#f59e0b]">
+          <Info className="mt-px h-2.5 w-2.5 shrink-0" strokeWidth={2} />
+          <span className="line-clamp-2">{card.attentionMsg}</span>
         </span>
       ) : null}
-      <div className="mt-0.5 flex items-center justify-between">
-        <span className="rounded bg-white/[0.06] px-1 font-label text-[7px] text-[#999]">
-          {card.tag}
-        </span>
-        {card.time ? (
-          <span className="font-label text-[7px] text-[#555]">{card.time}</span>
-        ) : null}
-      </div>
+      {card.time ? (
+        <span className="font-label text-[7px] text-[#555]">{card.time}</span>
+      ) : null}
     </div>
   )
 }
@@ -967,11 +1187,11 @@ function RunStat({
   tone: string
 }) {
   return (
-    <div className="text-center">
-      <div className={cn('font-headline text-[26px] font-semibold leading-none', tone)}>
+    <div className="text-right">
+      <div className={cn('font-headline text-[22px] font-medium leading-none', tone)}>
         {value}
       </div>
-      <div className="mt-1 font-label text-[7px] uppercase tracking-[0.16em] text-[#666]">
+      <div className="mt-1 font-mono text-[7px] uppercase tracking-widest text-[#444]">
         {label}
       </div>
     </div>
@@ -980,34 +1200,69 @@ function RunStat({
 
 /* ---------------------------------- Resume ---------------------------------- */
 
-const RESUME_SCORE = 76
+const RESUME_SCORE = 90
 const RESUME_BALANCE = [
   { category: 'Structure', value: 92 },
-  { category: 'Metrics', value: 38 },
-  { category: 'Keywords', value: 44 },
+  { category: 'Metrics', value: 68 },
+  { category: 'Keywords', value: 74 },
   { category: 'Experience', value: 86 },
 ] as const
 
+function resumeScoreColor(value: number): string {
+  if (value >= 90) return '#22c55e'
+  if (value >= 71) return '#FF6733'
+  if (value >= 41) return '#f59e0b'
+  return '#ef4444'
+}
+
+function resumeScoreLabel(value: number): string {
+  if (value >= 90) return 'Excellent'
+  if (value >= 71) return 'Strong'
+  if (value >= 41) return 'Getting There'
+  return 'Needs Work'
+}
+
 const RESUME_FINDINGS = [
   {
+    severity: 'warning' as const,
     tag: 'missing metrics',
     issue:
       "First bullet of 'RateMyRoommate' project does not quantify scale (users, sessions, or data volume).",
     fix: "Quantify the scale of authentication or database records (e.g., 'supporting 100+ active user sessions').",
   },
   {
+    severity: 'warning' as const,
     tag: 'vague description',
     issue:
       "Emerging Scholars Program description is too abstract for a software role ('interdisciplinary problem-solving').",
     fix: 'Specify the exact STEM tools, programming scripts, or data analysis methods used during the research.',
   },
   {
+    severity: 'suggestion' as const,
     tag: 'weak verb',
     issue:
       "Bullet regarding 'Focusing on…' uses a weak gerund instead of a strong engineering verb.",
     fix: "Replace with a strong verb like 'Streamlined' or 'Engineered' to lead the accomplishment.",
   },
 ] as const
+
+const SEVERITY_STYLE = {
+  critical: {
+    accent: 'text-red-400',
+    border: 'border-red-500/40',
+    label: 'Critical',
+  },
+  warning: {
+    accent: 'text-amber-400',
+    border: 'border-amber-500/40',
+    label: 'Warning',
+  },
+  suggestion: {
+    accent: 'text-[#FF6733]',
+    border: 'border-[#FF6733]/40',
+    label: 'Suggestion',
+  },
+} as const
 
 function polar(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = (angleDeg * Math.PI) / 180
@@ -1031,6 +1286,8 @@ function ShowcaseScoreGauge({ score, size = 148 }: { score: number; size?: numbe
   const dashRadius = Math.round((tickInner - 8) * 100) / 100
   const lit = Math.round((score / 100) * SEGMENTS)
   const numberSize = Math.max(28, Math.round(size * 0.24))
+  const color = resumeScoreColor(score)
+  const label = resumeScoreLabel(score)
 
   const ticks = Array.from({ length: SEGMENTS }, (_, i) => {
     const angle = START + (SWEEP / (SEGMENTS - 1)) * i
@@ -1063,7 +1320,7 @@ function ShowcaseScoreGauge({ score, size = 148 }: { score: number; size?: numbe
             y1={t.from.y}
             x2={t.to.x}
             y2={t.to.y}
-            stroke={t.lit ? '#FF6733' : 'rgba(255,255,255,0.09)'}
+            stroke={t.lit ? color : 'rgba(255,255,255,0.09)'}
             strokeWidth={2.5}
             strokeLinecap="round"
           />
@@ -1111,8 +1368,11 @@ function ShowcaseScoreGauge({ score, size = 148 }: { score: number; size?: numbe
           {score}
         </span>
         <span className="mt-0.5 font-body text-[9px] leading-none text-[#555]">/ 100</span>
-        <span className="mt-1 font-label text-[8px] font-semibold uppercase tracking-[0.2em] text-[#FF6733]">
-          Strong
+        <span
+          className="mt-1 font-label text-[8px] font-semibold uppercase tracking-[0.2em]"
+          style={{ color }}
+        >
+          {label}
         </span>
       </div>
     </div>
@@ -1260,43 +1520,52 @@ function ResumeSlide() {
             <p className="font-label text-[10px] font-semibold uppercase tracking-[0.22em] text-[#FF6733]">
               What Scout Found
             </p>
-            <p className="font-body text-[11px] text-[#888]">4 issues detected</p>
+            <p className="font-body text-[11px] text-[#888]">3 issues detected</p>
           </header>
 
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
-            {RESUME_FINDINGS.map((f) => (
-              <article
-                key={f.tag}
-                className="rounded-xl border border-green-500/40 bg-white/[0.04] px-3.5 py-2.5 backdrop-blur-md"
-              >
-                <header className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-green-400">
-                    <ShowcaseScoutMark className="h-3.5 w-3.5" />
-                    <span className="font-label text-[9px] font-semibold uppercase tracking-[0.18em]">
-                      Applied
+            {RESUME_FINDINGS.map((f) => {
+              const style = SEVERITY_STYLE[f.severity]
+              return (
+                <article
+                  key={f.tag}
+                  className={cn(
+                    'rounded-xl border bg-white/[0.04] px-3.5 py-2.5 backdrop-blur-md',
+                    style.border,
+                  )}
+                >
+                  <header className="flex items-center justify-between gap-2">
+                    <span className={cn('inline-flex items-center gap-1.5', style.accent)}>
+                      <ShowcaseScoutMark className="h-3.5 w-3.5" />
+                      <span className="font-label text-[9px] font-semibold uppercase tracking-[0.18em]">
+                        {style.label}
+                      </span>
                     </span>
-                  </span>
-                  <span className="truncate font-mono text-[8px] uppercase tracking-[0.16em] text-[#555]">
-                    {f.tag}
-                  </span>
-                </header>
-                <p className="mt-2 font-body text-[11px] font-medium leading-snug text-white">
-                  {f.issue}
-                </p>
-                <div className="mt-2 rounded-lg border border-white/[0.08] bg-black/30 px-2.5 py-2">
-                  <p className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#666]">
-                    How Scout will fix it
+                    <span className="truncate font-mono text-[8px] uppercase tracking-[0.16em] text-[#555]">
+                      {f.tag}
+                    </span>
+                  </header>
+                  <p className="mt-2 font-body text-[11px] font-medium leading-snug text-white">
+                    {f.issue}
                   </p>
-                  <p className="mt-1 font-body text-[10px] leading-snug text-[#cfcfcf]">
-                    {f.fix}
-                  </p>
-                </div>
-                <footer className="mt-2 inline-flex items-center gap-1.5 font-body text-[10px] text-green-400">
-                  <Check className="h-3 w-3" strokeWidth={2.5} />
-                  Fixed in your refactored resume
-                </footer>
-              </article>
-            ))}
+                  <div className="mt-2 rounded-lg border border-white/[0.08] bg-black/30 px-2.5 py-2">
+                    <p className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#666]">
+                      How Scout will fix it
+                    </p>
+                    <p className="mt-1 font-body text-[10px] leading-snug text-[#cfcfcf]">
+                      {f.fix}
+                    </p>
+                  </div>
+                  <footer className="mt-2 flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.1] bg-white/[0.06] px-2 py-1 font-body text-[9px] font-medium text-white">
+                      Fix with Scout
+                      <ArrowRight className="h-2.5 w-2.5" strokeWidth={2} />
+                    </span>
+                    <span className="font-body text-[9px] text-[#888]">Ignore</span>
+                  </footer>
+                </article>
+              )
+            })}
           </div>
         </section>
       </div>
@@ -1314,103 +1583,105 @@ const COPILOT_CHATS = [
 
 function CopilotSlide() {
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Conversation sidebar — mirrors ConversationSidebar */}
-      <aside className="flex w-[168px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0a0a]">
-        <div className="border-b border-white/[0.06] p-2">
-          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 font-label text-[10px] font-medium text-white">
-            <Plus className="h-3 w-3" strokeWidth={2} />
-            New chat
-          </span>
-        </div>
-        <ul className="space-y-1 p-1.5">
-          {COPILOT_CHATS.map((c) => (
-            <li key={c.snippet}>
-              <div
-                className={cn(
-                  'flex flex-col gap-0.5 rounded-lg border px-2 py-1.5',
-                  c.active
-                    ? 'border-[#FF6733]/40 bg-[#FF6733]/10'
-                    : 'border-transparent',
-                )}
-              >
-                <span
+    <div className="flex h-full overflow-hidden p-3">
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.06]">
+        {/* Conversation sidebar — mirrors ConversationSidebar */}
+        <aside className="flex w-[168px] shrink-0 flex-col border-r border-white/[0.06] bg-[#0a0a0a]">
+          <div className="border-b border-white/[0.06] p-2">
+            <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1.5 font-label text-[10px] font-medium text-white">
+              <Plus className="h-3 w-3" strokeWidth={2} />
+              New chat
+            </span>
+          </div>
+          <ul className="space-y-1 p-1.5">
+            {COPILOT_CHATS.map((c) => (
+              <li key={c.snippet}>
+                <div
                   className={cn(
-                    'line-clamp-1 font-label text-[10px] font-medium',
-                    c.active ? 'text-white' : 'text-[#bbb]',
+                    'flex flex-col gap-0.5 rounded-lg border px-2 py-1.5',
+                    c.active
+                      ? 'border-[#FF6733]/40 bg-[#FF6733]/10'
+                      : 'border-transparent',
                   )}
                 >
-                  {c.snippet}
-                </span>
-                <span className="font-label text-[8px] text-[#555]">{c.time}</span>
+                  <span
+                    className={cn(
+                      'line-clamp-1 font-label text-[10px] font-medium',
+                      c.active ? 'text-white' : 'text-[#bbb]',
+                    )}
+                  >
+                    {c.snippet}
+                  </span>
+                  <span className="font-label text-[8px] text-[#555]">{c.time}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        {/* Chat pane */}
+        <div className="flex min-w-0 flex-1 flex-col bg-[#080808]">
+          <div className="min-h-0 flex-1 space-y-3 overflow-hidden px-4 py-3">
+            {/* User bubble */}
+            <div className="flex justify-end">
+              <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
+                Am I ready for Stripe?
               </div>
-            </li>
-          ))}
-        </ul>
-      </aside>
+            </div>
 
-      {/* Chat pane */}
-      <div className="flex min-w-0 flex-1 flex-col bg-[#080808]">
-        <div className="min-h-0 flex-1 space-y-3 overflow-hidden px-4 py-3">
-          {/* User bubble */}
-          <div className="flex justify-end">
-            <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
-              Am I ready for Stripe?
+            {/* Assistant bubble */}
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
+                <Image
+                  src={scoutLogo}
+                  alt=""
+                  width={12}
+                  height={12}
+                  draggable={false}
+                  className="h-3 w-3 object-contain"
+                />
+              </span>
+              <div className="max-w-[82%] space-y-1.5 rounded-2xl rounded-tl-sm border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                  Almost — your resume is at{' '}
+                  <span className="font-semibold text-white">90</span>, and you already
+                  have strong fits at Stripe-adjacent roles.
+                </p>
+                <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                  Two gaps before you apply:
+                </p>
+                <ul className="space-y-0.5 pl-3 font-body text-[10px] leading-snug text-[#bbb]">
+                  <li className="list-disc">
+                    Add a metrics bullet on RateMyRoommate (scale / latency).
+                  </li>
+                  <li className="list-disc">
+                    Clear the 2 items in Needs Attention first.
+                  </li>
+                </ul>
+                <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
+                  Want me to queue Stripe SWE Intern once those are fixed?
+                </p>
+              </div>
+            </div>
+
+            {/* Follow-up user */}
+            <div className="flex justify-end">
+              <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
+                Yes — and what should I apply to next?
+              </div>
             </div>
           </div>
 
-          {/* Assistant bubble */}
-          <div className="flex items-start gap-2">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04]">
-              <Image
-                src={scoutLogo}
-                alt=""
-                width={12}
-                height={12}
-                draggable={false}
-                className="h-3 w-3 object-contain"
-              />
-            </span>
-            <div className="max-w-[82%] space-y-1.5 rounded-2xl rounded-tl-sm border border-white/[0.06] bg-white/[0.03] px-3 py-2">
-              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
-                Almost — your resume is at{' '}
-                <span className="font-semibold text-white">90</span>, and you already
-                have strong fits at Stripe-adjacent roles.
-              </p>
-              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
-                Two gaps before you apply:
-              </p>
-              <ul className="space-y-0.5 pl-3 font-body text-[10px] leading-snug text-[#bbb]">
-                <li className="list-disc">
-                  Add a metrics bullet on RateMyRoommate (scale / latency).
-                </li>
-                <li className="list-disc">
-                  Clear the 2 items in Needs Attention first.
-                </li>
-              </ul>
-              <p className="font-body text-[11px] leading-relaxed text-[#ddd]">
-                Want me to queue Stripe SWE Intern once those are fixed?
-              </p>
+          {/* Input — mirrors ChatInput */}
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1.5">
+              <span className="flex-1 px-2 py-1 font-body text-[11px] text-[#555]">
+                Ask Scout anything…
+              </span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
+              </span>
             </div>
-          </div>
-
-          {/* Follow-up user */}
-          <div className="flex justify-end">
-            <div className="max-w-[78%] rounded-2xl rounded-br-sm bg-[#FF6733] px-3 py-2 font-body text-[11px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,103,51,0.25)]">
-              Yes — and what should I apply to next?
-            </div>
-          </div>
-        </div>
-
-        {/* Input — mirrors ChatInput */}
-        <div className="px-4 pb-3">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1.5">
-            <span className="flex-1 px-2 py-1 font-body text-[11px] text-[#555]">
-              Ask Scout anything…
-            </span>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.25} />
-            </span>
           </div>
         </div>
       </div>

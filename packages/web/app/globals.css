@@ -503,6 +503,58 @@
   animation-play-state: paused;
 }
 
+/*
+ * University logo breathing — noticeable ~112% scale with a brief hold at
+ * peak. Only runs when .is-breathing is applied (viewport-triggered).
+ */
+@keyframes logo-breathe {
+  0% {
+    transform: scale(1);
+  }
+  32% {
+    transform: scale(1.12);
+  }
+  48% {
+    transform: scale(1.12);
+  }
+  82% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.logo-breathe {
+  display: flex;
+  transform: scale(1);
+  transform-origin: center center;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.logo-breathe.is-breathing {
+  animation: logo-breathe 3.8s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-breathe.is-breathing {
+    animation: none;
+  }
+
+  .flip-digit-strip {
+    transition: none !important;
+  }
+}
+
+.flip-digit-strip {
+  /* Short roll so each odometer tick feels mechanical, not laggy. */
+  transition: transform 0.04s cubic-bezier(0.33, 1, 0.36, 1);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
 @keyframes accordion-down {
   from {
     height: 0;

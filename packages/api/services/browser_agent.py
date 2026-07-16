@@ -50,6 +50,7 @@ from core.redis_client import (
     cancelled_token_key,
     gate_key,
     get_redis,
+    gh_inbox_assignment_key,
     pending_otp_key,
     verification_code_key,
 )
@@ -1501,15 +1502,17 @@ def _install_verification_relay(
       OTP handling is fully agent-side: NO user notification, NO CODE NEEDED card —
       verification codes are Scout's problem, never the user's.
     - The poll loop then reads the Redis mailbox apply:code:{app_id} every ~3s
-      (written by the AgentMail relay webhook) AND the shared parked-OTP slot
-      apply:ghotp:parked — Greenhouse's code email routinely arrives BEFORE this
-      gate is stamped, in which case the webhook parked it (see
-      core/agentmail_inbox.py). The manual /verification-code endpoint still writes
-      the same mailbox and keeps working as a dormant escape hatch.
+      (written by the AgentMail relay webhook) AND this apply's ASSIGNED inbox's
+      parked-OTP slot apply:ghotp:parked:{inbox} — Greenhouse's code email
+      routinely arrives BEFORE this gate is stamped, in which case the webhook
+      parked it under the receiving pool inbox (see core/agentmail_inbox.py). The
+      manual /verification-code endpoint still writes the same mailbox and keeps
+      working as a dormant escape hatch.
     - A fetch_code(gate_ts) callback is also polled (~every 15s) when provided —
       tasks/job_tasks.py wires agentmail_inbox.fetch_code_from_inbox, which reads
-      the shared inbox over the AgentMail REST API. This pull path is what serves
-      the code when the webhook cannot reach this worker (local dev) or is down.
+      the apply's assigned pool inbox over the AgentMail REST API. This pull path
+      is what serves the code when the webhook cannot reach this worker (local
+      dev) or is down.
 
     The code is consumed on read and never persisted. One call waits ~2 minutes; the
     prompt allows up to 3 calls before the agent gives up and reports the timeout.
@@ -1536,6 +1539,9 @@ def _install_verification_relay(
                     "report that an emailed verification code blocked submission."
                 )
             )
+        # Bind after the None guard so nested closures see a definite `str`
+        # (pyright does not carry narrowing into nested function scopes).
+        app_id = application_id
         call_count["n"] += 1
         attempt = call_count["n"]
         if attempt > _VERIFICATION_MAX_CALLS:
@@ -1557,12 +1563,12 @@ def _install_verification_relay(
             try:
                 if not await asyncio.to_thread(
                     redis_client.set,
-                    gate_key(application_id),
+                    gate_key(app_id),
                     str(now),
                     nx=True,
                     ex=GATE_FLAG_TTL,
                 ):
-                    raw = await asyncio.to_thread(redis_client.get, gate_key(application_id))
+                    raw = await asyncio.to_thread(redis_client.get, gate_key(app_id))
                     if raw is not None:
                         state["gate_ts"] = float(str(raw))
             except Exception:
@@ -1580,7 +1586,7 @@ def _install_verification_relay(
                         "status": "awaiting_code",
                         "error_message": "Completing the site's email verification step…",
                     }
-                ).eq("id", application_id).execute()
+                ).eq("id", app_id).execute()
 
             try:
                 await asyncio.to_thread(_mark_awaiting)
@@ -1590,18 +1596,26 @@ def _install_verification_relay(
         logger.info(
             "Awaiting verification code for application %s (attempt %s/%s, "
             "sent_to=%s, code_length=%s)",
-            application_id, attempt, _VERIFICATION_MAX_CALLS,
+            app_id, attempt, _VERIFICATION_MAX_CALLS,
             params.sent_to, params.code_length,
         )
 
         def _claim_parked_code() -> str | None:
             """Claim a Greenhouse OTP the webhook parked BEFORE this gate was
             stamped (the code email routinely beats the agent's first poll —
-            see core/agentmail_inbox.py). One shared slot is safe: the
-            shared-inbox verify mutex allows at most one Greenhouse apply
-            platform-wide at the code stage. Freshness: the embedded timestamp
-            must fall within the parking TTL window of this gate."""
-            raw = redis_client.get(pending_otp_key())
+            see core/agentmail_inbox.py). The slot is PER POOL INBOX: the task
+            recorded which inbox this apply claimed (apply:ghinbox:{app_id}),
+            and the per-inbox verify mutex allows at most one Greenhouse apply
+            at the code stage per inbox — so that inbox's slot can only hold
+            THIS application's code. No assignment record → no parked claim
+            (the mailbox poll and pull path still deliver). Freshness: the
+            embedded timestamp must fall within the parking TTL window of
+            this gate."""
+            inbox = redis_client.get(gh_inbox_assignment_key(app_id))
+            if not inbox:
+                return None
+            slot = pending_otp_key(str(inbox).strip().lower())
+            raw = redis_client.get(slot)
             if raw is None:
                 return None
             try:
@@ -1609,20 +1623,20 @@ def _install_verification_relay(
                 parked_code = str(parked.get("code") or "").strip()
                 parked_ts = float(parked.get("ts") or 0)
             except (ValueError, TypeError):
-                redis_client.delete(pending_otp_key())
+                redis_client.delete(slot)
                 return None
             if not parked_code or abs(state["gate_ts"] - parked_ts) > PENDING_OTP_TTL:
                 return None
-            redis_client.delete(pending_otp_key())
+            redis_client.delete(slot)
             logger.info(
                 "Claimed parked verification code for application %s "
                 "(parked %.0fs before/after gate)",
-                application_id, state["gate_ts"] - parked_ts,
+                app_id, state["gate_ts"] - parked_ts,
             )
             return parked_code
 
-        key = verification_code_key(application_id)
-        stop_key = cancel_key(application_id)
+        key = verification_code_key(app_id)
+        stop_key = cancel_key(app_id)
         deadline = asyncio.get_event_loop().time() + _VERIFICATION_POLL_TIMEOUT
         code: str | None = None
         code_was_auto = False
@@ -1679,13 +1693,13 @@ def _install_verification_relay(
                     return
                 supabase.table("applications").update(
                     {"status": "in_progress", "error_message": None}
-                ).eq("id", application_id).execute()
+                ).eq("id", app_id).execute()
 
             try:
                 await asyncio.to_thread(_mark_resumed)
             except Exception:
                 logger.warning("code-resumed callback failed", exc_info=True)
-            logger.info("Verification code received for application %s", application_id)
+            logger.info("Verification code received for application %s", app_id)
             msg = (
                 f"Verification code received: {code} — click the FIRST code input box, "
                 "then type the entire code in one input action (the boxes auto-advance). "

@@ -24,6 +24,8 @@ const isPublicRoute = createRouteMatcher([
   // page and has no Clerk session to check; auth is the shared internal secret instead
   // (core/auth.py verify_internal_service).
   '/api/newsletter(.*)',
+  // Landing live counters poll paced platform totals while logged out.
+  '/api/landing(.*)',
 ])
 
 const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)'])

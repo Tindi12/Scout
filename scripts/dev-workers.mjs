@@ -46,29 +46,7 @@ function logDev(message) {
   process.stdout.write(`${PREFIX_COLORS.dev}[dev:workers]${RESET} ${message}\n`)
 }
 
-function startWorker(index, { beat = false } = {}) {
-  const name = `worker${index}`
-  const color = workerColor(index)
-  const args = [
-    'run',
-    'celery',
-    '-A',
-    'core.celery_app',
-    'worker',
-    '--pool=solo',
-    '-n',
-    `${name}@%h`,
-    '-l',
-    'info',
-    // Embed Celery beat on this ONE worker so the periodic stale-application
-    // reaper (tasks.reap_stale_applications) runs. It's the backstop that fails
-    // applications a hard worker death stranded at in_progress/queued and closes
-    // their scout_runs — without a beat they'd read "APPLYING" on the tracker
-    // forever. Beat must run on EXACTLY ONE instance (idempotent, but N beats =
-    // N duplicate schedules), so only worker1 gets -B.
-    ...(beat ? ['-B'] : []),
-  ]
-
+function startChild(name, args, color) {
   const child = spawn(uvCmd, args, {
     cwd: apiDir,
     env: { ...process.env, FORCE_COLOR: '1' },
@@ -89,15 +67,60 @@ function startWorker(index, { beat = false } = {}) {
   return child
 }
 
+function startWorker(index, { beat = false } = {}) {
+  const name = `worker${index}`
+  const color = workerColor(index)
+  const args = [
+    'run',
+    'celery',
+    '-A',
+    'core.celery_app',
+    'worker',
+    '--pool=solo',
+    '-n',
+    `${name}@%h`,
+    '-l',
+    'info',
+    // Embed Celery beat on this ONE worker so the periodic stale-application
+    // reaper (tasks.reap_stale_applications) runs. It's the backstop that fails
+    // applications a hard worker death stranded at in_progress/queued and closes
+    // their scout_runs — without a beat they'd read "APPLYING" on the tracker
+    // forever. Beat must run on EXACTLY ONE instance (idempotent, but N beats =
+    // N duplicate schedules), so only worker1 gets -B.
+    // Windows: Celery rejects -B on the worker; we spawn a separate beat process.
+    ...(beat && !isWin ? ['-B'] : []),
+  ]
+
+  return startChild(name, args, color)
+}
+
+function startBeat() {
+  // Separate beat process — required on Windows (no -B), and fine on other OS too
+  // when we choose not to embed. Exactly one beat across the fleet.
+  const color = '\x1b[36m'
+  return startChild(
+    'beat',
+    ['run', 'celery', '-A', 'core.celery_app', 'beat', '-l', 'info'],
+    color,
+  )
+}
+
 logDev(
   `Starting ${count} Celery worker(s) (--pool=solo, cwd packages/api)…`,
 )
-logDev('worker1 also runs beat (stale-application reaper, every 5 min).')
+if (isWin) {
+  logDev('Also starting celery beat as a separate process (Windows cannot use -B).')
+} else {
+  logDev('worker1 also runs beat (stale-application reaper, every 5 min).')
+}
 logDev('Requires Redis (REDIS_URL in packages/api/.env). Ctrl+C stops all workers.')
 
 for (let i = 1; i <= count; i++) {
-  // Only worker1 embeds beat — exactly one scheduler across the fleet.
-  startWorker(i, { beat: i === 1 })
+  // Only worker1 embeds beat on non-Windows — exactly one scheduler across the fleet.
+  startWorker(i, { beat: i === 1 && !isWin })
+}
+if (isWin) {
+  startBeat()
 }
 
 let shuttingDown = false

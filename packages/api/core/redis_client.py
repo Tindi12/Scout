@@ -54,24 +54,36 @@ GH_VERIFY_MUTEX_TTL = 1200  # seconds
 # never a duplicate (the in-app notification is the backstop either way).
 FORWARDED_MESSAGE_TTL = 7 * 24 * 3600  # seconds
 
-# Sentinel "user" scope for the SHARED AgentMail inbox (core/agentmail_inbox.py): all
-# users' Greenhouse codes land in ONE address, so when AgentMail is active a Greenhouse
-# apply must also hold the mutex under this scope — at most one application PLATFORM-
-# wide at the code gate keeps the shared inbox's inbound mail unambiguous.
-GH_SHARED_INBOX_SCOPE = "shared-inbox"
+# Per-inbox "user" scope for the AgentMail inbox POOL (core/agentmail_inbox.py):
+# each pool inbox carries its own verify mutex, so at most one application sits at
+# the code gate PER INBOX (previously: one platform-wide on the single shared
+# inbox). A Greenhouse apply claims whichever inbox is free — that inbox's address
+# becomes the applicant email, keeping its inbound mail unambiguous while other
+# inboxes serve other users' concurrent verifications.
+def gh_inbox_scope(inbox: str) -> str:
+    return f"inbox:{inbox}"
+
+
+# Which pool inbox an in-flight application claimed (apply:ghinbox:{application_id}
+# -> inbox address). Written by the apply task at inbox acquisition; read by the
+# browser agent's relay to claim the RIGHT per-inbox parked-OTP slot. TTL covers the
+# whole run budget with slack (mirrors CONTROL_TOKEN_TTL); deleted in the task's
+# finally alongside the rest of the attempt's mid-run channel.
+GH_INBOX_ASSIGNMENT_TTL = 1800  # seconds
 
 # OTP-notice marker (apply:otpnotice:{application_id}): the user gets at most one
 # "Scout is handling the verification step" heads-up email per application per
 # window, however many code emails/redeliveries the inbox sees.
 OTP_NOTICE_TTL = 6 * 3600  # seconds
 
-# Parked OTP (apply:ghotp:parked): a Greenhouse verification email routinely BEATS the
-# gate stamp — Greenhouse sends it seconds after Submit, while the agent stamps the
-# gate only on its first request_verification_code call. When the webhook classifies
-# OTP-shaped mail but no application is awaiting_code yet, the code is parked here
-# (single shared slot — the GH_SHARED_INBOX_SCOPE mutex guarantees at most one
-# Greenhouse apply platform-wide is at the verification stage) for the relay poll to
-# claim. TTL bounds staleness; the relay also checks the embedded timestamp.
+# Parked OTP (apply:ghotp:parked:{inbox}): a Greenhouse verification email routinely
+# BEATS the gate stamp — Greenhouse sends it seconds after Submit, while the agent
+# stamps the gate only on its first request_verification_code call. When the webhook
+# classifies OTP-shaped mail but no application is awaiting_code yet, the code is
+# parked in the receiving inbox's slot (one slot per pool inbox — the per-inbox
+# verify mutex guarantees at most one Greenhouse apply at the verification stage
+# per inbox) for the relay poll to claim. TTL bounds staleness; the relay also
+# checks the embedded timestamp.
 PENDING_OTP_TTL = 900  # seconds
 
 _client: redis.Redis | None = None
@@ -113,10 +125,16 @@ def code_consumed_key(message_id: str) -> str:
     return f"apply:code:consumed:{message_id}"
 
 
-def pending_otp_key() -> str:
-    """Single shared parking slot for a Greenhouse OTP that arrived before the gate
+def pending_otp_key(inbox: str) -> str:
+    """Per-inbox parking slot for a Greenhouse OTP that arrived before the gate
     was stamped (see PENDING_OTP_TTL). Value: JSON {"code": str, "ts": float}."""
-    return "apply:ghotp:parked"
+    return f"apply:ghotp:parked:{inbox}"
+
+
+def gh_inbox_assignment_key(application_id: str) -> str:
+    """Which pool inbox this in-flight application claimed (see
+    GH_INBOX_ASSIGNMENT_TTL). Value: the inbox address."""
+    return f"apply:ghinbox:{application_id}"
 
 
 def forwarded_message_key(message_id: str) -> str:
