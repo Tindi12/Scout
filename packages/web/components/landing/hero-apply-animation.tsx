@@ -97,12 +97,13 @@ export function HeroApplyAnimation() {
   }
 
   return (
-    <div
-      role="img"
-      aria-label="Scout automatically sends applications to top engineering companies for you"
-      className="relative"
-      style={{ width: WIDTH, height: HEIGHT }}
-    >
+    <div className="mx-auto flex w-full max-w-[360px] justify-center overflow-hidden">
+      <div
+        role="img"
+        aria-label="Scout automatically sends applications to top engineering companies for you"
+        className="hero-apply-anim relative shrink-0"
+        style={{ width: WIDTH, height: HEIGHT }}
+      >
       {/* Faint dashed route between the two tiles. */}
       <svg
         aria-hidden
@@ -172,6 +173,7 @@ export function HeroApplyAnimation() {
           <Send className="h-4 w-4 rotate-45" strokeWidth={1.75} />
         </motion.span>
       )}
+      </div>
     </div>
   )
 }

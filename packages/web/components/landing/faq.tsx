@@ -24,19 +24,19 @@ const FAQS = [
 
 export function FAQ() {
   return (
-    <section id="faq" className="relative px-6 py-32 lg:px-12">
+    <section id="faq" className="relative px-4 py-20 sm:px-6 sm:py-28 lg:px-12 lg:py-32">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-14 text-center">
+        <div className="mb-10 text-center sm:mb-14">
           <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
             FAQ
           </p>
-          <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
+          <h2 className="mt-4 font-headline text-[1.85rem] font-medium tracking-[-0.03em] text-white sm:text-4xl md:text-5xl">
             Find answers for the most
             <br className="hidden md:block" /> asked questions
           </h2>
         </div>
 
-        <Accordion.Root type="single" collapsible className="space-y-4">
+        <Accordion.Root type="single" collapsible className="space-y-3 sm:space-y-4">
           {FAQS.map((item, i) => (
             <Accordion.Item
               key={item.q}
@@ -44,18 +44,19 @@ export function FAQ() {
               className="glass-card overflow-hidden rounded-2xl transition-colors duration-300 data-[state=open]:bg-white/[0.04]"
             >
               <Accordion.Header>
-                <Accordion.Trigger className="group flex w-full items-center justify-between gap-4 px-7 py-6 text-left">
-                  <span className="font-headline text-[17px] font-medium text-white">
+                <Accordion.Trigger className="group flex w-full items-center justify-between gap-3 px-4 py-5 text-left sm:gap-4 sm:px-7 sm:py-6">
+                  <span className="font-headline text-[15px] font-medium leading-snug text-white sm:text-[17px]">
                     {item.q}
                   </span>
                   <ChevronDown
                     className="h-5 w-5 shrink-0 text-[#A1A1AA] transition-all duration-300 group-data-[state=open]:rotate-180 group-data-[state=open]:text-[#FF6733]"
                     strokeWidth={1.75}
+                    aria-hidden
                   />
                 </Accordion.Trigger>
               </Accordion.Header>
               <Accordion.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-                <div className="px-7 pb-6 font-body text-[15px] leading-relaxed text-[#A1A1AA]">
+                <div className="px-4 pb-5 font-body text-[15px] leading-relaxed text-[#A1A1AA] sm:px-7 sm:pb-6">
                   {item.a}
                 </div>
               </Accordion.Content>

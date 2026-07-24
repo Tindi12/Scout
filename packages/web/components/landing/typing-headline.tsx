@@ -72,7 +72,7 @@ export function TypingHeadline() {
   }, [])
 
   return (
-    <h1 className="grid font-headline text-[clamp(2.75rem,6vw,5.25rem)] font-medium leading-[1.05] tracking-[-0.04em] text-white">
+    <h1 className="grid w-full max-w-[22ch] font-headline text-[clamp(2.15rem,8.5vw,5.25rem)] font-medium leading-[1.08] tracking-[-0.04em] text-white sm:max-w-none sm:leading-[1.05]">
       {/* Invisible sizers stack every phrase in the same grid cell so the
           headline reserves the tallest/widest footprint and never shifts the
           layout while text is typed, deleted, or wrapped onto extra lines. */}

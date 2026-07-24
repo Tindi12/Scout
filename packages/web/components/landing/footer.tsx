@@ -46,6 +46,13 @@ const PRODUCT_LINKS = [
   { label: 'Copilot', href: '/copilot' },
 ] as const
 
+const PRODUCT_LINKS_WAITLIST = [
+  { label: 'How it works', href: '/#about' },
+  { label: 'Pricing', href: '/#pricing' },
+  { label: 'FAQ', href: '/#faq' },
+  { label: 'Blog', href: '/blog' },
+] as const
+
 const COMPANY_LINKS = [
   { label: 'Blog', href: '/blog' },
   { label: 'Changelog', href: '/changelog' },
@@ -66,7 +73,7 @@ const LEGAL_LINKS = [
 ] as const
 
 const footerLinkClass =
-  'font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white'
+  'font-body inline-flex min-h-11 items-center text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white'
 
 function FooterLink({ label, href }: { label: string; href: string }) {
   if (href.includes('#')) {
@@ -90,7 +97,10 @@ export function Footer() {
     heading: string
     links: readonly { label: string; href: string }[]
   }[] = [
-    { heading: 'Product', links: PRODUCT_LINKS },
+    {
+      heading: 'Product',
+      links: waitlist ? PRODUCT_LINKS_WAITLIST : PRODUCT_LINKS,
+    },
     { heading: 'Company', links: COMPANY_LINKS },
     {
       heading: 'Account',
@@ -100,7 +110,7 @@ export function Footer() {
   ]
 
   return (
-    <footer className="relative px-6 pb-10 pt-24 lg:px-12">
+    <footer className="relative px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-16 sm:px-6 sm:pb-10 sm:pt-24 lg:px-12 md:pb-10">
       <div className="mx-auto max-w-7xl">
         <div className="glass-card relative overflow-hidden rounded-3xl p-10 md:p-14">
           <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
@@ -178,13 +188,13 @@ export function Footer() {
 
           <LandingHashLink
             href="#top"
-            className="font-label group inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.05] hover:text-white"
+            className="font-label group inline-flex min-h-11 items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.18em] text-[#A1A1AA] transition-colors duration-150 hover:border-white/25 hover:bg-white/[0.05] hover:text-white"
           >
             Back to top
             <ArrowUp className="h-4 w-4 transition-transform duration-150 group-hover:-translate-y-0.5 group-hover:text-primary" />
           </LandingHashLink>
 
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
             {[
               { Icon: TikTokIcon, label: 'TikTok', href: '#' },
               { Icon: XIcon, label: 'X', href: 'https://x.com/getscoutintern' },
@@ -199,7 +209,7 @@ export function Footer() {
                   {...(isExternal
                     ? { target: '_blank', rel: 'noopener noreferrer' }
                     : {})}
-                  className="text-[#888888] opacity-50 grayscale transition-all duration-200 hover:scale-110 hover:text-white hover:opacity-100 hover:grayscale-0"
+                  className="inline-flex h-11 w-11 items-center justify-center text-[#888888] opacity-50 grayscale transition-all duration-200 hover:scale-110 hover:text-white hover:opacity-100 hover:grayscale-0"
                 >
                   <Icon className="h-5 w-5" strokeWidth={1.75} />
                 </Link>

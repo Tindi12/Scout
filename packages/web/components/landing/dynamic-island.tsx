@@ -130,8 +130,13 @@ export function DynamicIsland() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false)
     }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [menuOpen])
 
   const closeMenu = () => setMenuOpen(false)
@@ -159,7 +164,7 @@ export function DynamicIsland() {
                   isLanding ? (
                     <LandingHashLink
                       href={homeHref}
-                      className="group flex shrink-0 items-center gap-2.5 transition-all duration-300"
+                      className="group flex min-h-11 shrink-0 items-center gap-2.5 transition-all duration-300"
                       aria-label="Scout home"
                     >
                       <Image
@@ -178,7 +183,7 @@ export function DynamicIsland() {
                   ) : (
                     <Link
                       href="/"
-                      className="group flex shrink-0 items-center gap-2.5 transition-all duration-300"
+                      className="group flex min-h-11 shrink-0 items-center gap-2.5 transition-all duration-300"
                       aria-label="Scout home"
                     >
                       <Image
@@ -243,7 +248,7 @@ export function DynamicIsland() {
                 </ul>
               ) : null}
 
-              <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 {waitlist ? (
                   <>
                     <WaitlistOpenButton
@@ -252,7 +257,12 @@ export function DynamicIsland() {
                     >
                       Join waitlist
                     </WaitlistOpenButton>
-                    <ComingSoonCta source="nav" size="default" />
+                    {/* Desktop/tablet only — phones use the menu + sticky dock */}
+                    <ComingSoonCta
+                      source="nav"
+                      size="default"
+                      className="hidden min-h-10 sm:inline-flex"
+                    />
                   </>
                 ) : (
                   <>
@@ -263,7 +273,7 @@ export function DynamicIsland() {
                     >
                       Log In
                     </Link>
-                    <Button asChild>
+                    <Button asChild className="hidden min-h-10 sm:inline-flex">
                       <Link href="/sign-up" prefetch>
                         Try Scout Now
                       </Link>
@@ -272,7 +282,7 @@ export function DynamicIsland() {
                 )}
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
                   aria-expanded={menuOpen}
                   aria-controls="landing-mobile-nav"
                   aria-label={menuOpen ? 'Close menu' : 'Open menu'}
@@ -309,16 +319,17 @@ export function DynamicIsland() {
       {menuOpen ? (
         <nav
           id="landing-mobile-nav"
-          className="glass-pill pointer-events-auto w-full max-w-3xl rounded-3xl p-4 md:hidden"
+          className="glass-pill pointer-events-auto mx-2 w-[calc(100%-1rem)] max-w-3xl rounded-3xl p-3 md:hidden sm:mx-4"
+          aria-label="Mobile"
         >
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-0.5">
             {isMarketingChrome
               ? navLinks.map((link) => (
                   <li key={link.key}>
                     {link.kind === 'hash' ? (
                       <LandingHashLink
                         href={link.href}
-                        className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                        className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
                         onClick={closeMenu}
                       >
                         {link.label}
@@ -326,7 +337,7 @@ export function DynamicIsland() {
                     ) : (
                       <Link
                         href={link.href}
-                        className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                        className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
                         onClick={closeMenu}
                       >
                         {link.label}
@@ -339,7 +350,8 @@ export function DynamicIsland() {
               {waitlist ? (
                 <WaitlistOpenButton
                   source="nav_mobile"
-                  className={`block w-full rounded-xl px-3 py-2.5 text-left ${navLinkClass} hover:bg-white/[0.04]`}
+                  className={`flex min-h-12 w-full items-center rounded-xl px-4 py-3 text-left ${navLinkClass} hover:bg-white/[0.04]`}
+                  onOpen={closeMenu}
                 >
                   Join waitlist
                 </WaitlistOpenButton>
@@ -347,13 +359,30 @@ export function DynamicIsland() {
                 <Link
                   href="/login"
                   prefetch
-                  className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                  className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
                   onClick={closeMenu}
                 >
                   Log In
                 </Link>
               )}
             </li>
+            {waitlist ? (
+              <li className="mt-1 border-t border-white/[0.06] pt-2">
+                <ComingSoonCta
+                  source="nav_mobile_cta"
+                  className="min-h-12 w-full"
+                  onOpen={closeMenu}
+                />
+              </li>
+            ) : (
+              <li className="mt-1 border-t border-white/[0.06] pt-2 sm:hidden">
+                <Button asChild className="min-h-12 w-full">
+                  <Link href="/sign-up" prefetch onClick={closeMenu}>
+                    Try Scout Now
+                  </Link>
+                </Button>
+              </li>
+            )}
           </ul>
         </nav>
       ) : null}

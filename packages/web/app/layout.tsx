@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Manrope } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
@@ -27,6 +27,13 @@ export const metadata: Metadata = {
   title: 'Scout - Never Apply Again.',
   description:
     'Scout is the autonomous AI agent that parses your resume, tailors it for every role, and applies on your behalf so you can stop filling out forms and start interviewing.',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#000000',
 }
 
 export default function RootLayout({

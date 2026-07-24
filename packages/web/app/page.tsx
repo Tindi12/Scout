@@ -14,6 +14,7 @@ import { Pricing } from '@/components/landing/pricing'
 import { LandingRails, SectionFrame } from '@/components/landing/section-frame'
 import { Stats } from '@/components/landing/stats'
 import { UniversityBelt } from '@/components/landing/university-belt'
+import { MobileWaitlistDock } from '@/components/landing/waitlist'
 import { getPlatformStats } from '@/lib/landing-stats'
 
 export const revalidate = 60
@@ -55,6 +56,7 @@ export default async function Page() {
         </SectionFrame>
       </main>
       <Footer />
+      <MobileWaitlistDock />
     </>
   )
 }

@@ -91,7 +91,10 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
 
   return (
     <div className="w-full">
-      <form className="relative flex w-full items-center" onSubmit={handleSubmit}>
+      <form
+        className="relative flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-0"
+        onSubmit={handleSubmit}
+      >
         {/* Honeypot — visually hidden from humans */}
         <input
           type="text"
@@ -105,18 +108,30 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
           type="email"
           name="email"
           required
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder="you@university.edu"
           aria-label="Email address"
           disabled={isBusy || isDone}
-          className="font-body w-full rounded-md border border-white/10 bg-white/[0.03] px-4 py-3 pr-36 text-[14.5px] text-white placeholder:text-[#888888] transition-colors duration-150 focus:border-white/25 focus:outline-none disabled:opacity-60"
+          className="font-body w-full rounded-md border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[16px] text-white placeholder:text-[#888888] transition-colors duration-150 focus:border-white/25 focus:outline-none disabled:opacity-60 sm:py-3 sm:pr-36 sm:text-[14.5px]"
         />
-        <Button type="submit" size="sm" disabled={isDone} loading={isBusy} className="absolute right-1.5">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isDone}
+          loading={isBusy}
+          className="min-h-11 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-0 sm:w-auto sm:-translate-y-1/2"
+        >
           {isBusy ? 'Joining…' : isDone ? 'Joined' : 'Join waitlist'}
         </Button>
       </form>
       {message ? (
         <p
           role="status"
+          aria-live="polite"
           className={`mt-3 font-body text-[13px] ${
             status === 'error' ? 'text-[#f87171]' : 'text-[#A1A1AA]'
           }`}
@@ -139,7 +154,7 @@ function WaitlistDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/10 bg-[#0c0c0e] sm:rounded-2xl">
+      <DialogContent className="max-h-[min(100dvh,640px)] overflow-y-auto border-white/10 bg-[#0c0c0e] p-5 sm:rounded-2xl sm:p-6">
         <DialogHeader className="space-y-3 text-left">
           <p className="font-label text-[11px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
             Beta
@@ -209,6 +224,8 @@ type ComingSoonCtaProps = {
   className?: string
   variant?: ButtonProps['variant']
   size?: ButtonProps['size']
+  /** Fires after opening the waitlist dialog (e.g. close mobile nav). */
+  onOpen?: () => void
 }
 
 /** Primary CTA replacement in waitlist mode — opens the beta waitlist dialog. */
@@ -218,6 +235,7 @@ export function ComingSoonCta({
   className,
   variant = 'default',
   size = 'lg',
+  onOpen,
 }: ComingSoonCtaProps) {
   if (!isWaitlistMode()) return null
   return (
@@ -227,6 +245,7 @@ export function ComingSoonCta({
       className={className}
       variant={variant}
       size={size}
+      onOpen={onOpen}
     />
   )
 }
@@ -237,6 +256,7 @@ function ComingSoonCtaInner({
   className,
   variant,
   size,
+  onOpen,
 }: Required<Pick<ComingSoonCtaProps, 'source' | 'label'>> &
   Omit<ComingSoonCtaProps, 'source' | 'label'>) {
   const { open } = useWaitlist()
@@ -246,7 +266,10 @@ function ComingSoonCtaInner({
       variant={variant}
       size={size}
       className={className}
-      onClick={() => open(source)}
+      onClick={() => {
+        open(source)
+        onOpen?.()
+      }}
     >
       {label}
     </Button>
@@ -258,14 +281,16 @@ export function WaitlistOpenButton({
   source = 'nav',
   children = 'Join waitlist',
   className,
+  onOpen,
 }: {
   source?: string
   children?: ReactNode
   className?: string
+  onOpen?: () => void
 }) {
   if (!isWaitlistMode()) return null
   return (
-    <WaitlistOpenButtonInner source={source} className={className}>
+    <WaitlistOpenButtonInner source={source} className={className} onOpen={onOpen}>
       {children}
     </WaitlistOpenButtonInner>
   )
@@ -275,14 +300,23 @@ function WaitlistOpenButtonInner({
   source,
   children,
   className,
+  onOpen,
 }: {
   source: string
   children: ReactNode
   className?: string
+  onOpen?: () => void
 }) {
   const { open } = useWaitlist()
   return (
-    <button type="button" className={className} onClick={() => open(source)}>
+    <button
+      type="button"
+      className={className}
+      onClick={() => {
+        open(source)
+        onOpen?.()
+      }}
+    >
       {children}
     </button>
   )
@@ -293,6 +327,33 @@ export function WaitlistInlineForm({ source = 'footer' }: { source?: string }) {
   return (
     <div className={cn('relative w-full')}>
       <WaitlistForm source={source} />
+    </div>
+  )
+}
+
+/** Thumb-zone sticky CTA for phones — waitlist mode only. */
+export function MobileWaitlistDock() {
+  if (!isWaitlistMode()) return null
+  return <MobileWaitlistDockInner />
+}
+
+function MobileWaitlistDockInner() {
+  const { open } = useWaitlist()
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 md:hidden">
+      <div
+        className="pointer-events-auto border-t border-white/[0.08] bg-black/90 px-4 pt-3 backdrop-blur-md"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <Button
+          type="button"
+          size="lg"
+          className="min-h-12 w-full"
+          onClick={() => open('mobile_dock')}
+        >
+          Join the waitlist
+        </Button>
+      </div>
     </div>
   )
 }

@@ -30,10 +30,19 @@
     --landing-line-outer: rgba(255, 255, 255, 0.14);
     --landing-corner: rgba(255, 255, 255, 0.32);
     --landing-corner-outer: rgba(255, 255, 255, 0.28);
-    --landing-frame-gap: 1.75rem;
+    /* Tight gutter on phones so outer rails don't cause horizontal scroll */
+    --landing-frame-gap: 0px;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
     --scrollbar-track: transparent;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+
+  @media (min-width: 640px) {
+    :root {
+      --landing-frame-gap: 1.75rem;
+    }
   }
 
   .dark {
@@ -62,10 +71,17 @@
     --landing-line-outer: rgba(255, 255, 255, 0.14);
     --landing-corner: rgba(255, 255, 255, 0.32);
     --landing-corner-outer: rgba(255, 255, 255, 0.28);
-    --landing-frame-gap: 1.75rem;
+    --landing-frame-gap: 0px;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
     --scrollbar-track: transparent;
+  }
+}
+
+@media (min-width: 640px) {
+  :root,
+  .dark {
+    --landing-frame-gap: 1.75rem;
   }
 }
 
@@ -113,9 +129,16 @@
     height: 0;
   }
 
+  html {
+    /* Clip decorative rails/corners that sit outside the content column on phones */
+    overflow-x: clip;
+  }
+
   body {
     background-color: #000;
     color: #fff;
+    overflow-x: clip;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Chrome/Edge autofill paints inputs with a light background that can't be
@@ -307,7 +330,9 @@
   .landing-nav-header {
     --nav-progress: 0;
     --banner-clearance: 0px;
-    top: calc(var(--banner-clearance) + var(--nav-progress) * 1.5rem);
+    top: calc(
+      var(--banner-clearance) + var(--nav-progress) * 1.5rem + env(safe-area-inset-top, 0px)
+    );
     transition: top 80ms linear;
   }
 
@@ -545,6 +570,18 @@
 
   .flip-digit-strip {
     transition: none !important;
+  }
+}
+
+/* Scale the fixed-geometry apply animation to fit narrow phones without overflow */
+.hero-apply-anim {
+  transform: scale(min(1, calc((100vw - 2rem) / 360)));
+  transform-origin: center center;
+}
+
+@media (min-width: 400px) {
+  .hero-apply-anim {
+    transform: none;
   }
 }
 

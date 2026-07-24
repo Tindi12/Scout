@@ -34,16 +34,16 @@ const CARD_OFFSET = ['md:translate-y-0', 'md:translate-y-12', 'md:translate-y-24
 
 export function HowItWorks() {
   return (
-    <section id="about" className="relative px-6 py-32 lg:px-12">
+    <section id="about" className="relative px-4 py-20 sm:px-6 sm:py-28 lg:px-12 lg:py-32">
       <div className="mx-auto max-w-7xl">
-        <div className="mx-auto mb-16 max-w-3xl text-center">
+        <div className="mx-auto mb-12 max-w-3xl text-center sm:mb-16">
           <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
             How it works
           </p>
-          <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
+          <h2 className="mt-4 font-headline text-[1.85rem] font-medium tracking-[-0.03em] text-white sm:text-4xl md:text-5xl">
             The autopilot for your career.
           </h2>
-          <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
+          <p className="mt-4 font-body text-[16px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
             Three steps. Zero busywork. Scout handles the loop from resume to
             recruiter so you can focus on what matters.
           </p>
@@ -53,7 +53,7 @@ export function HowItWorks() {
           {STEPS.map((step, i) => (
             <div
               key={step.title}
-              className={`glass-card group relative flex-1 basis-0 overflow-hidden rounded-2xl p-7 transition-all duration-300 hover:bg-white/[0.04] ${CARD_OFFSET[i]}`}
+              className={`glass-card group relative flex-1 basis-0 overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:bg-white/[0.04] sm:p-7 ${CARD_OFFSET[i]}`}
             >
               <div className="relative">
                 <div className="font-label text-[11px] uppercase tracking-[0.2em] text-[#888888]">

@@ -98,6 +98,7 @@ export function LandingDashboardShowcase() {
   }, [])
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const id = setInterval(
       () => setIndex((i) => (i + 1) % SLIDES.length),
       SLIDE_INTERVAL_MS,
@@ -149,7 +150,7 @@ export function LandingDashboardShowcase() {
           type="button"
           onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
           aria-label="Previous preview"
-          className="absolute left-1 top-1/2 -translate-y-1/2 p-1 text-white/25 transition-colors duration-200 hover:text-white/60 sm:-left-7"
+          className="absolute left-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:bg-black/60 hover:text-white sm:-left-8 sm:bg-transparent sm:backdrop-blur-none sm:hover:bg-transparent sm:hover:text-white/60"
         >
           <ChevronLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
@@ -157,21 +158,26 @@ export function LandingDashboardShowcase() {
           type="button"
           onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
           aria-label="Next preview"
-          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-white/25 transition-colors duration-200 hover:text-white/60 sm:-right-7"
+          className="absolute right-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:bg-black/60 hover:text-white sm:-right-8 sm:bg-transparent sm:backdrop-blur-none sm:hover:bg-transparent sm:hover:text-white/60"
         >
           <ChevronRight className="h-6 w-6" strokeWidth={1.5} />
         </button>
       </div>
 
-      <div className="mt-5 flex items-center justify-center gap-2">
+      <div
+        className="mt-5 flex items-center justify-center gap-1"
+        role="tablist"
+        aria-label="Product preview slides"
+      >
         {SLIDES.map((slide, i) => (
           <button
             key={i}
             type="button"
+            role="tab"
             onClick={() => setIndex(i)}
             aria-label={`Show ${slide.nav} preview`}
-            aria-current={i === index}
-            className="group flex h-4 items-center"
+            aria-selected={i === index}
+            className="group flex h-11 w-11 items-center justify-center"
           >
             <span
               className={cn(

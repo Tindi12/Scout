@@ -24,7 +24,7 @@ export function AnnouncementBanner() {
         className="pointer-events-none absolute inset-y-0 left-1/2 w-[60%] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(255,103,51,0.12)_0%,transparent_70%)] opacity-70"
       />
 
-      <div className="announcement-banner-inner relative mx-auto flex min-h-[44px] max-w-7xl flex-col items-center justify-center gap-2 px-4 py-2.5 sm:min-h-[48px] sm:flex-row sm:gap-4 sm:px-6 lg:px-12">
+      <div className="announcement-banner-inner relative mx-auto flex min-h-[48px] max-w-7xl flex-col items-center justify-center gap-2.5 px-4 py-3 sm:min-h-[48px] sm:flex-row sm:gap-4 sm:px-6 sm:py-2.5 lg:px-12">
         <p className="max-w-2xl text-center font-body text-[13px] leading-snug tracking-[0.01em] text-[#D4D4D8] sm:flex-1 sm:text-[13.5px]">
           {waitlist ? (
             <>
@@ -49,13 +49,13 @@ export function AnnouncementBanner() {
           <ComingSoonCta
             source="banner"
             label="Join waitlist"
-            size="sm"
-            className="shrink-0 !h-8 px-3 text-[12px]"
+            size="default"
+            className="min-h-11 shrink-0 px-4 text-[13px]"
           />
         ) : (
           <Link
             href="/blog"
-            className="announcement-banner-cta font-label group inline-flex shrink-0 items-center gap-1 text-[12px] font-medium tracking-[0.04em] text-[#FF6733] transition-all duration-200 hover:gap-1.5 hover:text-[#ff8254]"
+            className="announcement-banner-cta font-label group inline-flex min-h-11 shrink-0 items-center gap-1 px-2 text-[12px] font-medium tracking-[0.04em] text-[#FF6733] transition-all duration-200 hover:gap-1.5 hover:text-[#ff8254]"
           >
             Learn more
             <span

@@ -68,12 +68,12 @@ function PricingCta({
         source={source}
         variant={variant}
         size="lg"
-        className="mt-7"
+        className="mt-7 min-h-11 w-full"
       />
     )
   }
   return (
-    <Button asChild variant={variant} size="lg" className="mt-7">
+    <Button asChild variant={variant} size="lg" className="mt-7 min-h-11 w-full">
       <Link href={href} prefetch>
         {label}
       </Link>
@@ -83,15 +83,15 @@ function PricingCta({
 
 export function Pricing() {
   return (
-    <section id="pricing" className="relative px-6 py-32 lg:px-12">
-      <div className="mx-auto mb-16 max-w-3xl text-center">
+    <section id="pricing" className="relative px-4 py-20 sm:px-6 sm:py-28 lg:px-12 lg:py-32">
+      <div className="mx-auto mb-12 max-w-3xl text-center sm:mb-16">
         <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-primary">
           Pricing
         </p>
-        <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
+        <h2 className="mt-4 font-headline text-[1.85rem] font-medium tracking-[-0.03em] text-white sm:text-4xl md:text-5xl">
           Three tiers. One goal: get you hired.
         </h2>
-        <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
+        <p className="mt-4 font-body text-[16px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
           Start free. Upgrade when you&apos;re ready to let Scout apply on your
           behalf.
         </p>
@@ -210,10 +210,10 @@ export function Pricing() {
         </div>
       </div>
 
-      <div className="mt-12 flex justify-center">
+      <div className="mt-10 flex justify-center sm:mt-12">
         <Link
           href="/pricing"
-          className="font-label group inline-flex items-center gap-1.5 text-sm font-medium text-[#A1A1AA] transition-colors duration-200 hover:text-white"
+          className="font-label group inline-flex min-h-11 items-center gap-1.5 px-2 text-sm font-medium text-[#A1A1AA] transition-colors duration-200 hover:text-white"
         >
           Compare all features
           <span aria-hidden className="transition-transform duration-200 group-hover:translate-x-0.5">
