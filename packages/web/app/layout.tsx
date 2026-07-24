@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, Manrope } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { dark } from '@clerk/themes'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 import { Providers } from './providers'
 import './globals.css'
@@ -60,6 +61,7 @@ export default function RootLayout({
           suppressHydrationWarning
         >
           <Providers>{children}</Providers>
+          <SpeedInsights />
         </body>
       </html>
     </ClerkProvider>
