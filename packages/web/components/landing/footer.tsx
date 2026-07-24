@@ -10,26 +10,9 @@ import {
 } from '@/components/landing/waitlist'
 import { scoutLogo } from '@/lib/scout-logo'
 import { isWaitlistMode } from '@/lib/waitlist-mode'
-import { ArrowUp, Instagram } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 
 type SocialIconProps = { className?: string; strokeWidth?: number }
-
-function TikTokIcon({ className, strokeWidth = 1.75 }: SocialIconProps) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
-    </svg>
-  )
-}
 
 function XIcon({ className }: SocialIconProps) {
   return (
@@ -110,18 +93,18 @@ export function Footer() {
   ]
 
   return (
-    <footer className="relative px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-16 sm:px-6 sm:pb-10 sm:pt-24 lg:px-12 md:pb-10">
+    <footer className="relative px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-12 sm:px-6 sm:pb-10 sm:pt-20 lg:px-12 md:pb-10">
       <div className="mx-auto max-w-7xl">
-        <div className="glass-card relative overflow-hidden rounded-3xl p-10 md:p-14">
-          <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+        <div className="glass-card relative overflow-hidden rounded-2xl p-6 sm:rounded-3xl sm:p-10 md:p-14">
+          <div className="relative grid grid-cols-1 items-center gap-8 sm:gap-10 lg:grid-cols-2">
             <div>
               <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
                 {waitlist ? 'Early access' : 'Newsletter'}
               </p>
-              <h3 className="mt-3 font-headline text-3xl font-medium tracking-[-0.03em] text-white md:text-4xl">
+              <h3 className="mt-2 font-headline text-2xl font-medium tracking-[-0.03em] text-white sm:mt-3 sm:text-3xl md:text-4xl">
                 {waitlist ? 'Get a seat when we open.' : 'Stay in the loop.'}
               </h3>
-              <p className="mt-3 font-body text-[15px] text-[#A1A1AA]">
+              <p className="mt-2 font-body text-[14px] text-[#A1A1AA] sm:mt-3 sm:text-[15px]">
                 {waitlist
                   ? "Scout is in private beta. Leave your email and we'll notify you when public access is available."
                   : 'Tactical updates on landing internships, plus product news from the Scout team.'}
@@ -132,7 +115,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-20 grid grid-cols-2 gap-x-8 gap-y-12 md:grid-cols-4 lg:grid-cols-6">
+        <div className="mt-12 grid grid-cols-2 gap-x-8 gap-y-10 sm:mt-16 sm:gap-y-12 md:grid-cols-4 lg:mt-20 lg:grid-cols-6">
           <div className="col-span-2 origin-left md:col-span-4 lg:col-span-2">
             <Link href="/" className="inline-flex items-center gap-3">
               <Image
@@ -141,13 +124,13 @@ export function Footer() {
                 width={48}
                 height={48}
                 draggable={false}
-                className="h-12 w-12 select-none object-contain"
+                className="h-10 w-10 select-none object-contain sm:h-12 sm:w-12"
               />
-              <span className="font-headline text-2xl font-semibold tracking-tight text-white">
+              <span className="font-headline text-xl font-semibold tracking-tight text-white sm:text-2xl">
                 Scout
               </span>
             </Link>
-            <p className="mt-5 max-w-xs font-body text-sm leading-relaxed text-[#A1A1AA]">
+            <p className="mt-4 max-w-xs font-body text-sm leading-relaxed text-[#A1A1AA] sm:mt-5">
               Built for students by students. Automating the internship hunt for
               the next generation of engineers.
             </p>
@@ -196,9 +179,7 @@ export function Footer() {
 
           <div className="flex items-center gap-2">
             {[
-              { Icon: TikTokIcon, label: 'TikTok', href: '#' },
               { Icon: XIcon, label: 'X', href: 'https://x.com/getscoutintern' },
-              { Icon: Instagram, label: 'Instagram', href: '#' },
             ].map(({ Icon, label, href }) => {
               const isExternal = href.startsWith('http')
               return (

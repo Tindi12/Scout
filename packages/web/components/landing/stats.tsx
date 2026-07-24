@@ -79,16 +79,19 @@ export function Stats({ stats }: { stats: PlatformStats }) {
   }, [stats])
 
   return (
-    <section ref={sectionRef} className="relative px-6 py-24 lg:px-12">
+    <section
+      ref={sectionRef}
+      className="relative px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-28"
+    >
       <div className="mx-auto max-w-6xl">
-        <div className="mx-auto mb-14 max-w-3xl text-center md:mb-16">
+        <div className="mx-auto mb-10 max-w-3xl text-center sm:mb-14 md:mb-16">
           <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
             Our statistics
           </p>
-          <h2 className="mt-4 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
+          <h2 className="mt-3 font-headline text-[1.65rem] font-medium tracking-[-0.03em] text-white sm:mt-4 sm:text-4xl md:text-5xl">
             The numbers don&apos;t lie.
           </h2>
-          <p className="mt-5 font-body text-[17px] text-[#A1A1AA]">
+          <p className="mt-3 font-body text-[15px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
             Live from Scout&apos;s platform — applications automated, resumes
             optimized, and hours saved as Scout keeps working.
           </p>

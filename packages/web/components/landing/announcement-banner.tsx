@@ -6,6 +6,7 @@ import { isWaitlistMode } from '@/lib/waitlist-mode'
 /**
  * Slim premium beta announcement for the marketing landing page.
  * Document-flow (not sticky) so it scrolls away and the fixed nav settles to the top.
+ * Mobile: copy only — waitlist CTA lives in hero / sticky dock to avoid CTA spam.
  */
 export function AnnouncementBanner() {
   const waitlist = isWaitlistMode()
@@ -13,49 +14,40 @@ export function AnnouncementBanner() {
   return (
     <div
       id="announcement-banner"
-      className="announcement-banner relative z-[55] isolate overflow-hidden border-b border-white/[0.08]"
+      className="announcement-banner relative z-[55] isolate overflow-hidden border-b border-white/[0.06]"
       role="region"
       aria-label="Product announcement"
     >
-      <div aria-hidden className="announcement-banner-grid pointer-events-none absolute inset-0" />
-      <div aria-hidden className="announcement-banner-lines pointer-events-none absolute inset-0" />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-1/2 w-[60%] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(255,103,51,0.12)_0%,transparent_70%)] opacity-70"
+        className="announcement-banner-grid pointer-events-none absolute inset-0 hidden sm:block"
+      />
+      <div
+        aria-hidden
+        className="announcement-banner-lines pointer-events-none absolute inset-0 hidden sm:block"
       />
 
-      <div className="announcement-banner-inner relative mx-auto flex min-h-[48px] max-w-7xl flex-col items-center justify-center gap-2.5 px-4 py-3 sm:min-h-[48px] sm:flex-row sm:gap-4 sm:px-6 sm:py-2.5 lg:px-12">
-        <p className="max-w-2xl text-center font-body text-[13px] leading-snug tracking-[0.01em] text-[#D4D4D8] sm:flex-1 sm:text-[13.5px]">
+      <div className="announcement-banner-inner relative mx-auto flex max-w-7xl items-center justify-center gap-3 px-4 py-1.5 sm:gap-4 sm:px-6 sm:py-2 lg:px-12">
+        <p className="text-center font-body text-[11px] leading-none tracking-[0.01em] text-[#A1A1AA] sm:flex-1 sm:text-[12.5px] sm:leading-snug">
           {waitlist ? (
             <>
-              <span className="text-white">Scout is in private beta.</span>
-              <span className="text-[#A1A1AA]">
-                {' '}
-                Public access isn&apos;t open yet — join the waitlist for a seat.
-              </span>
+              <span className="text-white/90">Private beta</span>
+              <span className="text-white/25"> — </span>
+              <span>join the waitlist for a seat.</span>
             </>
           ) : (
             <>
-              <span className="text-white">Scout is now in Beta!</span>
-              <span className="text-[#A1A1AA]">
-                {' '}
-                Our AI-powered applications are improving every week.
-              </span>
+              <span className="text-white/90">Now in beta</span>
+              <span className="text-white/25"> — </span>
+              <span>applications improve every week.</span>
             </>
           )}
         </p>
 
-        {waitlist ? (
-          <ComingSoonCta
-            source="banner"
-            label="Join waitlist"
-            size="default"
-            className="min-h-11 shrink-0 px-4 text-[13px]"
-          />
-        ) : (
+        {!waitlist ? (
           <Link
             href="/blog"
-            className="announcement-banner-cta font-label group inline-flex min-h-11 shrink-0 items-center gap-1 px-2 text-[12px] font-medium tracking-[0.04em] text-[#FF6733] transition-all duration-200 hover:gap-1.5 hover:text-[#ff8254]"
+            className="announcement-banner-cta font-label group hidden shrink-0 items-center gap-1 text-[11px] font-medium tracking-[0.04em] text-[#FF6733] transition-colors duration-200 hover:text-[#ff8254] sm:inline-flex sm:min-h-8"
           >
             Learn more
             <span
@@ -65,6 +57,13 @@ export function AnnouncementBanner() {
               →
             </span>
           </Link>
+        ) : (
+          <ComingSoonCta
+            source="banner"
+            label="Join waitlist"
+            size="sm"
+            className="hidden h-8 min-h-0 shrink-0 px-3 text-[12px] sm:inline-flex"
+          />
         )}
       </div>
     </div>

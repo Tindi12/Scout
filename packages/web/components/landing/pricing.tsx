@@ -66,14 +66,15 @@ function PricingCta({
     return (
       <ComingSoonCta
         source={source}
+        label={`Join waitlist — ${label}`}
         variant={variant}
         size="lg"
-        className="mt-7 min-h-11 w-full"
+        className="mt-6 min-h-11 w-full sm:mt-7"
       />
     )
   }
   return (
-    <Button asChild variant={variant} size="lg" className="mt-7 min-h-11 w-full">
+    <Button asChild variant={variant} size="lg" className="mt-6 min-h-11 w-full sm:mt-7">
       <Link href={href} prefetch>
         {label}
       </Link>
@@ -83,36 +84,36 @@ function PricingCta({
 
 export function Pricing() {
   return (
-    <section id="pricing" className="relative px-4 py-20 sm:px-6 sm:py-28 lg:px-12 lg:py-32">
-      <div className="mx-auto mb-12 max-w-3xl text-center sm:mb-16">
+    <section id="pricing" className="relative px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-28">
+      <div className="mx-auto mb-10 max-w-3xl text-center sm:mb-14">
         <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-primary">
           Pricing
         </p>
-        <h2 className="mt-4 font-headline text-[1.85rem] font-medium tracking-[-0.03em] text-white sm:text-4xl md:text-5xl">
+        <h2 className="mt-3 font-headline text-[1.65rem] font-medium tracking-[-0.03em] text-white sm:mt-4 sm:text-4xl md:text-5xl">
           Three tiers. One goal: get you hired.
         </h2>
-        <p className="mt-4 font-body text-[16px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
+        <p className="mt-3 font-body text-[15px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
           Start free. Upgrade when you&apos;re ready to let Scout apply on your
           behalf.
         </p>
       </div>
 
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-3">
         {/* Free */}
-        <div className="glass-card relative flex flex-col rounded-2xl p-8">
+        <div className="glass-card relative flex flex-col rounded-xl p-5 sm:rounded-2xl sm:p-8">
           <div className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888888]">
             Free
           </div>
-          <div className="mt-5 flex items-baseline gap-2">
-            <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
+          <div className="mt-4 flex items-baseline gap-2 sm:mt-5">
+            <span className="font-headline text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
               $0
             </span>
-            <span className="font-body text-lg text-[#A1A1AA]">forever</span>
+            <span className="font-body text-base text-[#A1A1AA] sm:text-lg">forever</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
             10 lifetime applications
           </p>
-          <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
+          <p className="mt-3 font-body text-[14px] leading-relaxed text-[#A1A1AA] sm:text-[14.5px]">
             Perfect for trying Scout&apos;s resume intelligence before you let
             the agent loose.
           </p>
@@ -124,9 +125,9 @@ export function Pricing() {
             variant="outline"
           />
 
-          <div className="my-7 h-px w-full bg-white/10" />
+          <div className="my-5 h-px w-full bg-white/10 sm:my-7" />
 
-          <ul className="space-y-3.5">
+          <ul className="space-y-3 sm:space-y-3.5">
             {FREE_FEATURES.map((f) => (
               <FeatureRow key={f.label} feature={f} />
             ))}
@@ -134,8 +135,8 @@ export function Pricing() {
         </div>
 
         {/* Pro */}
-        <div className="relative flex flex-col rounded-2xl border border-primary/40 bg-white/[0.04] p-8">
-          <div className="absolute -top-3 right-6">
+        <div className="relative flex flex-col rounded-xl border border-primary/40 bg-white/[0.04] p-5 sm:rounded-2xl sm:p-8">
+          <div className="absolute -top-3 right-5 sm:right-6">
             <div className="font-label inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white">
               Unfair Advantage
             </div>
@@ -144,25 +145,25 @@ export function Pricing() {
           <div className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
             Pro
           </div>
-          <div className="mt-5 flex items-baseline gap-2">
-            <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
+          <div className="mt-4 flex items-baseline gap-2 sm:mt-5">
+            <span className="font-headline text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
               $14.99
             </span>
-            <span className="font-body text-lg text-[#A1A1AA]">/month</span>
+            <span className="font-body text-base text-[#A1A1AA] sm:text-lg">/month</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
             40 applications / 30 days
           </p>
-          <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
+          <p className="mt-3 font-body text-[14px] leading-relaxed text-[#A1A1AA] sm:text-[14.5px]">
             Unleash the full agent. Tailored resumes for every role, applied
             autonomously while you sleep.
           </p>
 
           <PricingCta source="pricing_pro" href="/sign-up" label="Upgrade to Pro" />
 
-          <div className="my-7 h-px w-full bg-white/10" />
+          <div className="my-5 h-px w-full bg-white/10 sm:my-7" />
 
-          <ul className="space-y-3.5">
+          <ul className="space-y-3 sm:space-y-3.5">
             {PRO_FEATURES.map((f) => (
               <FeatureRow key={f.label} feature={f} />
             ))}
@@ -170,8 +171,8 @@ export function Pricing() {
         </div>
 
         {/* Scout+ */}
-        <div className="glass-card relative flex flex-col rounded-2xl p-8">
-          <div className="absolute -top-3 right-6">
+        <div className="glass-card relative flex flex-col rounded-xl p-5 sm:rounded-2xl sm:p-8">
+          <div className="absolute -top-3 right-5 sm:right-6">
             <div className="font-label inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white">
               Power User
             </div>
@@ -180,16 +181,16 @@ export function Pricing() {
           <div className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
             Scout+
           </div>
-          <div className="mt-5 flex items-baseline gap-2">
-            <span className="font-headline text-5xl font-semibold tracking-[-0.04em] text-white">
+          <div className="mt-4 flex items-baseline gap-2 sm:mt-5">
+            <span className="font-headline text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
               $29.99
             </span>
-            <span className="font-body text-lg text-[#A1A1AA]">/month</span>
+            <span className="font-body text-base text-[#A1A1AA] sm:text-lg">/month</span>
           </div>
           <p className="mt-1 font-body text-sm text-[#A1A1AA]">
             100 applications / 30 days
           </p>
-          <p className="mt-3 font-body text-[14.5px] leading-relaxed text-[#A1A1AA]">
+          <p className="mt-3 font-body text-[14px] leading-relaxed text-[#A1A1AA] sm:text-[14.5px]">
             Maximum volume, priority support, and first access when Scout ships
             something new.
           </p>
@@ -200,9 +201,9 @@ export function Pricing() {
             label="Upgrade to Scout+"
           />
 
-          <div className="my-7 h-px w-full bg-white/10" />
+          <div className="my-5 h-px w-full bg-white/10 sm:my-7" />
 
-          <ul className="space-y-3.5">
+          <ul className="space-y-3 sm:space-y-3.5">
             {SCOUT_PLUS_FEATURES.map((f) => (
               <FeatureRow key={f.label} feature={f} />
             ))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { animate, useInView } from 'framer-motion'
+import { animate, useInView, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 
 import { cn } from '@/lib/utils'
@@ -112,6 +112,7 @@ export function FlipNumber({
   const ref = useRef<HTMLDivElement>(null)
   const localInView = useInView(ref, { once: true, amount: 0.35 })
   const active = activeProp ?? localInView
+  const reduceMotion = useReducedMotion()
 
   const seedSafe = Math.max(0, Math.round(seed))
   const targetSafe = Math.max(seedSafe, Math.round(target))
@@ -126,6 +127,13 @@ export function FlipNumber({
   // Catch up whenever the live target moves ahead of the display.
   useEffect(() => {
     if (!active) return
+
+    // Reduced motion: snap to target, no animated roll.
+    if (reduceMotion) {
+      displayedRef.current = targetSafe
+      setDisplayed(targetSafe)
+      return
+    }
 
     const from = displayedRef.current
     const to = targetSafe
@@ -162,12 +170,12 @@ export function FlipNumber({
       controls.stop()
       catchingUpRef.current = false
     }
-  }, [active, targetSafe])
+  }, [active, targetSafe, reduceMotion])
 
   // Keep ticking forever (prop growth). When the DB later surpasses the
   // display, the catch-up effect above snaps forward to the real total.
   useEffect(() => {
-    if (!active) return
+    if (!active || reduceMotion) return
 
     let timeoutId = 0
     let cancelled = false
@@ -196,7 +204,7 @@ export function FlipNumber({
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [active])
+  }, [active, reduceMotion])
 
   const chars = formatValue(displayed).split('')
 

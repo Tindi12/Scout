@@ -19,10 +19,10 @@ function UniversityItem({
   breatheDelay: string
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-3.5">
+    <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3.5">
       {uni.logoUrl ? (
         // Fixed layout slot so scale never shifts spacing / neighbors.
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center sm:h-12 sm:w-12">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center sm:h-12 sm:w-12">
           <div
             className={cn('logo-breathe', active && 'is-breathing')}
             style={{ animationDelay: breatheDelay }}
@@ -33,12 +33,12 @@ function UniversityItem({
               alt=""
               loading="lazy"
               draggable={false}
-              className="h-11 w-11 select-none object-contain sm:h-12 sm:w-12"
+              className="h-9 w-9 select-none object-contain sm:h-12 sm:w-12"
             />
           </div>
         </div>
       ) : null}
-      <span className="max-w-[11rem] text-center font-label text-[13px] font-medium leading-snug tracking-wide text-white/85 sm:max-w-[13rem] sm:text-left sm:text-sm">
+      <span className="max-w-[10rem] text-center font-label text-[12px] font-medium leading-snug tracking-wide text-white/85 sm:max-w-[13rem] sm:text-left sm:text-sm">
         {uni.name}
       </span>
     </div>
@@ -59,13 +59,13 @@ export function UniversityBelt() {
   const universities = getUniversityLogos()
 
   return (
-    <section ref={sectionRef} className="relative px-6 py-16 lg:px-12">
+    <section ref={sectionRef} className="relative px-4 py-10 sm:px-6 sm:py-14 lg:px-12 lg:py-16">
       <div className="mx-auto max-w-5xl">
-        <p className="text-center font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#888888]">
+        <p className="text-center font-label text-[11px] font-medium uppercase tracking-[0.2em] text-[#888888] sm:text-[12px]">
           used by students at
         </p>
 
-        <ul className="mt-10 flex list-none flex-wrap items-center justify-center gap-x-10 gap-y-10 sm:gap-x-14 md:gap-x-16 lg:gap-x-20">
+        <ul className="mt-6 flex list-none flex-wrap items-center justify-center gap-x-8 gap-y-6 sm:mt-10 sm:gap-x-14 sm:gap-y-10 md:gap-x-16 lg:gap-x-20">
           {universities.map((uni, i) => (
             <li key={uni.slug ?? uni.name}>
               <UniversityItem

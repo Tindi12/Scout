@@ -86,6 +86,15 @@ export function LandingDashboardShowcase() {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
   const [index, setIndex] = useState(0)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const sync = () => setIsDesktop(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
 
   useEffect(() => {
     const el = wrapperRef.current
@@ -98,13 +107,14 @@ export function LandingDashboardShowcase() {
   }, [])
 
   useEffect(() => {
+    if (!isDesktop) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const id = setInterval(
       () => setIndex((i) => (i + 1) % SLIDES.length),
       SLIDE_INTERVAL_MS,
     )
     return () => clearInterval(id)
-  }, [index])
+  }, [index, isDesktop])
 
   const activeNav = SLIDES[index].nav
   const sendScoutCount = SLIDES[index].sendScoutCount
@@ -113,12 +123,12 @@ export function LandingDashboardShowcase() {
     <div className="select-none">
       <div
         ref={wrapperRef}
-        className="relative w-full"
+        className="relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a] sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent"
         style={{ height: DESIGN_H * scale }}
       >
         <div
           aria-hidden
-          className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0a0a]"
+          className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-xl border-0 bg-[#0a0a0a] sm:rounded-2xl sm:border sm:border-white/[0.08]"
           style={{
             width: DESIGN_W,
             height: DESIGN_H,
@@ -131,26 +141,32 @@ export function LandingDashboardShowcase() {
             <div className="flex min-w-0 flex-1 flex-col">
               <Topbar crumb={SLIDES[index].crumb} sendScoutCount={sendScoutCount} />
               <div className="relative flex-1 overflow-hidden">
-                <div
-                  className="flex h-full transition-transform duration-700 ease-in-out"
-                  style={{ transform: `translateX(-${index * 100}%)` }}
-                >
-                  {SLIDES.map((slide, i) => (
-                    <div key={i} className="h-full w-full shrink-0 overflow-hidden">
-                      {slide.render()}
-                    </div>
-                  ))}
-                </div>
+                {isDesktop ? (
+                  <div
+                    className="flex h-full transition-transform duration-700 ease-in-out motion-reduce:transition-none"
+                    style={{ transform: `translateX(-${index * 100}%)` }}
+                  >
+                    {SLIDES.map((slide, i) => (
+                      <div key={i} className="h-full w-full shrink-0 overflow-hidden">
+                        {slide.render()}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  // Phones: only the active slide in the DOM (much less JS/paint).
+                  <div className="h-full w-full overflow-hidden">{SLIDES[index].render()}</div>
+                )}
               </div>
             </div>
           </div>
         </div>
 
+        {/* Desktop: side chevrons outside the frame */}
         <button
           type="button"
           onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
           aria-label="Previous preview"
-          className="absolute left-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:bg-black/60 hover:text-white sm:-left-8 sm:bg-transparent sm:backdrop-blur-none sm:hover:bg-transparent sm:hover:text-white/60"
+          className="absolute -left-8 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60 sm:flex"
         >
           <ChevronLeft className="h-6 w-6" strokeWidth={1.5} />
         </button>
@@ -158,37 +174,58 @@ export function LandingDashboardShowcase() {
           type="button"
           onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
           aria-label="Next preview"
-          className="absolute right-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/70 backdrop-blur-sm transition-colors duration-200 hover:bg-black/60 hover:text-white sm:-right-8 sm:bg-transparent sm:backdrop-blur-none sm:hover:bg-transparent sm:hover:text-white/60"
+          className="absolute -right-8 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60 sm:flex"
         >
           <ChevronRight className="h-6 w-6" strokeWidth={1.5} />
         </button>
       </div>
 
-      <div
-        className="mt-5 flex items-center justify-center gap-1"
-        role="tablist"
-        aria-label="Product preview slides"
-      >
-        {SLIDES.map((slide, i) => (
-          <button
-            key={i}
-            type="button"
-            role="tab"
-            onClick={() => setIndex(i)}
-            aria-label={`Show ${slide.nav} preview`}
-            aria-selected={i === index}
-            className="group flex h-11 w-11 items-center justify-center"
-          >
-            <span
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-500',
-                i === index
-                  ? 'w-5 bg-primary'
-                  : 'w-1.5 bg-white/15 group-hover:bg-white/40',
-              )}
-            />
-          </button>
-        ))}
+      {/* Mobile: chevrons + dots below the frame so they never cover the UI */}
+      <div className="mt-3 flex items-center justify-center gap-1 sm:mt-5">
+        <button
+          type="button"
+          onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
+          aria-label="Previous preview"
+          className="flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
+        >
+          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+        </button>
+
+        <div
+          className="flex items-center justify-center gap-1"
+          role="tablist"
+          aria-label="Product preview slides"
+        >
+          {SLIDES.map((slide, i) => (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              onClick={() => setIndex(i)}
+              aria-label={`Show ${slide.nav} preview`}
+              aria-selected={i === index}
+              className="group flex h-11 w-9 items-center justify-center sm:w-11"
+            >
+              <span
+                className={cn(
+                  'h-1.5 rounded-full transition-all duration-500 motion-reduce:transition-none',
+                  i === index
+                    ? 'w-5 bg-primary'
+                    : 'w-1.5 bg-white/15 group-hover:bg-white/40',
+                )}
+              />
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
+          aria-label="Next preview"
+          className="flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
+        >
+          <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
+        </button>
       </div>
     </div>
   )
@@ -1154,7 +1191,7 @@ function TrackerCardView({ card }: { card: TrackerCard }) {
       </span>
       {card.applying ? (
         <span className="inline-flex items-center gap-1 font-mono text-[8px] text-[#FF6733]">
-          <span className="h-1 w-1 animate-pulse rounded-full bg-[#FF6733]" />
+          <span className="h-1 w-1 animate-pulse rounded-full bg-[#FF6733] motion-reduce:animate-none" />
           APPLYING · 1m 24s
         </span>
       ) : null}

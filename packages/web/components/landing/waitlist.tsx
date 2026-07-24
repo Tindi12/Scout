@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useCookieConsent } from '@/components/consent/CookieConsentProvider'
 import { cn } from '@/lib/utils'
 import { isWaitlistMode } from '@/lib/waitlist-mode'
 
@@ -129,7 +130,7 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
           size="sm"
           disabled={isDone}
           loading={isBusy}
-          className="min-h-12 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-0 sm:w-auto sm:-translate-y-1/2"
+          className="min-h-11 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-9 sm:w-auto sm:-translate-y-1/2"
         >
           {isBusy ? 'Joining…' : isDone ? 'Joined' : 'Join waitlist'}
         </Button>
@@ -346,6 +347,10 @@ export function MobileWaitlistDock() {
 
 function MobileWaitlistDockInner() {
   const { open } = useWaitlist()
+  const { consent, isBannerOpen } = useCookieConsent()
+  // Don't fight the cookie banner for the thumb zone on first visit.
+  if (isBannerOpen || consent === null) return null
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 md:hidden">
       <div

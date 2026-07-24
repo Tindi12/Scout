@@ -39,12 +39,6 @@
     --safe-top: env(safe-area-inset-top, 0px);
   }
 
-  @media (min-width: 640px) {
-    :root {
-      --landing-frame-gap: 1.75rem;
-    }
-  }
-
   .dark {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
@@ -75,13 +69,6 @@
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
     --scrollbar-track: transparent;
-  }
-}
-
-@media (min-width: 640px) {
-  :root,
-  .dark {
-    --landing-frame-gap: 1.75rem;
   }
 }
 
@@ -340,17 +327,18 @@
     transition: top 80ms linear;
   }
 
-  /* Premium beta announcement — technical grid + subtle circuit lines. */
+  /* Slim beta notice — whisper of texture on sm+, static on phones. */
   .announcement-banner {
     background-color: #050505;
   }
 
   .announcement-banner-grid {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+    opacity: 0.7;
   }
 
   .announcement-banner-lines {
@@ -358,25 +346,25 @@
       linear-gradient(
         90deg,
         transparent 0%,
-        rgba(255, 103, 51, 0.18) 18%,
+        rgba(255, 103, 51, 0.1) 18%,
         transparent 36%,
         transparent 64%,
-        rgba(255, 255, 255, 0.08) 82%,
+        rgba(255, 255, 255, 0.05) 82%,
         transparent 100%
       ),
       linear-gradient(
         180deg,
         transparent 30%,
-        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0.04) 50%,
         transparent 70%
       );
     background-size: 220% 100%, 100% 100%;
-    opacity: 0.55;
-    animation: announcement-circuit 14s linear infinite;
+    opacity: 0.35;
+    animation: announcement-circuit 18s linear infinite;
   }
 
   .announcement-banner-inner {
-    animation: announcement-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: announcement-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -523,6 +511,13 @@
   will-change: opacity;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-cursor-blink {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 .animate-marquee {
   animation: marquee 40s linear infinite;
   will-change: transform;
@@ -577,18 +572,6 @@
   }
 }
 
-/* Scale the fixed-geometry apply animation to fit narrow phones without overflow */
-.hero-apply-anim {
-  transform: scale(min(1, calc((100vw - 2rem) / 360)));
-  transform-origin: center center;
-}
-
-@media (min-width: 400px) {
-  .hero-apply-anim {
-    transform: none;
-  }
-}
-
 .flip-digit-strip {
   /* Short roll so each odometer tick feels mechanical, not laggy. */
   transition: transform 0.04s cubic-bezier(0.33, 1, 0.36, 1);
@@ -626,6 +609,12 @@
 
 .animate-scout-tick-pulse {
   animation: scout-tick-pulse 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scout-tick-pulse {
+    animation: none;
+  }
 }
 
 @keyframes announcement-enter {
