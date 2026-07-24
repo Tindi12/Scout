@@ -2,24 +2,23 @@ import { LottiePlayer } from '@/components/landing/lottie-player'
 
 const STEPS = [
   {
-    lottieSrc:
-      'https://lottie.host/f27a371f-9a8d-443c-94a1-9ddaecd8d509/d1NoxlJrGf.lottie',
+    // Self-hosted — prod CSP blocks third-party connect-src (lottie.host), and
+    // remote CDN outages blanked this section on Vercel.
+    lottieSrc: '/lottie/parse-score.lottie',
     title: 'Parse & Score',
     body:
       'Scout breaks down your experience, side projects, and skills into a structured graph and scores it across four dimensions in seconds.',
     lottieClassName: '',
   },
   {
-    lottieSrc:
-      'https://lottie.host/fd291262-8330-492e-980c-a7e1dfe79257/K2e6Mz71j3.lottie',
+    lottieSrc: '/lottie/tailor-optimize.lottie',
     title: 'Tailor & Optimize',
     body:
       'For every role you target, the agent rewrites your bullets to inject the exact keywords recruiters and ATS scanners look for.',
     lottieClassName: '',
   },
   {
-    lottieSrc:
-      'https://lottie.host/d39193ca-f545-4d55-b0ff-c718458f55e9/9ehZqE1XUJ.lottie',
+    lottieSrc: '/lottie/auto-apply.lottie',
     title: 'Autonomous Auto-Apply',
     body:
       'Set your preferences and let Scout submit applications via Greenhouse, Lever, and Workday — the moment new roles drop.',
