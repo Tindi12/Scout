@@ -9,6 +9,9 @@ import { ComingSoonCta, WaitlistInlineForm } from '@/components/landing/waitlist
 import { Button } from '@/components/ui/button'
 import { isWaitlistMode } from '@/lib/waitlist-mode'
 
+const seeHowClass =
+  'font-label group inline-flex min-h-10 items-center gap-1.5 text-sm font-medium text-[#A1A1AA] underline-offset-4 transition-colors hover:text-white hover:underline'
+
 export function Hero() {
   const waitlist = isWaitlistMode()
 
@@ -20,7 +23,7 @@ export function Hero() {
       className="px-4 pb-8 pt-16 sm:px-6 sm:pb-16 sm:pt-28 lg:px-12 lg:pb-28 lg:pt-36"
     >
       <div className="mx-auto flex max-w-5xl flex-col items-center text-center">
-        <div className="mb-3 w-full max-w-[min(300px,92%)] sm:mb-6 sm:max-w-[min(360px,100%)]">
+        <div className="mb-4 flex w-full max-w-[min(320px,100%)] items-center justify-center sm:mb-6 sm:max-w-[min(360px,100%)]">
           <HeroApplyAnimation />
         </div>
 
@@ -35,23 +38,29 @@ export function Hero() {
         {waitlist ? (
           <>
             {/* Mobile: inline email (avoids keyboard + dialog collision). Desktop: CTA → dialog. */}
-            <div className="mt-5 w-full max-w-md text-left sm:hidden">
+            <div id="hero-waitlist" className="mt-5 w-full max-w-md text-left sm:hidden">
               <WaitlistInlineForm source="hero_mobile" />
             </div>
-            <div className="mt-6 hidden w-full max-w-md flex-col items-stretch gap-3 sm:mt-8 sm:flex sm:max-w-none sm:flex-row sm:items-center sm:justify-center">
+            <div
+              id="hero-waitlist-desktop"
+              className="mt-6 hidden w-full max-w-md flex-col items-stretch gap-3 sm:mt-8 sm:flex sm:max-w-none sm:flex-row sm:items-center sm:justify-center"
+            >
               <ComingSoonCta source="hero" className="min-h-12 w-full sm:w-auto" />
-              <LandingHashLink
-                href="#about"
-                className="font-label inline-flex min-h-11 items-center justify-center px-2 text-sm font-medium text-[#A1A1AA] underline-offset-4 transition-colors hover:text-white hover:underline"
-              >
+              <LandingHashLink href="#about" className={`${seeHowClass} justify-center px-2`}>
                 See how it works
+                <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+                  →
+                </span>
               </LandingHashLink>
             </div>
             <LandingHashLink
               href="#about"
-              className="mt-1.5 font-label inline-flex min-h-10 items-center text-sm font-medium text-[#A1A1AA] underline-offset-4 transition-colors hover:text-white hover:underline sm:hidden"
+              className={`${seeHowClass} mt-2 sm:hidden`}
             >
               See how it works
+              <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+                →
+              </span>
             </LandingHashLink>
           </>
         ) : (
@@ -63,11 +72,11 @@ export function Hero() {
                   <ArrowRight className="transition-transform duration-150 group-hover:translate-x-0.5" />
                 </Link>
               </Button>
-              <LandingHashLink
-                href="#about"
-                className="font-label inline-flex min-h-10 items-center justify-center px-2 text-sm font-medium text-[#A1A1AA] underline-offset-4 transition-colors hover:text-white hover:underline sm:hidden"
-              >
+              <LandingHashLink href="#about" className={`${seeHowClass} justify-center px-2 sm:hidden`}>
                 See how it works
+                <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+                  →
+                </span>
               </LandingHashLink>
               <Button
                 asChild

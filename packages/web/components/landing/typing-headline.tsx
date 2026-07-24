@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react'
 
-// `\n` forces "Never Apply Again." onto its own line under "Scout."; the
-// visible text renders with `whitespace-pre-line` so the break is honored.
+// Soft break after "Internship" avoids the "Sleep." orphan on narrow widths.
 const PHRASES = [
-  'Land Your Dream Internship While You Sleep.',
+  'Land Your Dream Internship\nWhile You Sleep.',
   'Scout.\nNever Apply Again.',
 ] as const
 
@@ -82,7 +81,7 @@ export function TypingHeadline() {
   }, [])
 
   return (
-    <h1 className="grid w-full max-w-[16ch] font-headline text-[1.625rem] font-medium leading-[1.15] tracking-[-0.04em] text-white sm:max-w-[20ch] sm:text-[clamp(1.75rem,5vw,3.5rem)] sm:leading-[1.1] md:max-w-none md:text-[clamp(2.25rem,5.5vw,5.25rem)] md:leading-[1.05]">
+    <h1 className="grid w-full max-w-[15ch] text-balance font-headline text-[1.625rem] font-medium leading-[1.15] tracking-[-0.04em] text-white sm:max-w-[18ch] sm:text-[clamp(1.75rem,5vw,3.5rem)] sm:leading-[1.1] md:max-w-[22ch] md:text-[clamp(2.25rem,5.5vw,5.25rem)] md:leading-[1.05]">
       {/* Desktop: reserve tallest phrase so typing never shifts layout.
           Mobile: only size to the brand phrase. */}
       {animate
@@ -90,7 +89,7 @@ export function TypingHeadline() {
             <span
               key={phrase}
               aria-hidden
-              className="invisible col-start-1 row-start-1 whitespace-pre-line"
+              className="invisible col-start-1 row-start-1 whitespace-pre-line text-balance"
             >
               {phrase}
             </span>
@@ -98,13 +97,13 @@ export function TypingHeadline() {
         : (
             <span
               aria-hidden
-              className="invisible col-start-1 row-start-1 whitespace-pre-line"
+              className="invisible col-start-1 row-start-1 whitespace-pre-line text-balance"
             >
               {MOBILE_PHRASE}
             </span>
           )}
 
-      <span className="col-start-1 row-start-1 whitespace-pre-line">
+      <span className="col-start-1 row-start-1 whitespace-pre-line text-balance">
         <span>{text}</span>
         {animate ? (
           <span

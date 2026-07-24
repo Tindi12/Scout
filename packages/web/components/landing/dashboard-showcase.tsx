@@ -4,7 +4,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from 'react'
@@ -45,6 +44,10 @@ import { cn } from '@/lib/utils'
 const DESIGN_W = 1024
 const DESIGN_H = 541
 const SLIDE_INTERVAL_MS = 5000
+/** Mobile swipe scale — large enough that dashboard stats stay readable. */
+const MOBILE_SCALE = 0.58
+const MOBILE_W = DESIGN_W * MOBILE_SCALE
+const MOBILE_H = DESIGN_H * MOBILE_SCALE
 
 const PRIMARY_NAV = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -104,6 +107,7 @@ export function LandingDashboardShowcase() {
   }, [])
 
   useEffect(() => {
+    if (!isDesktop) return
     const el = wrapperRef.current
     if (!el) return
     const update = () => setScale(el.clientWidth / DESIGN_W)
@@ -111,7 +115,7 @@ export function LandingDashboardShowcase() {
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [isDesktop])
 
   useEffect(() => {
     if (!isDesktop) return
@@ -127,91 +131,145 @@ export function LandingDashboardShowcase() {
   const sendScoutCount = SLIDES[index].sendScoutCount
   const fullHeight = DESIGN_H * scale
 
+  // Mobile: single active slide. Desktop: full carousel strip.
+  const renderFrame = (carousel: boolean) => (
+    <div className="flex h-full">
+      <Sidebar active={activeNav} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar crumb={SLIDES[index].crumb} sendScoutCount={sendScoutCount} />
+        <div className="relative flex-1 overflow-hidden">
+          {carousel ? (
+            <div
+              className="flex h-full transition-transform duration-700 ease-in-out motion-reduce:transition-none"
+              style={{ transform: `translateX(-${index * 100}%)` }}
+            >
+              {SLIDES.map((slide, i) => (
+                <div key={i} className="h-full w-full shrink-0 overflow-hidden">
+                  {slide.render()}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="h-full w-full overflow-hidden">{SLIDES[index].render()}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="select-none">
-      <div
-        ref={wrapperRef}
-        className="relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a] max-md:[height:calc(var(--showcase-h)*0.62)] sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent md:[height:var(--showcase-h)]"
-        style={
-          {
-            ['--showcase-h' as string]: `${fullHeight}px`,
-            height: fullHeight,
-          } as CSSProperties
-        }
-      >
+      {/* Mobile: readable-scale canvas — swipe sideways to explore the UI. */}
+      <div className="md:hidden">
         <div
-          aria-hidden
-          className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-xl border-0 bg-[#0a0a0a] sm:rounded-2xl sm:border sm:border-white/[0.08]"
-          style={{
-            width: DESIGN_W,
-            height: DESIGN_H,
-            transform: `scale(${scale})`,
-          }}
+          className="scrollbar-none -mx-4 overflow-x-auto overscroll-x-contain px-4"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          <div className="flex h-full">
-            <Sidebar active={activeNav} />
-
-            <div className="flex min-w-0 flex-1 flex-col">
-              <Topbar crumb={SLIDES[index].crumb} sendScoutCount={sendScoutCount} />
-              <div className="relative flex-1 overflow-hidden">
-                {isDesktop ? (
-                  <div
-                    className="flex h-full transition-transform duration-700 ease-in-out motion-reduce:transition-none"
-                    style={{ transform: `translateX(-${index * 100}%)` }}
-                  >
-                    {SLIDES.map((slide, i) => (
-                      <div key={i} className="h-full w-full shrink-0 overflow-hidden">
-                        {slide.render()}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  // Phones: only the active slide in the DOM (much less JS/paint).
-                  <div className="h-full w-full overflow-hidden">{SLIDES[index].render()}</div>
-                )}
-              </div>
+          <div
+            className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]"
+            style={{ width: MOBILE_W, height: MOBILE_H }}
+          >
+            <div
+              aria-hidden
+              className="absolute left-0 top-0 origin-top-left"
+              style={{
+                width: DESIGN_W,
+                height: DESIGN_H,
+                transform: `scale(${MOBILE_SCALE})`,
+              }}
+            >
+              {renderFrame(false)}
             </div>
           </div>
         </div>
-
-        {/* Soft fade so the cropped mobile peek doesn't feel abruptly cut. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/70 to-transparent sm:hidden"
-        />
-
-        {/* Desktop: side chevrons outside the frame */}
-        <button
-          type="button"
-          onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
-          aria-label="Previous preview"
-          className="absolute -left-8 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60 sm:flex"
-        >
-          <ChevronLeft className="h-6 w-6" strokeWidth={1.5} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
-          aria-label="Next preview"
-          className="absolute -right-8 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60 sm:flex"
-        >
-          <ChevronRight className="h-6 w-6" strokeWidth={1.5} />
-        </button>
+        <p className="mt-2 text-center font-label text-[10px] uppercase tracking-[0.16em] text-[#666666]">
+          Swipe to explore
+        </p>
+        <div className="mt-1.5 flex items-center justify-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
+            aria-label="Previous preview"
+            className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white"
+          >
+            <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+          <div
+            className="flex items-center justify-center gap-0.5"
+            role="tablist"
+            aria-label="Product preview slides"
+          >
+            {SLIDES.map((slide, i) => (
+              <button
+                key={i}
+                type="button"
+                role="tab"
+                onClick={() => setIndex(i)}
+                aria-label={`Show ${slide.nav} preview`}
+                aria-selected={i === index}
+                className="group flex h-10 w-8 items-center justify-center"
+              >
+                <span
+                  className={cn(
+                    'h-1.5 rounded-full transition-all duration-500 motion-reduce:transition-none',
+                    i === index
+                      ? 'w-5 bg-primary'
+                      : 'w-1.5 bg-white/15 group-hover:bg-white/40',
+                  )}
+                />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
+            aria-label="Next preview"
+            className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white"
+          >
+            <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
 
-      {/* Mobile: chevrons + dots below the frame so they never cover the UI */}
-      <div className="mt-2 flex items-center justify-center gap-0.5 sm:mt-5 sm:gap-1">
-        <button
-          type="button"
-          onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
-          aria-label="Previous preview"
-          className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
+      {/* Desktop / tablet: full-width scaled frame */}
+      <div className="hidden md:block">
+        <div
+          ref={wrapperRef}
+          className="relative w-full overflow-visible bg-transparent"
+          style={{ height: fullHeight }}
         >
-          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
-        </button>
+          <div
+            aria-hidden
+            className="absolute left-0 top-0 origin-top-left overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0a0a]"
+            style={{
+              width: DESIGN_W,
+              height: DESIGN_H,
+              transform: `scale(${scale})`,
+            }}
+          >
+            {renderFrame(true)}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
+            aria-label="Previous preview"
+            className="absolute -left-8 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60"
+          >
+            <ChevronLeft className="h-6 w-6" strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
+            aria-label="Next preview"
+            className="absolute -right-8 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-white/70 transition-colors duration-200 hover:text-white/60"
+          >
+            <ChevronRight className="h-6 w-6" strokeWidth={1.5} />
+          </button>
+        </div>
 
         <div
-          className="flex items-center justify-center gap-0.5 sm:gap-1"
+          className="mt-5 flex items-center justify-center gap-1"
           role="tablist"
           aria-label="Product preview slides"
         >
@@ -223,7 +281,7 @@ export function LandingDashboardShowcase() {
               onClick={() => setIndex(i)}
               aria-label={`Show ${slide.nav} preview`}
               aria-selected={i === index}
-              className="group flex h-10 w-8 items-center justify-center sm:h-11 sm:w-11"
+              className="group flex h-11 w-11 items-center justify-center"
             >
               <span
                 className={cn(
@@ -236,15 +294,6 @@ export function LandingDashboardShowcase() {
             </button>
           ))}
         </div>
-
-        <button
-          type="button"
-          onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
-          aria-label="Next preview"
-          className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
-        >
-          <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
-        </button>
       </div>
     </div>
   )

@@ -128,7 +128,7 @@ export function HeroApplyAnimation() {
 
   return (
     <div
-      className="mx-auto overflow-hidden"
+      className="mx-auto flex items-center justify-between overflow-hidden"
       style={{ width: WIDTH * scale, height: HEIGHT * scale }}
     >
       <div
@@ -159,7 +159,7 @@ export function HeroApplyAnimation() {
           />
         </svg>
 
-        {/* Scout origin tile */}
+        {/* Scout origin + employer destination — space-between anchors. */}
         <span className="absolute left-0 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-md border border-white/10 bg-white/[0.03]">
           <Image
             src="/scout-logo.png"
@@ -170,7 +170,6 @@ export function HeroApplyAnimation() {
           />
         </span>
 
-        {/* Destination company tile */}
         <span
           className="absolute right-0 top-1/2 flex h-10 -translate-y-1/2 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-2"
           style={{ width: COMPANY_TILE_W }}

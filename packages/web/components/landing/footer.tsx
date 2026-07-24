@@ -102,7 +102,7 @@ export function Footer() {
   ]
 
   return (
-    <footer className="relative px-4 pb-[calc(4.75rem+env(safe-area-inset-bottom,0px))] pt-10 sm:px-6 sm:pb-10 sm:pt-20 lg:px-12 md:pb-10">
+    <footer className="relative px-4 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] pt-10 sm:px-6 sm:pb-10 sm:pt-20 lg:px-12 md:pb-10">
       <div className="mx-auto max-w-7xl">
         <div className="glass-card relative overflow-hidden rounded-xl p-5 sm:rounded-3xl sm:p-10 md:p-14">
           <div className="relative grid grid-cols-1 items-center gap-6 sm:gap-10 lg:grid-cols-2">

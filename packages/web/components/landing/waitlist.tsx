@@ -348,24 +348,39 @@ export function MobileWaitlistDock() {
 function MobileWaitlistDockInner() {
   const { open } = useWaitlist()
   const { consent, isBannerOpen } = useCookieConsent()
+  const [heroCtaVisible, setHeroCtaVisible] = useState(true)
+
+  useEffect(() => {
+    const el = document.getElementById('hero-waitlist')
+    if (!el) {
+      setHeroCtaVisible(false)
+      return
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        setHeroCtaVisible(entry.isIntersecting)
+      },
+      { threshold: 0.4, rootMargin: '0px 0px -12% 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
   // Don't fight the cookie banner for the thumb zone on first visit.
   if (isBannerOpen || consent === null) return null
+  // Hide while the hero waitlist form is on screen — avoids double-CTA clash.
+  if (heroCtaVisible) return null
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 md:hidden">
-      <div
-        className="pointer-events-auto border-t border-white/[0.08] bg-black/90 px-3 pt-2 backdrop-blur-md"
-        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+      <Button
+        type="button"
+        size="lg"
+        className="pointer-events-auto min-h-11 rounded-full px-6 shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
+        onClick={() => open('mobile_dock')}
       >
-        <Button
-          type="button"
-          size="lg"
-          className="min-h-11 w-full"
-          onClick={() => open('mobile_dock')}
-        >
-          Join the waitlist
-        </Button>
-      </div>
+        Join waitlist
+      </Button>
     </div>
   )
 }
