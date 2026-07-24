@@ -1,6 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import Image from 'next/image'
 import {
   Activity,
@@ -118,13 +125,19 @@ export function LandingDashboardShowcase() {
 
   const activeNav = SLIDES[index].nav
   const sendScoutCount = SLIDES[index].sendScoutCount
+  const fullHeight = DESIGN_H * scale
 
   return (
     <div className="select-none">
       <div
         ref={wrapperRef}
-        className="relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a] sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent"
-        style={{ height: DESIGN_H * scale }}
+        className="relative w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a] max-md:[height:calc(var(--showcase-h)*0.62)] sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent md:[height:var(--showcase-h)]"
+        style={
+          {
+            ['--showcase-h' as string]: `${fullHeight}px`,
+            height: fullHeight,
+          } as CSSProperties
+        }
       >
         <div
           aria-hidden
@@ -161,6 +174,12 @@ export function LandingDashboardShowcase() {
           </div>
         </div>
 
+        {/* Soft fade so the cropped mobile peek doesn't feel abruptly cut. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/70 to-transparent sm:hidden"
+        />
+
         {/* Desktop: side chevrons outside the frame */}
         <button
           type="button"
@@ -181,18 +200,18 @@ export function LandingDashboardShowcase() {
       </div>
 
       {/* Mobile: chevrons + dots below the frame so they never cover the UI */}
-      <div className="mt-3 flex items-center justify-center gap-1 sm:mt-5">
+      <div className="mt-2 flex items-center justify-center gap-0.5 sm:mt-5 sm:gap-1">
         <button
           type="button"
           onClick={() => setIndex((i) => (i - 1 + SLIDES.length) % SLIDES.length)}
           aria-label="Previous preview"
-          className="flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
+          className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
         >
           <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
         </button>
 
         <div
-          className="flex items-center justify-center gap-1"
+          className="flex items-center justify-center gap-0.5 sm:gap-1"
           role="tablist"
           aria-label="Product preview slides"
         >
@@ -204,7 +223,7 @@ export function LandingDashboardShowcase() {
               onClick={() => setIndex(i)}
               aria-label={`Show ${slide.nav} preview`}
               aria-selected={i === index}
-              className="group flex h-11 w-9 items-center justify-center sm:w-11"
+              className="group flex h-10 w-8 items-center justify-center sm:h-11 sm:w-11"
             >
               <span
                 className={cn(
@@ -222,7 +241,7 @@ export function LandingDashboardShowcase() {
           type="button"
           onClick={() => setIndex((i) => (i + 1) % SLIDES.length)}
           aria-label="Next preview"
-          className="flex h-11 w-11 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
+          className="flex h-10 w-10 items-center justify-center text-white/60 transition-colors hover:text-white sm:hidden"
         >
           <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
         </button>

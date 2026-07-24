@@ -354,13 +354,13 @@ function MobileWaitlistDockInner() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 md:hidden">
       <div
-        className="pointer-events-auto border-t border-white/[0.08] bg-black/90 px-4 pt-3 backdrop-blur-md"
-        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        className="pointer-events-auto border-t border-white/[0.08] bg-black/90 px-3 pt-2 backdrop-blur-md"
+        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
       >
         <Button
           type="button"
           size="lg"
-          className="min-h-12 w-full"
+          className="min-h-11 w-full"
           onClick={() => open('mobile_dock')}
         >
           Join the waitlist

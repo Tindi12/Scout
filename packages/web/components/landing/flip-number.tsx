@@ -42,13 +42,13 @@ function formatValue(n: number): string {
 function RollingDigit({ char, size }: { char: string; size: 'md' | 'sm' }) {
   const isDigit = char >= '0' && char <= '9'
 
-  const cell = size === 'sm' ? 'h-6 w-[1.15rem] sm:h-7 sm:w-5' : 'h-9 w-6 sm:h-10 sm:w-7'
+  const cell = size === 'sm' ? 'h-6 w-[1.15rem] sm:h-7 sm:w-5' : 'h-6 w-[1.15rem] sm:h-10 sm:w-7'
   const glyph =
-    size === 'sm' ? 'text-xs sm:text-sm' : 'text-lg sm:text-xl'
+    size === 'sm' ? 'text-xs sm:text-sm' : 'text-sm sm:text-xl'
   const punct =
     size === 'sm'
       ? 'h-6 w-2.5 text-xs sm:h-7 sm:w-3 sm:text-sm'
-      : 'h-9 w-3.5 text-lg sm:h-10 sm:w-4 sm:text-xl'
+      : 'h-6 w-2.5 text-sm sm:h-10 sm:w-4 sm:text-xl'
 
   if (!isDigit) {
     return (

@@ -9,8 +9,8 @@ const PHRASES = [
   'Scout.\nNever Apply Again.',
 ] as const
 
-/** Primary phrase used as the mobile layout sizer (avoids 2-line reserve). */
-const MOBILE_PHRASE = PHRASES[0]
+/** Brand-led static headline for phones / tablets in portrait. */
+const MOBILE_PHRASE = 'Scout.\nNever Apply Again.'
 
 const TYPE_DELAY_MIN = 60
 const TYPE_DELAY_MAX = 80
@@ -31,9 +31,9 @@ export function TypingHeadline() {
     const reduceMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches
-    const isNarrow = window.matchMedia('(max-width: 639px)').matches
+    // Static brand headline below md — avoids typewriter layout thrash on phones.
+    const isNarrow = window.matchMedia('(max-width: 767px)').matches
 
-    // Phones + reduced motion: static primary phrase (no typewriter, no tall reserve).
     if (reduceMotion || isNarrow) {
       setText(MOBILE_PHRASE)
       setAnimate(false)
@@ -82,9 +82,9 @@ export function TypingHeadline() {
   }, [])
 
   return (
-    <h1 className="grid w-full max-w-[20ch] font-headline text-[clamp(1.75rem,6.5vw,5.25rem)] font-medium leading-[1.1] tracking-[-0.04em] text-white sm:max-w-none sm:leading-[1.05]">
+    <h1 className="grid w-full max-w-[16ch] font-headline text-[1.625rem] font-medium leading-[1.15] tracking-[-0.04em] text-white sm:max-w-[20ch] sm:text-[clamp(1.75rem,5vw,3.5rem)] sm:leading-[1.1] md:max-w-none md:text-[clamp(2.25rem,5.5vw,5.25rem)] md:leading-[1.05]">
       {/* Desktop: reserve tallest phrase so typing never shifts layout.
-          Mobile: only size to the primary phrase. */}
+          Mobile: only size to the brand phrase. */}
       {animate
         ? PHRASES.map((phrase) => (
             <span

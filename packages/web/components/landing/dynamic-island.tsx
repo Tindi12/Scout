@@ -164,38 +164,38 @@ export function DynamicIsland() {
                   isLanding ? (
                     <LandingHashLink
                       href={homeHref}
-                      className="group flex min-h-11 shrink-0 items-center gap-2.5 transition-all duration-300"
+                      className="group flex min-h-11 shrink-0 items-center gap-2 transition-all duration-300 sm:gap-2.5"
                       aria-label="Scout home"
                     >
                       <Image
                         src={scoutLogo}
                         alt="Scout AI Logo"
-                        width={32}
-                        height={32}
+                        width={28}
+                        height={28}
                         priority
                         draggable={false}
-                        className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
+                        className="h-7 w-7 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100 sm:h-8 sm:w-8"
                       />
-                      <span className="font-headline text-lg font-semibold tracking-tight text-white">
+                      <span className="font-headline text-base font-semibold tracking-tight text-white sm:text-lg">
                         Scout
                       </span>
                     </LandingHashLink>
                   ) : (
                     <Link
                       href="/"
-                      className="group flex min-h-11 shrink-0 items-center gap-2.5 transition-all duration-300"
+                      className="group flex min-h-11 shrink-0 items-center gap-2 sm:gap-2.5 transition-all duration-300"
                       aria-label="Scout home"
                     >
                       <Image
                         src={scoutLogo}
                         alt="Scout AI Logo"
-                        width={32}
-                        height={32}
+                        width={28}
+                        height={28}
                         priority
                         draggable={false}
-                        className="h-8 w-8 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100"
+                        className="h-7 w-7 select-none object-contain opacity-90 transition-all duration-300 group-hover:scale-[1.04] group-hover:opacity-100 sm:h-8 sm:w-8"
                       />
-                      <span className="font-headline text-lg font-semibold tracking-tight text-white">
+                      <span className="font-headline text-base font-semibold tracking-tight text-white sm:text-lg">
                         Scout
                       </span>
                     </Link>
@@ -319,7 +319,7 @@ export function DynamicIsland() {
       {menuOpen ? (
         <nav
           id="landing-mobile-nav"
-          className="glass-pill pointer-events-auto mx-2 w-[calc(100%-1rem)] max-w-3xl rounded-3xl p-3 md:hidden sm:mx-4"
+          className="glass-pill pointer-events-auto mx-2 w-[calc(100%-1rem)] max-w-3xl rounded-2xl p-2 md:hidden sm:mx-4 sm:rounded-3xl sm:p-3"
           aria-label="Mobile"
         >
           <ul className="flex flex-col gap-0.5">
@@ -329,7 +329,7 @@ export function DynamicIsland() {
                     {link.kind === 'hash' ? (
                       <LandingHashLink
                         href={link.href}
-                        className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
+                        className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
                         onClick={closeMenu}
                       >
                         {link.label}
@@ -337,7 +337,7 @@ export function DynamicIsland() {
                     ) : (
                       <Link
                         href={link.href}
-                        className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
+                        className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
                         onClick={closeMenu}
                       >
                         {link.label}
@@ -350,7 +350,7 @@ export function DynamicIsland() {
               {waitlist ? (
                 <WaitlistOpenButton
                   source="nav_mobile"
-                  className={`flex min-h-12 w-full items-center rounded-xl px-4 py-3 text-left ${navLinkClass} hover:bg-white/[0.04]`}
+                  className={`flex min-h-11 w-full items-center rounded-xl px-3.5 py-2.5 text-left text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
                   onOpen={closeMenu}
                 >
                   Join waitlist
@@ -359,7 +359,7 @@ export function DynamicIsland() {
                 <Link
                   href="/login"
                   prefetch
-                  className={`flex min-h-12 items-center rounded-xl px-4 py-3 ${navLinkClass} hover:bg-white/[0.04]`}
+                  className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
                   onClick={closeMenu}
                 >
                   Log In
@@ -370,13 +370,13 @@ export function DynamicIsland() {
               <li className="mt-1 border-t border-white/[0.06] pt-2">
                 <ComingSoonCta
                   source="nav_mobile_cta"
-                  className="min-h-12 w-full"
+                  className="min-h-11 w-full sm:min-h-12"
                   onOpen={closeMenu}
                 />
               </li>
             ) : (
               <li className="mt-1 border-t border-white/[0.06] pt-2 sm:hidden">
-                <Button asChild className="min-h-12 w-full">
+                <Button asChild className="min-h-11 w-full sm:min-h-12">
                   <Link href="/sign-up" prefetch onClick={closeMenu}>
                     Try Scout Now
                   </Link>

@@ -26,10 +26,11 @@
     --brand: 14 100% 60%;
     --brand-hover: 14 85% 52%;
     --radius: 0.5rem;
-    --landing-line: rgba(255, 255, 255, 0.16);
-    --landing-line-outer: rgba(255, 255, 255, 0.14);
-    --landing-corner: rgba(255, 255, 255, 0.32);
-    --landing-corner-outer: rgba(255, 255, 255, 0.28);
+    /* Softer blueprint chrome on phones — less visual noise */
+    --landing-line: rgba(255, 255, 255, 0.08);
+    --landing-line-outer: rgba(255, 255, 255, 0.05);
+    --landing-corner: rgba(255, 255, 255, 0.18);
+    --landing-corner-outer: rgba(255, 255, 255, 0.1);
     /* Tight gutter on phones so outer rails don't cause horizontal scroll */
     --landing-frame-gap: 0px;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
@@ -61,10 +62,10 @@
     --ring: 14 100% 60%;
     --brand: 14 100% 60%;
     --brand-hover: 14 85% 52%;
-    --landing-line: rgba(255, 255, 255, 0.16);
-    --landing-line-outer: rgba(255, 255, 255, 0.14);
-    --landing-corner: rgba(255, 255, 255, 0.32);
-    --landing-corner-outer: rgba(255, 255, 255, 0.28);
+    --landing-line: rgba(255, 255, 255, 0.08);
+    --landing-line-outer: rgba(255, 255, 255, 0.05);
+    --landing-corner: rgba(255, 255, 255, 0.18);
+    --landing-corner-outer: rgba(255, 255, 255, 0.1);
     --landing-frame-gap: 0px;
     --scrollbar-thumb: rgba(255, 255, 255, 0.14);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
@@ -75,6 +76,10 @@
 @media (min-width: 1024px) {
   :root,
   .dark {
+    --landing-line: rgba(255, 255, 255, 0.16);
+    --landing-line-outer: rgba(255, 255, 255, 0.14);
+    --landing-corner: rgba(255, 255, 255, 0.32);
+    --landing-corner-outer: rgba(255, 255, 255, 0.28);
     --landing-frame-gap: 3.5rem;
   }
 }
@@ -311,6 +316,17 @@
     background-color: var(--landing-corner-outer);
   }
 
+  /* Outer corners only read on desktop where the double-frame gap exists. */
+  @media (max-width: 1023px) {
+    .frame-corner-outer {
+      display: none;
+    }
+
+    .landing-rails-outer {
+      display: none;
+    }
+  }
+
   /*
    * Landing nav morph: --nav-progress 0 = flat grid-aligned bar,
    * 1 = floating glass pill. Driven by scroll in dynamic-island.tsx.
@@ -322,12 +338,20 @@
     --nav-progress: 0;
     --banner-clearance: 0px;
     top: calc(
-      var(--banner-clearance) + var(--nav-progress) * 1.5rem + env(safe-area-inset-top, 0px)
+      var(--banner-clearance) + var(--nav-progress) * 0.75rem + env(safe-area-inset-top, 0px)
     );
     transition: top 80ms linear;
   }
 
-  /* Slim beta notice — whisper of texture on sm+, static on phones. */
+  @media (min-width: 640px) {
+    .landing-nav-header {
+      top: calc(
+        var(--banner-clearance) + var(--nav-progress) * 1.5rem + env(safe-area-inset-top, 0px)
+      );
+    }
+  }
+
+  /* Slim beta notice — grid + orange circuit on all viewports. */
   .announcement-banner {
     background-color: #050505;
   }
@@ -346,10 +370,10 @@
       linear-gradient(
         90deg,
         transparent 0%,
-        rgba(255, 103, 51, 0.1) 18%,
+        rgba(255, 103, 51, 0.16) 18%,
         transparent 36%,
         transparent 64%,
-        rgba(255, 255, 255, 0.05) 82%,
+        rgba(255, 255, 255, 0.06) 82%,
         transparent 100%
       ),
       linear-gradient(
@@ -359,7 +383,7 @@
         transparent 70%
       );
     background-size: 220% 100%, 100% 100%;
-    opacity: 0.35;
+    opacity: 0.52;
     animation: announcement-circuit 18s linear infinite;
   }
 
@@ -383,8 +407,15 @@
   }
 
   .landing-nav-pad {
-    padding-left: calc(1.5rem - var(--nav-progress) * 0.5rem);
-    padding-right: calc(1.5rem - var(--nav-progress) * 0.5rem);
+    padding-left: calc(1rem - var(--nav-progress) * 0.35rem);
+    padding-right: calc(1rem - var(--nav-progress) * 0.35rem);
+  }
+
+  @media (min-width: 640px) {
+    .landing-nav-pad {
+      padding-left: calc(1.5rem - var(--nav-progress) * 0.5rem);
+      padding-right: calc(1.5rem - var(--nav-progress) * 0.5rem);
+    }
   }
 
   @media (min-width: 1024px) {
@@ -407,10 +438,19 @@
     border-radius: calc(var(--nav-progress) * 9999px);
     box-shadow: 0 10px 40px rgba(0, 0, 0, calc(0.6 * var(--nav-progress)));
     /* Flat bar keeps CTA/logo off the rails; pill settles to the original inset. */
-    padding-left: calc(1.25rem - var(--nav-progress) * 0.25rem);
-    padding-right: calc(1.25rem - var(--nav-progress) * 0.5rem);
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding-left: calc(0.875rem - var(--nav-progress) * 0.125rem);
+    padding-right: calc(0.75rem - var(--nav-progress) * 0.25rem);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .landing-nav {
+      padding-left: calc(1.25rem - var(--nav-progress) * 0.25rem);
+      padding-right: calc(1.25rem - var(--nav-progress) * 0.5rem);
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
   }
 
   /* Divider stays locked to the page grid gutters, independent of pill shrink. */
@@ -560,6 +600,23 @@
 .logo-breathe.is-breathing {
   animation: logo-breathe 3.8s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
   will-change: transform;
+}
+
+@media (max-width: 639px) {
+  @keyframes logo-breathe-mobile {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.05);
+    }
+  }
+
+  .logo-breathe.is-breathing {
+    animation-name: logo-breathe-mobile;
+    animation-duration: 4.5s;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
