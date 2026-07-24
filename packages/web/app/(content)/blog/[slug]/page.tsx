@@ -6,9 +6,11 @@ import { notFound } from 'next/navigation'
 import { ArticleMeta } from '@/components/content/article-meta'
 import { ContentSwap } from '@/components/content/content-page-shell'
 import { MarkdownProse } from '@/components/content/markdown-prose'
+import { ComingSoonCta } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
 import { getAllBlogPosts, getBlogPost } from '@/lib/content'
 import { absoluteUrl } from '@/lib/site'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 type PageProps = {
   params: Promise<{ slug: string }>
@@ -136,15 +138,23 @@ export default async function BlogPostPage({ params }: PageProps) {
         <div className="mt-16 flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-headline text-xl font-medium text-white">
-              Ready to stop filling forms?
+              {isWaitlistMode()
+                ? 'Public access is coming soon'
+                : 'Ready to stop filling forms?'}
             </p>
             <p className="mt-1 font-body text-sm text-[#A1A1AA]">
-              Try Scout, the AI job application agent built for students.
+              {isWaitlistMode()
+                ? 'Scout is in private beta. Join the waitlist for a seat when we open up.'
+                : 'Try Scout, the AI job application agent built for students.'}
             </p>
           </div>
-          <Button asChild>
-            <Link href="/sign-up">Try Scout Now</Link>
-          </Button>
+          {isWaitlistMode() ? (
+            <ComingSoonCta source="blog" />
+          ) : (
+            <Button asChild>
+              <Link href="/sign-up">Try Scout Now</Link>
+            </Button>
+          )}
         </div>
       </article>
     </ContentSwap>

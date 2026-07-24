@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
 import { getSupabaseUserByClerkId } from '@/lib/supabase-user-status'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -24,6 +25,8 @@ const isPublicRoute = createRouteMatcher([
   // page and has no Clerk session to check; auth is the shared internal secret instead
   // (core/auth.py verify_internal_service).
   '/api/newsletter(.*)',
+  // Soft-launch waitlist — Landing "Coming soon" dialog; service-role write only.
+  '/api/waitlist(.*)',
   // Landing live counters poll paced platform totals while logged out.
   '/api/landing(.*)',
 ])
@@ -48,6 +51,8 @@ const isAuthRoute = createRouteMatcher([
   '/login(.*)',
 ])
 
+const isSignUpRoute = createRouteMatcher(['/sign-up(.*)'])
+
 function readClerkOnboardingComplete(sessionClaims: unknown): boolean {
   const claims = sessionClaims as
     | {
@@ -71,7 +76,14 @@ function readClerkOnboardingComplete(sessionClaims: unknown): boolean {
 
 export default clerkMiddleware(async (auth, request) => {
   const { userId, sessionClaims } = await auth()
-  const path = request.nextUrl.pathname
+
+  // Soft launch: block public Clerk sign-up; open the waitlist dialog instead.
+  // /sign-in and /login stay reachable by direct URL for beta testers / team.
+  if (isWaitlistMode() && !userId && isSignUpRoute(request)) {
+    const url = new URL('/', request.url)
+    url.searchParams.set('waitlist', '1')
+    return NextResponse.redirect(url)
+  }
 
   if (!userId) {
     if (!isPublicRoute(request)) {

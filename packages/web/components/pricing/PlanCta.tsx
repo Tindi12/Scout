@@ -5,11 +5,13 @@ import Link from 'next/link'
 import { ChangePlanButton } from '@/components/billing/ChangePlanButton'
 import { ManageBillingButton } from '@/components/billing/ManageBillingButton'
 import { UpgradeButton } from '@/components/billing/UpgradeButton'
+import { ComingSoonCta } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
 import {
   planDisplayLabel,
   type SubscriptionPlan,
 } from '@/lib/subscription-plan'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 export type Viewer = {
   isSignedIn: boolean
@@ -30,6 +32,7 @@ type PlanCtaProps = {
  * Renders the correct action for one pricing tier given the viewer's auth +
  * subscription state. Centralizes the three-state logic so cards and the
  * comparison chart never diverge:
+ *   - waitlist mode (logged out) -> "Coming soon" waitlist dialog
  *   - logged out -> "Get Started" (sign up)
  *   - logged-in free -> upgrade buttons / "Current plan" on Free
  *   - logged-in paid -> "Current plan" on their tier, upgrade/downgrade elsewhere
@@ -45,6 +48,18 @@ export function PlanCta({ tierId, viewer, placement = 'card' }: PlanCtaProps) {
         className={`${
           isCard ? 'h-10 w-full' : 'h-9 w-full'
         } animate-pulse rounded-md bg-white/[0.05]`}
+      />
+    )
+  }
+
+  // ---- Soft launch: public signup closed ----
+  if (isWaitlistMode() && !viewer.isSignedIn) {
+    return (
+      <ComingSoonCta
+        source={`pricing_page_${tierId}`}
+        variant={isPaidTier ? 'default' : 'outline'}
+        size={isCard ? 'lg' : 'default'}
+        className="w-full"
       />
     )
   }

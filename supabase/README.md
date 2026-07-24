@@ -18,7 +18,16 @@ Scout’s Postgres schema is **not** versioned in this repo. All DDL lives on th
 
 ## Current `public` tables (live)
 
-`users`, `resumes`, `analyses`, `jobs`, `applications`, `conversations`, `scout_runs`, `resume_variants`, `notifications` — all with RLS enabled.
+`users`, `resumes`, `analyses`, `jobs`, `applications`, `conversations`, `scout_runs`, `resume_variants`, `notifications`, `waitlist` — all with RLS enabled.
+
+## Waitlist (2026-07-23)
+
+Soft-launch email capture from the marketing landing (`NEXT_PUBLIC_WAITLIST_MODE`).
+
+Applied via MCP migrations `create_waitlist_table` + `waitlist_deny_all_policy`:
+
+- `public.waitlist` — `id`, unique `email`, `source`, `created_at`
+- RLS on; restrictive deny-all for `anon`/`authenticated`; inserts via Next.js `/api/waitlist` using the service role only
 
 Apply `notifications.sql` in the SQL Editor to create the `notifications` table and backfill from existing applications.
 

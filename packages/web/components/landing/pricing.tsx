@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { Check } from 'lucide-react'
 
+import { ComingSoonCta } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 type Feature = { label: string; emphasis?: boolean }
 
@@ -49,6 +51,36 @@ function FeatureRow({ feature }: { feature: Feature }) {
   )
 }
 
+function PricingCta({
+  source,
+  href,
+  label,
+  variant = 'default',
+}: {
+  source: string
+  href: string
+  label: string
+  variant?: 'default' | 'outline'
+}) {
+  if (isWaitlistMode()) {
+    return (
+      <ComingSoonCta
+        source={source}
+        variant={variant}
+        size="lg"
+        className="mt-7"
+      />
+    )
+  }
+  return (
+    <Button asChild variant={variant} size="lg" className="mt-7">
+      <Link href={href} prefetch>
+        {label}
+      </Link>
+    </Button>
+  )
+}
+
 export function Pricing() {
   return (
     <section id="pricing" className="relative px-6 py-32 lg:px-12">
@@ -85,11 +117,12 @@ export function Pricing() {
             the agent loose.
           </p>
 
-          <Button asChild variant="outline" size="lg" className="mt-7">
-            <Link href="/sign-up" prefetch>
-              Start Free
-            </Link>
-          </Button>
+          <PricingCta
+            source="pricing_free"
+            href="/sign-up"
+            label="Start Free"
+            variant="outline"
+          />
 
           <div className="my-7 h-px w-full bg-white/10" />
 
@@ -125,11 +158,7 @@ export function Pricing() {
             autonomously while you sleep.
           </p>
 
-          <Button asChild size="lg" className="mt-7">
-            <Link href="/sign-up" prefetch>
-              Upgrade to Pro
-            </Link>
-          </Button>
+          <PricingCta source="pricing_pro" href="/sign-up" label="Upgrade to Pro" />
 
           <div className="my-7 h-px w-full bg-white/10" />
 
@@ -165,11 +194,11 @@ export function Pricing() {
             something new.
           </p>
 
-          <Button asChild size="lg" className="mt-7">
-            <Link href="/sign-up" prefetch>
-              Upgrade to Scout+
-            </Link>
-          </Button>
+          <PricingCta
+            source="pricing_scout_plus"
+            href="/sign-up"
+            label="Upgrade to Scout+"
+          />
 
           <div className="my-7 h-px w-full bg-white/10" />
 

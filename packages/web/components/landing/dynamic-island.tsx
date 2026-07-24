@@ -8,8 +8,10 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { LandingHashLink } from '@/components/landing/landing-hash-link'
+import { ComingSoonCta, WaitlistOpenButton } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 const NAV_LINKS = [
   { hash: '#about', label: 'About', kind: 'hash' as const },
@@ -34,6 +36,7 @@ function clamp01(value: number) {
 
 export function DynamicIsland() {
   const pathname = usePathname()
+  const waitlist = isWaitlistMode()
   const isLanding = pathname === '/'
   const isMarketingChrome =
     isLanding ||
@@ -241,14 +244,32 @@ export function DynamicIsland() {
               ) : null}
 
               <div className="flex shrink-0 items-center gap-3 sm:gap-4">
-                <Link href="/login" prefetch className={`hidden md:inline-flex ${navLinkClass}`}>
-                  Log In
-                </Link>
-                <Button asChild>
-                  <Link href="/sign-up" prefetch>
-                    Try Scout Now
-                  </Link>
-                </Button>
+                {waitlist ? (
+                  <>
+                    <WaitlistOpenButton
+                      source="nav"
+                      className={`hidden md:inline-flex ${navLinkClass}`}
+                    >
+                      Join waitlist
+                    </WaitlistOpenButton>
+                    <ComingSoonCta source="nav" size="default" />
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      prefetch
+                      className={`hidden md:inline-flex ${navLinkClass}`}
+                    >
+                      Log In
+                    </Link>
+                    <Button asChild>
+                      <Link href="/sign-up" prefetch>
+                        Try Scout Now
+                      </Link>
+                    </Button>
+                  </>
+                )}
                 <button
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
@@ -315,14 +336,23 @@ export function DynamicIsland() {
                 ))
               : null}
             <li>
-              <Link
-                href="/login"
-                prefetch
-                className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
-                onClick={closeMenu}
-              >
-                Log In
-              </Link>
+              {waitlist ? (
+                <WaitlistOpenButton
+                  source="nav_mobile"
+                  className={`block w-full rounded-xl px-3 py-2.5 text-left ${navLinkClass} hover:bg-white/[0.04]`}
+                >
+                  Join waitlist
+                </WaitlistOpenButton>
+              ) : (
+                <Link
+                  href="/login"
+                  prefetch
+                  className={`block rounded-xl px-3 py-2.5 ${navLinkClass} hover:bg-white/[0.04]`}
+                  onClick={closeMenu}
+                >
+                  Log In
+                </Link>
+              )}
             </li>
           </ul>
         </nav>

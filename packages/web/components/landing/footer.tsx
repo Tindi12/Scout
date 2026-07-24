@@ -4,7 +4,12 @@ import Link from 'next/link'
 import { CookiePreferencesLink } from '@/components/consent/CookiePreferencesLink'
 import { LandingHashLink } from '@/components/landing/landing-hash-link'
 import { NewsletterForm } from '@/components/landing/newsletter-form'
+import {
+  WaitlistInlineForm,
+  WaitlistOpenButton,
+} from '@/components/landing/waitlist'
 import { scoutLogo } from '@/lib/scout-logo'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 import { ArrowUp, Instagram } from 'lucide-react'
 
 type SocialIconProps = { className?: string; strokeWidth?: number }
@@ -34,44 +39,66 @@ function XIcon({ className }: SocialIconProps) {
   )
 }
 
-const COLUMNS = [
-  {
-    heading: 'Product',
-    links: [
-      { label: 'Resume', href: '/resume' },
-      { label: 'Roles', href: '/roles' },
-      { label: 'Tracker', href: '/tracker' },
-      { label: 'Copilot', href: '/copilot' },
-    ],
-  },
-  {
-    heading: 'Company',
-    links: [
-      { label: 'Blog', href: '/blog' },
-      { label: 'Changelog', href: '/changelog' },
-      { label: 'About', href: '/#about' },
-      { label: 'Pricing', href: '/#pricing' },
-      { label: 'FAQ', href: '/#faq' },
-    ],
-  },
-  {
-    heading: 'Account',
-    links: [
-      { label: 'Sign in', href: '/sign-in' },
-      { label: 'Sign up', href: '/sign-up' },
-      { label: 'Dashboard', href: '/dashboard' },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Terms of Service', href: '/terms' },
-    ],
-  },
+const PRODUCT_LINKS = [
+  { label: 'Resume', href: '/resume' },
+  { label: 'Roles', href: '/roles' },
+  { label: 'Tracker', href: '/tracker' },
+  { label: 'Copilot', href: '/copilot' },
 ] as const
 
+const COMPANY_LINKS = [
+  { label: 'Blog', href: '/blog' },
+  { label: 'Changelog', href: '/changelog' },
+  { label: 'About', href: '/#about' },
+  { label: 'Pricing', href: '/#pricing' },
+  { label: 'FAQ', href: '/#faq' },
+] as const
+
+const ACCOUNT_LINKS = [
+  { label: 'Sign in', href: '/sign-in' },
+  { label: 'Sign up', href: '/sign-up' },
+  { label: 'Dashboard', href: '/dashboard' },
+] as const
+
+const LEGAL_LINKS = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+] as const
+
+const footerLinkClass =
+  'font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white'
+
+function FooterLink({ label, href }: { label: string; href: string }) {
+  if (href.includes('#')) {
+    return (
+      <LandingHashLink href={href} className={footerLinkClass}>
+        {label}
+      </LandingHashLink>
+    )
+  }
+  return (
+    <Link href={href} className={footerLinkClass}>
+      {label}
+    </Link>
+  )
+}
+
 export function Footer() {
+  const waitlist = isWaitlistMode()
+
+  const columns: {
+    heading: string
+    links: readonly { label: string; href: string }[]
+  }[] = [
+    { heading: 'Product', links: PRODUCT_LINKS },
+    { heading: 'Company', links: COMPANY_LINKS },
+    {
+      heading: 'Account',
+      links: waitlist ? [] : ACCOUNT_LINKS,
+    },
+    { heading: 'Legal', links: LEGAL_LINKS },
+  ]
+
   return (
     <footer className="relative px-6 pb-10 pt-24 lg:px-12">
       <div className="mx-auto max-w-7xl">
@@ -79,18 +106,19 @@ export function Footer() {
           <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div>
               <p className="font-label text-[12px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
-                Newsletter
+                {waitlist ? 'Early access' : 'Newsletter'}
               </p>
               <h3 className="mt-3 font-headline text-3xl font-medium tracking-[-0.03em] text-white md:text-4xl">
-                Stay in the loop.
+                {waitlist ? 'Get a seat when we open.' : 'Stay in the loop.'}
               </h3>
               <p className="mt-3 font-body text-[15px] text-[#A1A1AA]">
-                Tactical updates on landing internships, plus product news from
-                the Scout team.
+                {waitlist
+                  ? "Scout is in private beta. Leave your email and we'll notify you when public access is available."
+                  : 'Tactical updates on landing internships, plus product news from the Scout team.'}
               </p>
             </div>
 
-            <NewsletterForm />
+            {waitlist ? <WaitlistInlineForm source="footer" /> : <NewsletterForm />}
           </div>
         </div>
 
@@ -115,7 +143,7 @@ export function Footer() {
             </p>
           </div>
 
-          {COLUMNS.map((col) => (
+          {columns.map((col) => (
             <div key={col.heading}>
               <h4 className="font-label text-[11px] font-semibold uppercase tracking-[0.2em] text-[#888888]">
                 {col.heading}
@@ -123,23 +151,16 @@ export function Footer() {
               <ul className="mt-6 space-y-4">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    {link.href.includes('#') ? (
-                      <LandingHashLink
-                        href={link.href}
-                        className="font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white"
-                      >
-                        {link.label}
-                      </LandingHashLink>
-                    ) : (
-                      <Link
-                        href={link.href}
-                        className="font-body inline-block text-[15px] text-[#A1A1AA] transition-all duration-200 hover:translate-x-0.5 hover:text-white"
-                      >
-                        {link.label}
-                      </Link>
-                    )}
+                    <FooterLink label={link.label} href={link.href} />
                   </li>
                 ))}
+                {col.heading === 'Account' && waitlist ? (
+                  <li>
+                    <WaitlistOpenButton source="footer_account" className={footerLinkClass}>
+                      Join waitlist
+                    </WaitlistOpenButton>
+                  </li>
+                ) : null}
                 {col.heading === 'Legal' ? (
                   <li>
                     <CookiePreferencesLink />

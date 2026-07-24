@@ -7,6 +7,7 @@ import {
   CookieConsentProvider,
   useCookieConsent,
 } from '@/components/consent/CookieConsentProvider'
+import { WaitlistProvider } from '@/components/landing/waitlist'
 import { ScoutMascotController } from '@/components/mascot/ScoutMascotController'
 import {
   identifyUser,
@@ -28,8 +29,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <CookieConsentProvider>
       <AnalyticsIdentity />
-      {children}
-      <MascotHost />
+      <WaitlistProvider>
+        {children}
+        <MascotHost />
+      </WaitlistProvider>
     </CookieConsentProvider>
   )
 }

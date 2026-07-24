@@ -5,9 +5,13 @@ import { LandingDashboardShowcase } from '@/components/landing/dashboard-showcas
 import { HeroApplyAnimation } from '@/components/landing/hero-apply-animation'
 import { LandingHashLink } from '@/components/landing/landing-hash-link'
 import { TypingHeadline } from '@/components/landing/typing-headline'
+import { ComingSoonCta } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 export function Hero() {
+  const waitlist = isWaitlistMode()
+
   return (
     // No opaque background on the section — the page-level LandingRails
     // overlay sits at -z-10 and must show through on both sides of the hero.
@@ -27,28 +31,39 @@ export function Hero() {
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <Link href="/sign-up" prefetch className="group">
-              Try Scout Now
-              <ArrowRight className="transition-transform duration-150 group-hover:translate-x-0.5" />
-            </Link>
-          </Button>
+          {waitlist ? (
+            <ComingSoonCta source="hero" />
+          ) : (
+            <Button asChild size="lg">
+              <Link href="/sign-up" prefetch className="group">
+                Try Scout Now
+                <ArrowRight className="transition-transform duration-150 group-hover:translate-x-0.5" />
+              </Link>
+            </Button>
+          )}
           <Button asChild variant="outline" size="lg">
             <LandingHashLink href="#about">See how it works</LandingHashLink>
           </Button>
         </div>
 
-        <p className="mt-4 font-body text-sm text-[#71717A]">
-          Already have an account?{' '}
-          <Link
-            href="/login"
-            prefetch
-            className="text-[#A1A1AA] underline-offset-4 transition-colors duration-150 hover:text-white"
-          >
-            Log in here
-          </Link>
-          .
-        </p>
+        {waitlist ? (
+          <p className="mt-4 max-w-md font-body text-sm text-[#71717A]">
+            Private beta — public access isn&apos;t open yet. Tap Coming soon to
+            join the waitlist.
+          </p>
+        ) : (
+          <p className="mt-4 font-body text-sm text-[#71717A]">
+            Already have an account?{' '}
+            <Link
+              href="/login"
+              prefetch
+              className="text-[#A1A1AA] underline-offset-4 transition-colors duration-150 hover:text-white"
+            >
+              Log in here
+            </Link>
+            .
+          </p>
+        )}
       </div>
 
       <div className="mx-auto mt-24 max-w-6xl">
