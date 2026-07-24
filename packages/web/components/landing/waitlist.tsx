@@ -88,6 +88,7 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
 
   const isBusy = status === 'loading'
   const isDone = status === 'success' || status === 'already'
+  const isError = status === 'error'
 
   return (
     <div className="w-full">
@@ -95,7 +96,6 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
         className="relative flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-0"
         onSubmit={handleSubmit}
       >
-        {/* Honeypot — visually hidden from humans */}
         <input
           type="text"
           name="website"
@@ -113,27 +113,34 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
+          enterKeyHint="send"
           placeholder="you@university.edu"
           aria-label="Email address"
+          aria-invalid={isError || undefined}
+          aria-describedby={message ? `waitlist-msg-${source}` : undefined}
           disabled={isBusy || isDone}
-          className="font-body w-full rounded-md border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[16px] text-white placeholder:text-[#888888] transition-colors duration-150 focus:border-white/25 focus:outline-none disabled:opacity-60 sm:py-3 sm:pr-36 sm:text-[14.5px]"
+          className={cn(
+            'font-body w-full rounded-md border bg-white/[0.03] px-4 py-3.5 text-[16px] text-white placeholder:text-[#A1A1AA] transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-60 sm:py-3 sm:pr-36 sm:text-[14.5px]',
+            isError ? 'border-[#f87171]/60' : 'border-white/10 focus:border-white/25',
+          )}
         />
         <Button
           type="submit"
           size="sm"
           disabled={isDone}
           loading={isBusy}
-          className="min-h-11 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-0 sm:w-auto sm:-translate-y-1/2"
+          className="min-h-12 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-0 sm:w-auto sm:-translate-y-1/2"
         >
           {isBusy ? 'Joining…' : isDone ? 'Joined' : 'Join waitlist'}
         </Button>
       </form>
       {message ? (
         <p
-          role="status"
-          aria-live="polite"
+          id={`waitlist-msg-${source}`}
+          role={isError ? 'alert' : 'status'}
+          aria-live={isError ? 'assertive' : 'polite'}
           className={`mt-3 font-body text-[13px] ${
-            status === 'error' ? 'text-[#f87171]' : 'text-[#A1A1AA]'
+            isError ? 'text-[#f87171]' : 'text-[#A1A1AA]'
           }`}
         >
           {message}

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const DotLottieReact = dynamic(
   () =>
@@ -13,6 +13,10 @@ const DotLottieReact = dynamic(
   { ssr: false },
 )
 
+/**
+ * Lazy-mount DotLottie only when visible so the ~1.7MB WASM stays off LCP.
+ * Respects prefers-reduced-motion (static slot, no player).
+ */
 export function LottiePlayer({
   src,
   className,
@@ -20,16 +24,46 @@ export function LottiePlayer({
   src: string
   className?: string
 }) {
-  // Avoid mounting until client mount so the dynamic import + setWasmUrl race
-  // can't start fetching animations before WASM is configured.
-  const [ready, setReady] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
+
   useEffect(() => {
-    setReady(true)
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduceMotion(mq.matches)
+    const onChange = () => setReduceMotion(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  if (!ready) {
+  useEffect(() => {
+    if (reduceMotion) return
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setInView(true)
+          io.disconnect()
+        }
+      },
+      { rootMargin: '120px 0px', threshold: 0.15 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [reduceMotion])
+
+  if (reduceMotion) {
     return <div className={className} aria-hidden />
   }
 
-  return <DotLottieReact src={src} loop autoplay className={className} />
+  return (
+    <div ref={ref} className={className}>
+      {inView ? (
+        <DotLottieReact src={src} loop autoplay className="h-full w-full" />
+      ) : (
+        <div className="h-full w-full" aria-hidden />
+      )}
+    </div>
+  )
 }

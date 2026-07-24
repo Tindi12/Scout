@@ -132,6 +132,10 @@
   html {
     /* Clip decorative rails/corners that sit outside the content column on phones */
     overflow-x: clip;
+    color-scheme: dark;
+    /* Sticky waitlist dock (~4.5rem) + safe area — keeps hash targets / focus clear */
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    scroll-padding-top: calc(5rem + env(safe-area-inset-top, 0px));
   }
 
   body {
