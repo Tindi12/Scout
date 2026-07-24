@@ -97,7 +97,7 @@ const frameSrc = [
 
 const csp = [
   "default-src 'self'",
-  `script-src ${scriptSrc.join(' ')}`,
+  `script-src ${scriptSrc.join(' ')} 'wasm-unsafe-eval'`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",

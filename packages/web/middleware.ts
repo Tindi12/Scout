@@ -117,7 +117,9 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Skip static assets (incl. .lottie / .wasm) so Clerk never auth.protect()s
+    // public/ files — that was 404ing How-it-works animations on prod.
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|lottie|wasm|json)$).*)',
     '/(api|trpc)(.*)',
   ],
 }
