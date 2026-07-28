@@ -16,8 +16,15 @@ import { isWaitlistMode } from '@/lib/waitlist-mode'
 const NAV_LINKS = [
   { hash: '#about', label: 'About', kind: 'hash' as const },
   { hash: '#pricing', label: 'Pricing', kind: 'hash' as const },
-  { hash: '#faq', label: 'FAQ', kind: 'hash' as const },
+  { href: '/faq', label: 'FAQ', kind: 'route' as const },
   { href: '/blog', label: 'Blog', kind: 'route' as const },
+] as const
+
+/** Mobile marketing menu: Home + dedicated pages only (no desktop section hashes). */
+const MOBILE_MARKETING_LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/faq', label: 'FAQ' },
 ] as const
 
 /** Scroll distance (px) over which the flat bar morphs into the glass pill. */
@@ -45,7 +52,8 @@ export function DynamicIsland() {
     pathname === '/pricing' ||
     pathname === '/blog' ||
     pathname.startsWith('/blog/') ||
-    pathname === '/changelog'
+    pathname === '/changelog' ||
+    pathname === '/faq'
   const [menuOpen, setMenuOpen] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
   const progressRef = useRef(0)
@@ -276,23 +284,21 @@ export function DynamicIsland() {
                     </Button>
                   </>
                 )}
-                {/* Landing mobile is intentionally nav-light (hero + waitlist only). */}
-                {!isLanding ? (
-                  <button
-                    type="button"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
-                    aria-expanded={menuOpen}
-                    aria-controls="landing-mobile-nav"
-                    aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-                    onClick={() => setMenuOpen((open) => !open)}
-                  >
-                    {menuOpen ? (
-                      <X className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                    ) : (
-                      <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                    )}
-                  </button>
-                ) : null}
+                {/* Mobile menu — landing + other marketing pages. */}
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
+                  aria-expanded={menuOpen}
+                  aria-controls="landing-mobile-nav"
+                  aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                  onClick={() => setMenuOpen((open) => !open)}
+                >
+                  {menuOpen ? (
+                    <X className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                  )}
+                </button>
               </div>
             </nav>
           </div>
@@ -323,32 +329,32 @@ export function DynamicIsland() {
         >
           <ul className="flex flex-col gap-0.5">
             {isMarketingChrome
-              ? navLinks.map((link) => (
-                  <li key={link.key}>
-                    {link.kind === 'hash' ? (
-                      <LandingHashLink
-                        href={link.href}
-                        className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
-                        onClick={closeMenu}
-                      >
-                        {link.label}
-                      </LandingHashLink>
-                    ) : (
+              ? MOBILE_MARKETING_LINKS.map((link) => {
+                  const isActive =
+                    link.href === '/'
+                      ? pathname === '/'
+                      : pathname === link.href ||
+                        pathname.startsWith(`${link.href}/`)
+                  return (
+                    <li key={link.href}>
                       <Link
                         href={link.href}
-                        className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
+                        className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]${
+                          isActive ? ' text-white' : ''
+                        }`}
                         onClick={closeMenu}
                       >
                         {link.label}
                       </Link>
-                    )}
-                  </li>
-                ))
+                    </li>
+                  )
+                })
               : null}
             {waitlist ? (
               <li className="mt-1 border-t border-white/[0.06] pt-2">
                 <ComingSoonCta
                   source="nav_mobile_cta"
+                  label="Join waitlist"
                   className="min-h-11 w-full sm:min-h-12"
                   onOpen={closeMenu}
                 />

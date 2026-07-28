@@ -29,7 +29,11 @@ export const metadata: Metadata = {
 
 export default function BlogIndexPage() {
   const posts = getAllBlogPosts()
-  const [featured, ...rest] = posts
+  const pinnedSlug = 'why-i-built-scout'
+  const pinned = posts.find((post) => post.slug === pinnedSlug) ?? null
+  const rest = posts.filter((post) => post.slug !== pinnedSlug)
+  const featured = pinned ?? rest[0] ?? null
+  const gridPosts = pinned ? rest : rest.slice(1)
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -53,11 +57,12 @@ export default function BlogIndexPage() {
       />
       <ContentTabs />
 
-      <div className="mx-auto mt-14 max-w-6xl space-y-8 px-6 lg:px-12">
+      {/* Extra inset past the landing rails so cards sit inside the grid, not flush to it. */}
+      <div className="mx-auto mt-10 max-w-6xl space-y-6 px-9 sm:mt-14 sm:space-y-8 sm:px-10 lg:px-16">
         {featured ? <BlogCard post={featured} featured /> : null}
-        {rest.length > 0 ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {rest.map((post) => (
+        {gridPosts.length > 0 ? (
+          <div className="grid gap-5 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {gridPosts.map((post) => (
               <BlogCard key={post.slug} post={post} />
             ))}
           </div>

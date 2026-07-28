@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 /**
  * Mobile-only availability note. Scout launches desktop-first; this frames
  * that as an intentional product decision rather than a missing feature.
@@ -24,6 +26,23 @@ export function MobileAvailability() {
         <p className="mt-4 font-body text-[14px] leading-relaxed text-[#A1A1AA]">
           Scout launches on desktop first. Use a computer or laptop for the
           best experience. Mobile support is coming soon.
+        </p>
+        <p className="mt-8 font-body text-[14px] leading-relaxed text-[#A1A1AA]">
+          For now, check out our{' '}
+          <Link
+            href="/blog"
+            className="font-medium text-white underline-offset-4 transition-colors hover:text-[#FF6733] hover:underline"
+          >
+            Blog
+          </Link>{' '}
+          and{' '}
+          <Link
+            href="/faq"
+            className="font-medium text-white underline-offset-4 transition-colors hover:text-[#FF6733] hover:underline"
+          >
+            FAQ
+          </Link>
+          .
         </p>
       </div>
     </section>

@@ -50,7 +50,7 @@ export default function ChangelogPage() {
       />
       <ContentTabs />
 
-      <div className="mx-auto mt-14 max-w-3xl space-y-8 px-6 lg:px-12">
+      <div className="mx-auto mt-10 max-w-3xl space-y-6 px-6 sm:mt-14 sm:space-y-8 lg:px-12">
         {entries.map((entry) => (
           <ChangelogCard key={entry.slug} entry={entry}>
             <MarkdownProse content={entry.content} />

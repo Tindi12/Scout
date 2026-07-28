@@ -32,7 +32,7 @@ const PRODUCT_LINKS = [
 const PRODUCT_LINKS_WAITLIST = [
   { label: 'How it works', href: '/#about' },
   { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQ', href: '/#faq' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Blog', href: '/blog' },
 ] as const
 
@@ -41,7 +41,7 @@ const COMPANY_LINKS = [
   { label: 'Changelog', href: '/changelog' },
   { label: 'About', href: '/#about' },
   { label: 'Pricing', href: '/#pricing' },
-  { label: 'FAQ', href: '/#faq' },
+  { label: 'FAQ', href: '/faq' },
 ] as const
 
 /** Waitlist mode: Product already covers How it works / Pricing / FAQ / Blog. */

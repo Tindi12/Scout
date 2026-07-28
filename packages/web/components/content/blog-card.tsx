@@ -43,7 +43,7 @@ export function BlogCard({ post, featured = false }: BlogCardProps) {
         ) : null}
       </div>
 
-      <div className={cn('flex flex-1 flex-col p-6', featured && 'md:p-8')}>
+      <div className={cn('flex flex-1 flex-col p-4 sm:p-6', featured && 'md:p-8')}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-label text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF6733]">
             {post.category}
