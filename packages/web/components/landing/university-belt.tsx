@@ -62,7 +62,7 @@ export function UniversityBelt() {
     <section ref={sectionRef} className="relative px-4 py-8 sm:px-6 sm:py-14 lg:px-12 lg:py-16">
       <div className="mx-auto max-w-5xl">
         <p className="text-center font-label text-[10px] font-medium uppercase tracking-[0.18em] text-[#888888] sm:text-[12px] sm:tracking-[0.2em]">
-          used by students at
+          With interest from students at:
         </p>
 
         <ul className="mt-5 grid list-none grid-cols-2 items-start justify-items-center gap-x-4 gap-y-5 sm:mt-10 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-14 sm:gap-y-10 md:gap-x-16 lg:gap-x-20">

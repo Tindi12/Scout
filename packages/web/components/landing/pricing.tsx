@@ -55,7 +55,7 @@ function PricingCta({
   source,
   href,
   label,
-  waitlistLabel = 'Join waitlist',
+  waitlistLabel = 'Join waitlist now',
   variant = 'default',
 }: {
   source: string
@@ -124,7 +124,7 @@ export function Pricing() {
             source="pricing_free"
             href="/sign-up"
             label="Start Free"
-            waitlistLabel="Join waitlist"
+            waitlistLabel="Join waitlist now"
             variant="outline"
           />
 
@@ -166,7 +166,7 @@ export function Pricing() {
             source="pricing_pro"
             href="/sign-up"
             label="Upgrade to Pro"
-            waitlistLabel="Join waitlist"
+            waitlistLabel="Join waitlist now"
           />
 
           <div className="my-4 h-px w-full bg-white/10 sm:my-7" />
@@ -207,7 +207,7 @@ export function Pricing() {
             source="pricing_scout_plus"
             href="/sign-up"
             label="Upgrade to Scout+"
-            waitlistLabel="Join waitlist"
+            waitlistLabel="Join waitlist now"
           />
 
           <div className="my-4 h-px w-full bg-white/10 sm:my-7" />

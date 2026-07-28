@@ -92,14 +92,15 @@ export function Stats({ stats }: { stats: PlatformStats }) {
       <div className="mx-auto max-w-6xl">
         <div className="mx-auto mb-7 max-w-3xl text-center sm:mb-14 md:mb-16">
           <p className="font-label text-[11px] font-medium uppercase tracking-[0.18em] text-[#FF6733] sm:text-[12px] sm:tracking-[0.2em]">
-            Our statistics
+            Live from Scout&apos;s beta dataset
           </p>
           <h2 className="mt-2.5 font-headline text-[1.375rem] font-medium leading-snug tracking-[-0.03em] text-white sm:mt-4 sm:text-4xl md:text-5xl">
             The numbers don&apos;t lie.
           </h2>
           <p className="mt-2.5 font-body text-[14px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-[17px]">
-            Live from Scout&apos;s platform — applications automated, resumes
-            optimized, and hours saved as Scout keeps working.
+            Real activity from Scout&apos;s beta — applications automated,
+            resumes optimized, and hours saved, updating as students use the
+            product.
           </p>
         </div>
 

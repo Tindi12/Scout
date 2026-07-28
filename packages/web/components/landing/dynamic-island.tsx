@@ -5,10 +5,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Menu, X } from 'lucide-react'
 import { usePathname } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { LandingHashLink } from '@/components/landing/landing-hash-link'
-import { ComingSoonCta, WaitlistOpenButton } from '@/components/landing/waitlist'
+import { ComingSoonCta } from '@/components/landing/waitlist'
 import { Button } from '@/components/ui/button'
 import { scoutLogo } from '@/lib/scout-logo'
 import { isWaitlistMode } from '@/lib/waitlist-mode'
@@ -22,6 +22,8 @@ const NAV_LINKS = [
 
 /** Scroll distance (px) over which the flat bar morphs into the glass pill. */
 const NAV_MORPH_RANGE = 96
+/** Approx banner height so fixed nav sits below it before the first measure. */
+const BANNER_CLEARANCE_FALLBACK = '2.5rem'
 
 const navLinkClass =
   'font-label text-base font-medium text-[#A1A1AA] transition-colors duration-200 hover:text-white'
@@ -72,7 +74,7 @@ export function DynamicIsland() {
 
   const homeHref = isLanding ? '#top' : '/'
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const applyProgress = (progress: number) => {
       const next = Math.round(progress * 1000) / 1000
       if (Math.abs(next - progressRef.current) < 0.001) return
@@ -148,7 +150,9 @@ export function DynamicIsland() {
       style={
         {
           ['--nav-progress' as string]: 0,
-          ['--banner-clearance' as string]: '0px',
+          ['--banner-clearance' as string]: isLanding
+            ? BANNER_CLEARANCE_FALLBACK
+            : '0px',
         } as CSSProperties
       }
     >
@@ -250,20 +254,12 @@ export function DynamicIsland() {
 
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 {waitlist ? (
-                  <>
-                    <WaitlistOpenButton
-                      source="nav"
-                      className={`hidden md:inline-flex ${navLinkClass}`}
-                    >
-                      Join waitlist
-                    </WaitlistOpenButton>
-                    {/* Desktop/tablet only — phones use the menu + sticky dock */}
-                    <ComingSoonCta
-                      source="nav"
-                      size="default"
-                      className="hidden min-h-10 sm:inline-flex"
-                    />
-                  </>
+                  /* Desktop/tablet only — phones use the hero waitlist form. */
+                  <ComingSoonCta
+                    source="nav"
+                    size="default"
+                    className="hidden min-h-10 sm:inline-flex"
+                  />
                 ) : (
                   <>
                     <Link
@@ -280,20 +276,23 @@ export function DynamicIsland() {
                     </Button>
                   </>
                 )}
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
-                  aria-expanded={menuOpen}
-                  aria-controls="landing-mobile-nav"
-                  aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-                  onClick={() => setMenuOpen((open) => !open)}
-                >
-                  {menuOpen ? (
-                    <X className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                  ) : (
-                    <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-                  )}
-                </button>
+                {/* Landing mobile is intentionally nav-light (hero + waitlist only). */}
+                {!isLanding ? (
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[#A1A1AA] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white md:hidden"
+                    aria-expanded={menuOpen}
+                    aria-controls="landing-mobile-nav"
+                    aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                    onClick={() => setMenuOpen((open) => !open)}
+                  >
+                    {menuOpen ? (
+                      <X className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                    ) : (
+                      <Menu className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                    )}
+                  </button>
+                ) : null}
               </div>
             </nav>
           </div>
@@ -346,26 +345,6 @@ export function DynamicIsland() {
                   </li>
                 ))
               : null}
-            <li>
-              {waitlist ? (
-                <WaitlistOpenButton
-                  source="nav_mobile"
-                  className={`flex min-h-11 w-full items-center rounded-xl px-3.5 py-2.5 text-left text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
-                  onOpen={closeMenu}
-                >
-                  Join waitlist
-                </WaitlistOpenButton>
-              ) : (
-                <Link
-                  href="/login"
-                  prefetch
-                  className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
-                  onClick={closeMenu}
-                >
-                  Log In
-                </Link>
-              )}
-            </li>
             {waitlist ? (
               <li className="mt-1 border-t border-white/[0.06] pt-2">
                 <ComingSoonCta
@@ -375,13 +354,25 @@ export function DynamicIsland() {
                 />
               </li>
             ) : (
-              <li className="mt-1 border-t border-white/[0.06] pt-2 sm:hidden">
-                <Button asChild className="min-h-11 w-full sm:min-h-12">
-                  <Link href="/sign-up" prefetch onClick={closeMenu}>
-                    Try Scout Now
+              <>
+                <li>
+                  <Link
+                    href="/login"
+                    prefetch
+                    className={`flex min-h-11 items-center rounded-xl px-3.5 py-2.5 text-sm sm:min-h-12 sm:px-4 sm:py-3 sm:text-base ${navLinkClass} hover:bg-white/[0.04]`}
+                    onClick={closeMenu}
+                  >
+                    Log In
                   </Link>
-                </Button>
-              </li>
+                </li>
+                <li className="mt-1 border-t border-white/[0.06] pt-2 sm:hidden">
+                  <Button asChild className="min-h-11 w-full sm:min-h-12">
+                    <Link href="/sign-up" prefetch onClick={closeMenu}>
+                      Try Scout Now
+                    </Link>
+                  </Button>
+                </li>
+              </>
             )}
           </ul>
         </nav>

@@ -32,7 +32,7 @@ type PlanCtaProps = {
  * Renders the correct action for one pricing tier given the viewer's auth +
  * subscription state. Centralizes the three-state logic so cards and the
  * comparison chart never diverge:
- *   - waitlist mode (logged out) -> "Coming soon" waitlist dialog
+ *   - waitlist mode (logged out) -> "Join waitlist now" dialog
  *   - logged out -> "Get Started" (sign up)
  *   - logged-in free -> upgrade buttons / "Current plan" on Free
  *   - logged-in paid -> "Current plan" on their tier, upgrade/downgrade elsewhere

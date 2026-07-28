@@ -1,5 +1,5 @@
 /**
- * Soft-launch gate: landing CTAs show "Coming soon" + waitlist dialog instead of
+ * Soft-launch gate: landing CTAs show "Join waitlist now" + waitlist dialog instead of
  * Clerk sign-up. Flip off in Vercel when public access opens.
  *
  * Set NEXT_PUBLIC_WAITLIST_MODE=true (string) to enable.

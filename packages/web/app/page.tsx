@@ -10,11 +10,11 @@ import { Footer } from '@/components/landing/footer'
 import { Hero } from '@/components/landing/hero'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { InternationalStudents } from '@/components/landing/international-students'
+import { MobileAvailability } from '@/components/landing/mobile-availability'
 import { Pricing } from '@/components/landing/pricing'
 import { LandingRails, SectionFrame } from '@/components/landing/section-frame'
 import { Stats } from '@/components/landing/stats'
 import { UniversityBelt } from '@/components/landing/university-belt'
-import { MobileWaitlistDock } from '@/components/landing/waitlist'
 import { getPlatformStats } from '@/lib/landing-stats'
 
 export const revalidate = 60
@@ -33,30 +33,37 @@ export default async function Page() {
       <main className="relative">
         <LandingRails />
         <Hero />
-        <SectionFrame>
-          <UniversityBelt />
+
+        {/* Mobile: hero + availability + footer only. Desktop: full experience. */}
+        <SectionFrame className="sm:hidden">
+          <MobileAvailability />
         </SectionFrame>
-        <SectionFrame>
-          <HowItWorks />
-        </SectionFrame>
-        <SectionFrame>
-          <AtsCoverage />
-        </SectionFrame>
-        <SectionFrame>
-          <Stats stats={stats} />
-        </SectionFrame>
-        <SectionFrame>
-          <Pricing />
-        </SectionFrame>
-        <SectionFrame>
-          <InternationalStudents />
-        </SectionFrame>
-        <SectionFrame>
-          <FAQ />
-        </SectionFrame>
+
+        <div className="hidden sm:contents">
+          <SectionFrame>
+            <UniversityBelt />
+          </SectionFrame>
+          <SectionFrame>
+            <HowItWorks />
+          </SectionFrame>
+          <SectionFrame>
+            <AtsCoverage />
+          </SectionFrame>
+          <SectionFrame>
+            <Stats stats={stats} />
+          </SectionFrame>
+          <SectionFrame>
+            <Pricing />
+          </SectionFrame>
+          <SectionFrame>
+            <InternationalStudents />
+          </SectionFrame>
+          <SectionFrame>
+            <FAQ />
+          </SectionFrame>
+        </div>
       </main>
       <Footer />
-      <MobileWaitlistDock />
     </>
   )
 }

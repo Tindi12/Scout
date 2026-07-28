@@ -8,9 +8,6 @@ const PHRASES = [
   'Scout.\nNever Apply Again.',
 ] as const
 
-/** Brand-led static headline for phones / tablets in portrait. */
-const MOBILE_PHRASE = 'Scout.\nNever Apply Again.'
-
 const TYPE_DELAY_MIN = 60
 const TYPE_DELAY_MAX = 80
 const DELETE_DELAY_MIN = 30
@@ -23,18 +20,16 @@ const randomDelay = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min
 
 export function TypingHeadline() {
-  const [text, setText] = useState<string>(MOBILE_PHRASE)
+  const [text, setText] = useState('')
   const [animate, setAnimate] = useState(false)
 
   useEffect(() => {
     const reduceMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches
-    // Static brand headline below md — avoids typewriter layout thrash on phones.
-    const isNarrow = window.matchMedia('(max-width: 767px)').matches
 
-    if (reduceMotion || isNarrow) {
-      setText(MOBILE_PHRASE)
+    if (reduceMotion) {
+      setText(PHRASES[1])
       setAnimate(false)
       return
     }
@@ -82,26 +77,16 @@ export function TypingHeadline() {
 
   return (
     <h1 className="grid w-full max-w-[15ch] text-balance font-headline text-[1.625rem] font-medium leading-[1.15] tracking-[-0.04em] text-white sm:max-w-[18ch] sm:text-[clamp(1.75rem,5vw,3.5rem)] sm:leading-[1.1] md:max-w-[22ch] md:text-[clamp(2.25rem,5.5vw,5.25rem)] md:leading-[1.05]">
-      {/* Desktop: reserve tallest phrase so typing never shifts layout.
-          Mobile: only size to the brand phrase. */}
-      {animate
-        ? PHRASES.map((phrase) => (
-            <span
-              key={phrase}
-              aria-hidden
-              className="invisible col-start-1 row-start-1 whitespace-pre-line text-balance"
-            >
-              {phrase}
-            </span>
-          ))
-        : (
-            <span
-              aria-hidden
-              className="invisible col-start-1 row-start-1 whitespace-pre-line text-balance"
-            >
-              {MOBILE_PHRASE}
-            </span>
-          )}
+      {/* Reserve tallest phrase so typing never shifts layout. */}
+      {PHRASES.map((phrase) => (
+        <span
+          key={phrase}
+          aria-hidden
+          className="invisible col-start-1 row-start-1 whitespace-pre-line text-balance"
+        >
+          {phrase}
+        </span>
+      ))}
 
       <span className="col-start-1 row-start-1 whitespace-pre-line text-balance">
         <span>{text}</span>

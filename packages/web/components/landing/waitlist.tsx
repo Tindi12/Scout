@@ -10,6 +10,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react'
+import { Check } from 'lucide-react'
 
 import { Button, type ButtonProps } from '@/components/ui/button'
 import {
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { isWaitlistMode } from '@/lib/waitlist-mode'
 
 type Status = 'idle' | 'loading' | 'success' | 'already' | 'error'
+type JoinedKind = 'success' | 'already'
 
 type WaitlistContextValue = {
   open: (source?: string) => void
@@ -40,7 +42,16 @@ export function useWaitlist() {
   return ctx
 }
 
-function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void }) {
+function WaitlistForm({
+  source,
+  onDone,
+  onJoined,
+}: {
+  source: string
+  onDone?: () => void
+  /** When set (dialog), parent swaps to the thank-you card instead of inline copy. */
+  onJoined?: (kind: JoinedKind) => void
+}) {
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState<string | null>(null)
 
@@ -74,12 +85,20 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
 
       if (payload?.status === 'already') {
         setStatus('already')
-        setMessage("You're already on the list — we'll email you when access opens.")
+        if (onJoined) {
+          onJoined('already')
+        } else {
+          setMessage("You're already on the list — we'll email you when access opens.")
+        }
       } else {
         setStatus('success')
-        setMessage("You're on the list. We'll email you when Scout opens more seats.")
         form.reset()
         onDone?.()
+        if (onJoined) {
+          onJoined('success')
+        } else {
+          setMessage("You're on the list. We'll email you when Scout opens more seats.")
+        }
       }
     } catch {
       setStatus('error')
@@ -121,7 +140,7 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
           aria-describedby={message ? `waitlist-msg-${source}` : undefined}
           disabled={isBusy || isDone}
           className={cn(
-            'font-body w-full rounded-md border bg-white/[0.03] px-4 py-3.5 text-[16px] text-white placeholder:text-[#A1A1AA] transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-60 sm:py-3 sm:pr-36 sm:text-[14.5px]',
+            'font-body w-full rounded-md border bg-white/[0.03] px-3.5 py-3 text-[16px] text-white placeholder:text-[#A1A1AA] transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-60 sm:px-4 sm:py-3 sm:pr-36 sm:text-[14.5px]',
             isError ? 'border-[#f87171]/60' : 'border-white/10 focus:border-white/25',
           )}
         />
@@ -130,7 +149,7 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
           size="sm"
           disabled={isDone}
           loading={isBusy}
-          className="min-h-11 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-9 sm:w-auto sm:-translate-y-1/2"
+          className="min-h-10 w-full sm:absolute sm:right-1.5 sm:top-1/2 sm:min-h-9 sm:w-auto sm:-translate-y-1/2"
         >
           {isBusy ? 'Joining…' : isDone ? 'Joined' : 'Join waitlist'}
         </Button>
@@ -151,6 +170,48 @@ function WaitlistForm({ source, onDone }: { source: string; onDone?: () => void 
   )
 }
 
+function WaitlistThanks({
+  kind,
+  onClose,
+}: {
+  kind: JoinedKind
+  onClose: () => void
+}) {
+  const already = kind === 'already'
+
+  return (
+    <div className="animate-content-swap flex flex-col items-start text-left">
+      <p className="font-label text-[10px] font-medium uppercase tracking-[0.2em] text-[#FF6733] sm:text-[11px]">
+        Beta
+      </p>
+      <div
+        aria-hidden
+        className="mt-3 flex h-9 w-9 items-center justify-center rounded-full border border-[#FF6733]/25 bg-[#FF6733]/10 sm:mt-5 sm:h-11 sm:w-11"
+      >
+        <Check className="h-4 w-4 text-[#FF6733] sm:h-5 sm:w-5" strokeWidth={2.25} />
+      </div>
+      <DialogHeader className="mt-3 space-y-1.5 text-left sm:mt-4 sm:space-y-2">
+        <DialogTitle className="font-headline text-xl font-medium tracking-[-0.03em] text-white sm:text-2xl">
+          {already ? "You're already on the list" : "You're on the list"}
+        </DialogTitle>
+        <DialogDescription className="font-body text-[13.5px] leading-relaxed text-[#A1A1AA] sm:text-[15px]">
+          {already
+            ? "Thanks for checking in — we'll email you as soon as a seat opens up."
+            : "Thanks for signing up. We'll email you the moment Scout opens more seats."}
+        </DialogDescription>
+      </DialogHeader>
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-5 min-h-10 w-full sm:mt-6 sm:min-h-11 sm:w-auto"
+        onClick={onClose}
+      >
+        Got it
+      </Button>
+    </div>
+  )
+}
+
 function WaitlistDialog({
   open,
   source,
@@ -160,24 +221,44 @@ function WaitlistDialog({
   source: string
   onOpenChange: (open: boolean) => void
 }) {
+  const [joined, setJoined] = useState<JoinedKind | null>(null)
+
+  useEffect(() => {
+    if (!open) setJoined(null)
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(100dvh,640px)] overflow-y-auto border-white/10 bg-[#0c0c0e] p-5 sm:rounded-2xl sm:p-6">
-        <DialogHeader className="space-y-3 text-left">
-          <p className="font-label text-[11px] font-medium uppercase tracking-[0.2em] text-[#FF6733]">
-            Beta
-          </p>
-          <DialogTitle className="font-headline text-2xl font-medium tracking-[-0.03em] text-white">
-            Public access is coming soon
-          </DialogTitle>
-          <DialogDescription className="font-body text-[15px] leading-relaxed text-[#A1A1AA]">
-            Scout is in private beta while we harden the apply agent. Drop your email and
-            we&apos;ll save you a seat when we open up.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="mt-2">
-          <WaitlistForm source={source} />
-        </div>
+      <DialogContent
+        className={cn(
+          // Mobile: compact centered card with side margins — not a full-bleed takeover.
+          'w-[calc(100%-2.5rem)] max-w-[22rem] gap-3 overflow-y-auto rounded-2xl border-white/10 bg-[#0c0c0e] p-4',
+          'max-h-[min(85dvh,32rem)]',
+          // Desktop: keep the polished wider modal.
+          'sm:w-full sm:max-w-md sm:gap-4 sm:rounded-2xl sm:p-6 sm:max-h-[min(100dvh,640px)]',
+        )}
+      >
+        {joined ? (
+          <WaitlistThanks kind={joined} onClose={() => onOpenChange(false)} />
+        ) : (
+          <>
+            <DialogHeader className="space-y-2 text-left sm:space-y-3">
+              <p className="font-label text-[10px] font-medium uppercase tracking-[0.2em] text-[#FF6733] sm:text-[11px]">
+                Beta
+              </p>
+              <DialogTitle className="font-headline text-xl font-medium tracking-[-0.03em] text-white sm:text-2xl">
+                Public access is coming soon
+              </DialogTitle>
+              <DialogDescription className="font-body text-[13.5px] leading-relaxed text-[#A1A1AA] sm:text-[15px]">
+                Scout is in private beta while we harden the apply agent. Drop your
+                email and we&apos;ll save you a seat when we open up.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-1 sm:mt-2">
+              <WaitlistForm source={source} onJoined={setJoined} />
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -239,7 +320,7 @@ type ComingSoonCtaProps = {
 /** Primary CTA replacement in waitlist mode — opens the beta waitlist dialog. */
 export function ComingSoonCta({
   source = 'cta',
-  label = 'Coming soon',
+  label = 'Join waitlist now',
   className,
   variant = 'default',
   size = 'lg',
@@ -368,15 +449,15 @@ function MobileWaitlistDockInner() {
 
   // Don't fight the cookie banner for the thumb zone on first visit.
   if (isBannerOpen || consent === null) return null
-  // Hide while the hero waitlist form is on screen — avoids double-CTA clash.
+  // Hide while the hero waitlist CTA is on screen — avoids double-CTA clash.
   if (heroCtaVisible) return null
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
       <Button
         type="button"
-        size="lg"
-        className="pointer-events-auto min-h-11 rounded-full px-6 shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
+        size="default"
+        className="pointer-events-auto min-h-10 rounded-full px-5 shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
         onClick={() => open('mobile_dock')}
       >
         Join waitlist
