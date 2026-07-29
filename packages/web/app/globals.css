@@ -462,6 +462,11 @@
       padding-right: 3rem;
     }
   }
+
+  /* Article bodies (blog/[slug]) hide the marketing grid — privacy-style reading. */
+  main:has([data-content-rails='off']) .landing-rails {
+    display: none;
+  }
 }
 
 @layer utilities {

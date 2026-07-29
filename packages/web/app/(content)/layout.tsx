@@ -4,15 +4,14 @@ import { LandingRails } from '@/components/landing/section-frame'
 import type { ReactNode } from 'react'
 
 /**
- * Shared marketing chrome for /blog, /changelog, and /faq.
- * Keeping nav + footer in a layout means tab switches only remount page content
- * instead of flashing a full-page remount.
+ * Same chrome as /pricing: nav + full-height LandingRails on <main>.
+ * Article pages set data-content-rails="off" to hide the grid for prose reading.
  */
 export default function ContentSectionLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <DynamicIsland />
-      <main className="relative min-h-screen pt-24 sm:pt-28 lg:pt-32">
+      <main className="relative min-h-screen">
         <LandingRails />
         {children}
       </main>

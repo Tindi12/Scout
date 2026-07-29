@@ -42,21 +42,22 @@ export default function FaqPage() {
   }
 
   return (
-    <ContentSwap>
+    <ContentSwap className="pb-20 pt-28 lg:pt-32">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <ContentHero
-        eyebrow="FAQ"
-        title="Answers to the questions we hear most"
-        description="How Scout applies, tailored resumes, portal safety, and what is on the free plan. Short and direct."
-      />
+      <div className="px-6 lg:px-12">
+        <ContentHero
+          eyebrow="FAQ"
+          title="Answers to the questions we hear most"
+          description="How Scout applies, tailored resumes, portal safety, and what is on the free plan. Short and direct."
+        />
+      </div>
 
       <SectionFrame className="mt-10 sm:mt-14">
-        {/* Extra inset past the rails so accordion cards never touch the grid lines. */}
-        <div className="relative px-9 py-10 sm:px-10 sm:py-14 lg:px-16 lg:py-16">
+        <div className="relative px-6 py-10 sm:py-14 lg:px-12 lg:py-16">
           <div className="mx-auto max-w-3xl">
             <FaqAccordion />
           </div>

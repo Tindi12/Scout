@@ -38,7 +38,7 @@ export default function ChangelogPage() {
   }
 
   return (
-    <ContentSwap>
+    <ContentSwap className="px-6 pb-20 pt-28 lg:px-12 lg:pt-32">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -50,7 +50,7 @@ export default function ChangelogPage() {
       />
       <ContentTabs />
 
-      <div className="mx-auto mt-10 max-w-3xl space-y-6 px-6 sm:mt-14 sm:space-y-8 lg:px-12">
+      <div className="mx-auto mt-10 max-w-3xl space-y-6 sm:mt-14 sm:space-y-8">
         {entries.map((entry) => (
           <ChangelogCard key={entry.slug} entry={entry}>
             <MarkdownProse content={entry.content} />

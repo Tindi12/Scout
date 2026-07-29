@@ -20,7 +20,7 @@ export function ContentTabs() {
 
   return (
     <div
-      className="mx-auto mt-8 flex max-w-3xl justify-center gap-2 px-6 sm:mt-10 lg:px-12"
+      className="mx-auto mt-8 flex max-w-3xl justify-center gap-2 sm:mt-10"
       role="tablist"
       aria-label="Content sections"
     >

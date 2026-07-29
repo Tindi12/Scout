@@ -45,7 +45,7 @@ export default function BlogIndexPage() {
   }
 
   return (
-    <ContentSwap>
+    <ContentSwap className="px-6 pb-20 pt-28 lg:px-12 lg:pt-32">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -57,8 +57,7 @@ export default function BlogIndexPage() {
       />
       <ContentTabs />
 
-      {/* Extra inset past the landing rails so cards sit inside the grid, not flush to it. */}
-      <div className="mx-auto mt-10 max-w-6xl space-y-6 px-9 sm:mt-14 sm:space-y-8 sm:px-10 lg:px-16">
+      <div className="mx-auto mt-10 max-w-6xl space-y-6 sm:mt-14 sm:space-y-8">
         {featured ? <BlogCard post={featured} featured /> : null}
         {gridPosts.length > 0 ? (
           <div className="grid gap-5 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">

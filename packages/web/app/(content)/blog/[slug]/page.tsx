@@ -79,7 +79,10 @@ export default async function BlogPostPage({ params }: PageProps) {
   }
 
   return (
-    <ContentSwap className="px-6 lg:px-12">
+    <ContentSwap
+      data-content-rails="off"
+      className="px-6 pb-20 pt-28 sm:px-8 lg:px-12 lg:pt-32"
+    >
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -101,10 +104,10 @@ export default async function BlogPostPage({ params }: PageProps) {
           />
         </div>
 
-        <h1 className="mt-6 font-headline text-4xl font-medium tracking-[-0.03em] text-white md:text-5xl">
+        <h1 className="mt-6 font-headline text-[1.75rem] font-medium leading-snug tracking-[-0.03em] text-white sm:text-4xl md:text-5xl">
           {post.title}
         </h1>
-        <p className="mt-5 font-body text-lg leading-relaxed text-[#A1A1AA]">
+        <p className="mt-4 font-body text-[15px] leading-relaxed text-[#A1A1AA] sm:mt-5 sm:text-lg">
           {post.description}
         </p>
 

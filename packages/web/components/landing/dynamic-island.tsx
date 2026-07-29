@@ -304,21 +304,23 @@ export function DynamicIsland() {
           </div>
         </div>
 
-        {/* Locked to page gutters — independent of the pill shrink. */}
-        <div aria-hidden className="landing-nav-divider absolute top-full">
-          <div className="frame-divider relative mx-auto max-w-7xl">
-            <span className="frame-corner" style={{ left: 0 }} />
-            <span className="frame-corner" style={{ left: '100%' }} />
-            <span
-              className="frame-corner frame-corner-outer"
-              style={{ left: 'calc(-1 * var(--landing-frame-gap))' }}
-            />
-            <span
-              className="frame-corner frame-corner-outer"
-              style={{ left: 'calc(100% + var(--landing-frame-gap))' }}
-            />
+        {/* Locked to page gutters — same continuous frame divider as /pricing. */}
+        {isMarketingChrome ? (
+          <div aria-hidden className="landing-nav-divider absolute top-full">
+            <div className="frame-divider relative mx-auto max-w-7xl">
+              <span className="frame-corner" style={{ left: 0 }} />
+              <span className="frame-corner" style={{ left: '100%' }} />
+              <span
+                className="frame-corner frame-corner-outer"
+                style={{ left: 'calc(-1 * var(--landing-frame-gap))' }}
+              />
+              <span
+                className="frame-corner frame-corner-outer"
+                style={{ left: 'calc(100% + var(--landing-frame-gap))' }}
+              />
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       {menuOpen ? (
