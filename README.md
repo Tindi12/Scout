@@ -16,6 +16,6 @@ Build your profile once. Let opportunities come to you.
 ---
 
 <div align="center">
-  <sub>Made with ambition, caffeine, and hope.</sub>
+  <sub>Made with ambition, caffeine, and hope.</sub></br>
   <sub>A Summer 2026 Endeavor</sub>
 </div>
