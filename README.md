@@ -1,4 +1,9 @@
 <div align="center">
+Not open source. Source-available for viewing only. All rights reserved. Not for use, forks-for-use, or contributions.
+</div>
+</br>
+</br>
+<div align="center">
   <img src="./docs/imgs/Scout Logo.png" alt="Scout logo" width="110" />
 
 # Scout
